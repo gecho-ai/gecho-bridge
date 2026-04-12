@@ -1,0 +1,24 @@
+# Dependency directories
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Data/Temp Files
+data/
+*.json
+!package.json
+
+# Build and IDE files
+.DS_Store
+.vscode/
+.idea/
+.git/
+.gitignore
+
+# Project-specific
+gecho_bridge/
+tiktok_bridge_skill/
+extension/

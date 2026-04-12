@@ -1,0 +1,35 @@
+{
+  "name": "@gecho-ai/gecho-bridge",
+  "version": "1.0.0",
+  "description": "MCP Bridge for TikTok Extension Relay - Connecting LLMs to TikTok via Chrome Extension",
+  "main": "mcp-client.js",
+  "bin": {
+    "gecho-bridge": "mcp-client.js"
+  },
+  "files": [
+    "*.js",
+    "package.json"
+  ],
+  "scripts": {
+    "start": "node mcp-client.js",
+    "server": "node server.js"
+  },
+  "keywords": [
+    "mcp",
+    "tiktok",
+    "bridge",
+    "automation",
+    "llm",
+    "gecho"
+  ],
+  "author": "Gecho AI",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "ws": "^8.19.0"
+  },
+  "publishConfig": {
+  "access": "public"
+  }
+}
