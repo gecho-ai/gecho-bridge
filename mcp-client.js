@@ -120,7 +120,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
 
         req.on("error", () => reject(new Error("Service Layer communication error")));
-        req.write(JSON.stringify({ query }));
+        req.write(JSON.stringify({
+          query,
+          query_b64: Buffer.from(String(query), "utf8").toString("base64")
+        }));
         req.end();
       });
 

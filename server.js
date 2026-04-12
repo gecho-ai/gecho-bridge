@@ -20,6 +20,50 @@ let extensionSocket = null;
 const pendingRequests = new Map();
 let requestIdCounter = 1;
 
+function decodeBase64Utf8(value) {
+  try {
+    return Buffer.from(String(value || ""), "base64").toString("utf8");
+  } catch (_e) {
+    return "";
+  }
+}
+
+function normalizeQuery(rawQuery, queryB64) {
+  const queryText = String(rawQuery || "").trim();
+  const decodedFromB64 = decodeBase64Utf8(queryB64).trim();
+  if (decodedFromB64) {
+    if (!queryText || /^[?？]+$/.test(queryText)) {
+      return decodedFromB64;
+    }
+  }
+  if (!queryText) {
+    return "";
+  }
+  try {
+    if (/%[0-9A-Fa-f]{2}/.test(queryText)) {
+      return decodeURIComponent(queryText);
+    }
+  } catch (_e) {}
+  return queryText;
+}
+
+function toSafeFileName(name) {
+  const value = String(name || "").trim();
+  const replaced = value
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "_")
+    .replace(/[. ]+$/g, "")
+    .slice(0, 80);
+  const fallback = `query_${Date.now()}`;
+  const candidate = replaced || fallback;
+  const upper = candidate.toUpperCase();
+  const reserved = new Set([
+    "CON","PRN","AUX","NUL",
+    "COM1","COM2","COM3","COM4","COM5","COM6","COM7","COM8","COM9",
+    "LPT1","LPT2","LPT3","LPT4","LPT5","LPT6","LPT7","LPT8","LPT9"
+  ]);
+  return reserved.has(upper) ? `${candidate}_` : candidate;
+}
+
 // --- WebSocket Server (与插件通信) ---
 const wss = new WebSocketServer({ port: WS_PORT, host: "127.0.0.1" });
 
@@ -61,7 +105,7 @@ wss.on("error", (err) => {
 
 // --- HTTP Server (供 Client 层调用) ---
 const server = http.createServer(async (req, res) => {
-  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
 
   // 健康检查接口
   if (req.method === "GET" && req.url === "/ping") {
@@ -73,7 +117,8 @@ const server = http.createServer(async (req, res) => {
     req.on("data", chunk => { body += chunk; });
     req.on("end", async () => {
       try {
-        const { query } = JSON.parse(body);
+        const payload = JSON.parse(body);
+        const query = normalizeQuery(payload.query, payload.query_b64);
         if (!query) {
           res.statusCode = 400;
           return res.end(JSON.stringify({ error: "Missing query" }));
@@ -103,14 +148,21 @@ const server = http.createServer(async (req, res) => {
         });
 
         // 持久化存储
+        let savePath = "";
+        let saveWarning = "";
         if (Array.isArray(result) && result.length > 0) {
           const dataDir = path.join(__dirname, "..", "data");
           if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-          const fixedPath = path.join(dataDir, `${query}_search_results.json`);
-          fs.writeFileSync(fixedPath, JSON.stringify(result, null, 2), "utf8");
+          const safeName = toSafeFileName(query);
+          const fixedPath = path.join(dataDir, `${safeName}_search_results.json`);
+          try {
+            fs.writeFileSync(fixedPath, JSON.stringify(result, null, 2), "utf8");
+            savePath = fixedPath;
+          } catch (e) {
+            saveWarning = e.message;
+          }
         }
-
-        res.end(JSON.stringify({ success: true, data: result }));
+        res.end(JSON.stringify({ success: true, data: result, savePath, saveWarning }));
       } catch (e) {
         res.statusCode = 500;
         res.end(JSON.stringify({ error: e.message }));
