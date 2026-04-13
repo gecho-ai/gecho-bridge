@@ -151,7 +151,8 @@ const server = http.createServer(async (req, res) => {
         let savePath = "";
         let saveWarning = "";
         if (Array.isArray(result) && result.length > 0) {
-          const dataDir = path.join(__dirname, "..", "data");
+          // 优先级: 1. 请求中传来的 save_dir 2. 环境变量 GECHO_DATA_DIR 3. 默认 data 目录
+          const dataDir = payload.save_dir || process.env.GECHO_DATA_DIR || path.join(__dirname, "..", "data");
           if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
           const safeName = toSafeFileName(query);
           const fixedPath = path.join(dataDir, `${safeName}_search_results.json`);

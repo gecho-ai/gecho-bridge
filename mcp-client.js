@@ -82,7 +82,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: "object",
           properties: {
-            query: { type: "string", description: "搜索关键词 (例如: '猫薄荷')" }
+            query: { type: "string", description: "搜索关键词 (例如: '猫薄荷')" },
+            save_dir: { type: "string", description: "可选的保存目录绝对路径 (例如: '/Users/xxx/data')" }
           },
           required: ["query"]
         }
@@ -94,7 +95,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 // 2. 转发工具请求到 Service 层
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (request.params.name === "tiktok_search_top_200") {
-    const { query } = request.params.arguments;
+    const { query, save_dir } = request.params.arguments;
 
     try {
       const requestService = () => new Promise((resolve, reject) => {
@@ -114,7 +115,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             if (res.statusCode >= 400) {
               reject(new Error(parsed.error || `HTTP ${res.statusCode}`));
             } else {
-              resolve(parsed.data);
+              resolve(parsed);
             }
           });
         });
@@ -122,35 +123,41 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         req.on("error", () => reject(new Error("Service Layer communication error")));
         req.write(JSON.stringify({
           query,
-          query_b64: Buffer.from(String(query), "utf8").toString("base64")
+          query_b64: Buffer.from(String(query), "utf8").toString("base64"),
+          save_dir
         }));
         req.end();
       });
 
-      let result;
+      let serviceResponse;
       try {
-        result = await requestService();
+        serviceResponse = await requestService();
       } catch (firstError) {
         if (String(firstError.message || "").includes("communication error")) {
           await ensureServiceRunning();
           await new Promise(r => setTimeout(r, 800));
-          result = await requestService();
+          serviceResponse = await requestService();
         } else {
           throw firstError;
         }
       }
 
-      if (result.error) {
-        return { content: [{ type: "text", text: `❌ 错误: ${result.error}` }], isError: true };
+      if (serviceResponse.error) {
+        return { content: [{ type: "text", text: `❌ 错误: ${serviceResponse.error}` }], isError: true };
       }
 
-      const top20 = Array.isArray(result) ? result.slice(0, 20) : [];
+      const result = Array.isArray(serviceResponse.data) ? serviceResponse.data : [];
+      const savePath = serviceResponse.savePath || "";
+      const saveLine = savePath
+        ? `📂 完整结果已保存到: ${savePath}\n\n`
+        : `📂 未返回保存路径，请检查服务端日志。\n\n`;
+      const top20 = result.slice(0, 20);
       return {
         content: [
           { 
             type: "text", 
-            text: `✅ 抓取完成！共获取 ${Array.isArray(result) ? result.length : 0} 条数据。\n` +
-                  `📂 完整结果已保存在本地 data 目录。\n\n` +
+            text: `✅ 抓取完成！共获取 ${result.length} 条数据。\n` +
+                  saveLine +
                   `以下是点赞最高的前 20 条结果：\n` +
                   JSON.stringify(top20, null, 2) 
           }

@@ -42,12 +42,52 @@ Add a new MCP server:
 - **Type**: command
 - **Command**: `npx -y @gecho-ai/gecho-bridge@latest`
 
+### Save Path Configuration
+Search results are persisted to a JSON file. You can control the save directory in two ways:
+
+1. Pass `save_dir` in the MCP tool call arguments.
+2. Set environment variable `GECHO_DATA_DIR` for the MCP process.
+
+Priority order used by the service:
+
+1. `save_dir` from request arguments
+2. `GECHO_DATA_DIR` environment variable
+3. Default `data` directory (`path.join(__dirname, "..", "data")`)
+
+File naming:
+
+- Result file pattern: `<query>_search_results.json`
+- Query text is sanitized to a safe file name before writing.
+
+Example (Claude Desktop with `GECHO_DATA_DIR`):
+
+```json
+{
+  "mcpServers": {
+    "gecho-bridge": {
+      "command": "npx",
+      "args": ["-y", "@gecho-ai/gecho-bridge@latest"],
+      "env": {
+        "GECHO_DATA_DIR": "/Users/yourname/gecho-data"
+      }
+    }
+  }
+}
+```
+
+Example (Cursor command with env):
+
+```bash
+GECHO_DATA_DIR=/Users/yourname/gecho-data npx -y @gecho-ai/gecho-bridge@latest
+```
+
 ## Usage
 
 Once configured, you can ask your AI:
 
 - "Search TikTok for 'cooking recipes'"
 - "Find trending TikTok videos about AI agents"
+- "Search TikTok for 'computer' and save to `/Users/yourname/data` (`save_dir`)"
 
 ## Development
 
