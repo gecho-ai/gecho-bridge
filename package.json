@@ -30,6 +30,6 @@
     "ws": "^8.19.0"
   },
   "publishConfig": {
-  "access": "public"
+    "access": "public"
   }
 }

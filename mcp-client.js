@@ -23,7 +23,7 @@ const HTTP_SERVICE_URL = "http://127.0.0.1:18793/search";
 const SERVICE_PATH = path.join(__dirname, "server.js");
 
 const server = new Server(
-  { name: "tiktok-bridge-client", version: "1.1.0" },
+  { name: "tiktok-bridge-client", version: "1.1.1" },
   { capabilities: { tools: {} } }
 );
 
@@ -46,12 +46,9 @@ function checkServiceAlive() {
 async function ensureServiceRunning() {
   const alive = await checkServiceAlive();
   if (alive) {
-    console.error("🐷 Service Layer is already running.");
     return;
   }
 
-  console.error("🐷 Service Layer not found. Starting it automatically...");
-  
   const child = spawn("node", [SERVICE_PATH], {
     detached: true,
     stdio: "ignore" // 静默启动，不占用当前终端
@@ -64,7 +61,6 @@ async function ensureServiceRunning() {
   while (retries > 0) {
     await new Promise(r => setTimeout(r, 1000));
     if (await checkServiceAlive()) {
-      console.error("✅ Service Layer started successfully.");
       return;
     }
     retries--;
@@ -115,17 +111,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             if (res.statusCode >= 400) {
               reject(new Error(parsed.error || `HTTP ${res.statusCode}`));
             } else {
-              resolve(parsed);
+              resolve(parsed); // 返回整个响应对象
             }
           });
         });
 
         req.on("error", () => reject(new Error("Service Layer communication error")));
-        req.write(JSON.stringify({
-          query,
-          query_b64: Buffer.from(String(query), "utf8").toString("base64"),
-          save_dir
-        }));
+        req.write(JSON.stringify({ query, save_dir }));
         req.end();
       });
 
@@ -146,7 +138,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: "text", text: `❌ 错误: ${serviceResponse.error}` }], isError: true };
       }
 
-      const result = Array.isArray(serviceResponse.data) ? serviceResponse.data : [];
+      const result = serviceResponse.data || [];
       const savePath = serviceResponse.savePath || "";
       const saveLine = savePath
         ? `📂 完整结果已保存到: ${savePath}\n\n`
@@ -179,11 +171,9 @@ async function main() {
     await ensureServiceRunning();
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error("🐷 TikTok Bridge MCP Client is running (STDIO)");
   } catch (e) {
-    console.error(`❌ Client initialization failed: ${e.message}`);
     process.exit(1);
   }
 }
 
-main().catch(console.error);
+main().catch(e => {});
