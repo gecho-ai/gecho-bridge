@@ -175,7 +175,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: "text", text: `❌ 错误: ${serviceResponse.error}` }], isError: true };
       }
 
-      const result = serviceResponse.data || [];
+      const result = serviceResponse.data;
+      if (typeof result === 'object' && result !== null && result.error) {
+        return { content: [{ type: "text", text: `❌ 抓取错误: ${result.error}` }], isError: true };
+      }
+
+      if (!Array.isArray(result)) {
+        return { content: [{ type: "text", text: `❌ 异常: 服务端未返回数组格式的数据` }], isError: true };
+      }
+
       const savePath = serviceResponse.savePath || "";
       const saveLine = savePath
         ? `📂 完整结果已保存到: ${savePath}\n\n`

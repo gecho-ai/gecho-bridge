@@ -177,8 +177,8 @@ const server = http.createServer(async (req, res) => {
         const result = await new Promise((resolve) => {
           const timeoutId = setTimeout(() => {
             pendingRequests.delete(requestId);
-            resolve({ error: "Scraping timeout (120s)" });
-          }, 120000);
+            resolve({ error: "Scraping timeout (300s)" });
+          }, 300000);
 
           pendingRequests.set(requestId, { resolve, timeoutId });
 
