@@ -148,9 +148,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const timeoutId = setTimeout(() => {
         if (pendingRequests.has(requestId)) {
           pendingRequests.delete(requestId);
-          resolve({ error: "抓取超时 (120s)，请检查浏览器是否已停止滚动" });
+          resolve({ error: "抓取超时 (300s)，请检查浏览器是否已停止滚动" });
         }
-      }, 120000);
+      }, 300000);
 
       pendingRequests.set(requestId, { resolve, reject, timeoutId });
 
@@ -243,8 +243,8 @@ async function run() {
     const result = await new Promise((resolve) => {
       const timeoutId = setTimeout(() => {
         pendingRequests.delete(requestId);
-        resolve({ error: "抓取超时 (120s)" });
-      }, 120000);
+        resolve({ error: "抓取超时 (300s)" });
+      }, 300000);
 
       pendingRequests.set(requestId, { resolve, timeoutId });
 

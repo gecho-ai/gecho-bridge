@@ -19,7 +19,10 @@ const http = require("http");
 const { spawn } = require("child_process");
 const path = require("path");
 
-const HTTP_SERVICE_URL = "http://127.0.0.1:18793/search";
+const SERVICE_BASE_URL = "http://127.0.0.1:18793";
+const HTTP_SERVICE_URL = `${SERVICE_BASE_URL}/search`;
+const PING_URL = `${SERVICE_BASE_URL}/ping`;
+const SHUTDOWN_URL = `${SERVICE_BASE_URL}/shutdown`;
 const SERVICE_PATH = path.join(__dirname, "server.js");
 
 const server = new Server(
@@ -32,7 +35,7 @@ const server = new Server(
  */
 function checkServiceAlive() {
   return new Promise((resolve) => {
-    const req = http.get("http://127.0.0.1:18793/ping", (res) => {
+    const req = http.get(PING_URL, (res) => {
       resolve(res.statusCode === 200);
     });
     req.on("error", () => resolve(false));
@@ -41,31 +44,65 @@ function checkServiceAlive() {
 }
 
 /**
- * 自动拉起 Service 层
+ * 请求旧服务优雅退出
  */
-async function ensureServiceRunning() {
-  const alive = await checkServiceAlive();
-  if (alive) {
-    return;
-  }
+function requestShutdown() {
+  return new Promise((resolve) => {
+    const req = http.request(SHUTDOWN_URL, { method: "POST" }, (res) => {
+      resolve(res.statusCode >= 200 && res.statusCode < 300);
+    });
+    req.on("error", () => resolve(false));
+    req.setTimeout(1000, () => {
+      req.destroy();
+      resolve(false);
+    });
+    req.end();
+  });
+}
 
+function startServiceDetached() {
   const child = spawn("node", [SERVICE_PATH], {
     detached: true,
     stdio: "ignore" // 静默启动，不占用当前终端
   });
-
   child.unref(); // 让子进程独立运行，父进程退出时不影响它
+}
 
-  // 等待服务启动成功
-  let retries = 5;
+async function waitForServiceDown() {
+  let retries = 10;
   while (retries > 0) {
-    await new Promise(r => setTimeout(r, 1000));
-    if (await checkServiceAlive()) {
-      return;
+    await new Promise((r) => setTimeout(r, 300));
+    if (!(await checkServiceAlive())) {
+      return true;
     }
     retries--;
   }
-  throw new Error("Failed to start Service Layer after 5s.");
+  return false;
+}
+
+async function waitForServiceUp() {
+  let retries = 8;
+  while (retries > 0) {
+    await new Promise((r) => setTimeout(r, 800));
+    if (await checkServiceAlive()) {
+      return true;
+    }
+    retries--;
+  }
+  return false;
+}
+
+/**
+ * 启动即接管：每次启动 MCP 时先尝试关闭旧服务，再拉起当前服务
+ */
+async function ensureServiceRunning() {
+  await requestShutdown();
+  await waitForServiceDown();
+  startServiceDetached();
+  const ready = await waitForServiceUp();
+  if (!ready) {
+    throw new Error("Failed to start Service Layer.");
+  }
 }
 
 // 1. 定义工具
@@ -138,7 +175,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: "text", text: `❌ 错误: ${serviceResponse.error}` }], isError: true };
       }
 
-      const result = serviceResponse.data || [];
+      const result = serviceResponse.data;
+      if (typeof result === 'object' && result !== null && result.error) {
+        return { content: [{ type: "text", text: `❌ 抓取错误: ${result.error}` }], isError: true };
+      }
+
+      if (!Array.isArray(result)) {
+        return { content: [{ type: "text", text: `❌ 异常: 服务端未返回数组格式的数据` }], isError: true };
+      }
+
       const savePath = serviceResponse.savePath || "";
       const saveLine = savePath
         ? `📂 完整结果已保存到: ${savePath}\n\n`

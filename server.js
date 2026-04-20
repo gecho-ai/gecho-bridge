@@ -19,6 +19,7 @@ const HTTP_PORT = 18793;
 let extensionSocket = null;
 const pendingRequests = new Map();
 let requestIdCounter = 1;
+let shuttingDown = false;
 
 function decodeBase64Utf8(value) {
   try {
@@ -62,6 +63,36 @@ function toSafeFileName(name) {
     "LPT1","LPT2","LPT3","LPT4","LPT5","LPT6","LPT7","LPT8","LPT9"
   ]);
   return reserved.has(upper) ? `${candidate}_` : candidate;
+}
+
+function gracefulShutdown(reason) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`🛑 Service shutting down: ${reason}`);
+
+  for (const [_requestId, pending] of pendingRequests) {
+    clearTimeout(pending.timeoutId);
+    pending.resolve({ error: "Service is shutting down" });
+  }
+  pendingRequests.clear();
+
+  try {
+    if (extensionSocket && extensionSocket.readyState === 1) {
+      extensionSocket.close(1001, "service_shutdown");
+    }
+  } catch (_e) {}
+
+  try {
+    wss.close(() => {
+      server.close(() => process.exit(0));
+    });
+  } catch (_e) {
+    try {
+      server.close(() => process.exit(0));
+    } catch (__e) {
+      process.exit(0);
+    }
+  }
 }
 
 // --- WebSocket Server (与插件通信) ---
@@ -112,7 +143,18 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ status: "ok" }));
   }
 
+  if (req.method === "POST" && req.url === "/shutdown") {
+    res.end(JSON.stringify({ status: "ok", message: "shutdown accepted" }));
+    setTimeout(() => gracefulShutdown("remote_shutdown"), 20).unref?.();
+    return;
+  }
+
   if (req.method === "POST" && req.url === "/search") {
+    if (shuttingDown) {
+      res.statusCode = 503;
+      return res.end(JSON.stringify({ error: "Service is shutting down" }));
+    }
+
     let body = "";
     req.on("data", chunk => { body += chunk; });
     req.on("end", async () => {
@@ -135,8 +177,8 @@ const server = http.createServer(async (req, res) => {
         const result = await new Promise((resolve) => {
           const timeoutId = setTimeout(() => {
             pendingRequests.delete(requestId);
-            resolve({ error: "Scraping timeout (120s)" });
-          }, 120000);
+            resolve({ error: "Scraping timeout (300s)" });
+          }, 300000);
 
           pendingRequests.set(requestId, { resolve, timeoutId });
 
@@ -180,3 +222,6 @@ server.listen(HTTP_PORT, "127.0.0.1", () => {
   console.log(`   - WebSocket (Extension): ws://127.0.0.1:${WS_PORT}`);
   console.log(`   - HTTP API (Client): http://127.0.0.1:${HTTP_PORT}`);
 });
+
+process.on("SIGTERM", () => gracefulShutdown("sigterm"));
+process.on("SIGINT", () => gracefulShutdown("sigint"));
