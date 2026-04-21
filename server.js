@@ -149,7 +149,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "POST" && req.url === "/search") {
+  if (req.method === "POST" && (req.url === "/search" || req.url === "/action")) {
     if (shuttingDown) {
       res.statusCode = 503;
       return res.end(JSON.stringify({ error: "Service is shutting down" }));
@@ -160,10 +160,11 @@ const server = http.createServer(async (req, res) => {
     req.on("end", async () => {
       try {
         const payload = JSON.parse(body);
-        const query = normalizeQuery(payload.query, payload.query_b64);
-        if (!query) {
+        const action = payload.action;
+        
+        if (!action) {
           res.statusCode = 400;
-          return res.end(JSON.stringify({ error: "Missing query" }));
+          return res.end(JSON.stringify({ error: "Missing action" }));
         }
 
         if (!extensionSocket || extensionSocket.readyState !== 1) {
@@ -171,20 +172,31 @@ const server = http.createServer(async (req, res) => {
           return res.end(JSON.stringify({ error: "Extension not connected" }));
         }
 
-        console.log(`🔍 Processing search request for: [${query}]`);
+        console.log(`🚀 Dispatching action: [${action}]`);
         const requestId = `svc-${Date.now()}-${requestIdCounter++}`;
         
         const result = await new Promise((resolve) => {
           const timeoutId = setTimeout(() => {
             pendingRequests.delete(requestId);
-            resolve({ error: "Scraping timeout (300s)" });
+            resolve({ error: `Scraping timeout (300s) for action: ${action}` });
           }, 300000);
 
           pendingRequests.set(requestId, { resolve, timeoutId });
 
+          // 通用透传逻辑：将 payload 中的所有参数（除去 action）作为 params 传给插件
+          const { action: _a, ...params } = payload;
+          
+          // 🐷 兼容层：如果插件版本较旧，识别不了 tiktok_search，则映射回 search
+          let finalAction = action;
+          if (action === "tiktok_search") finalAction = "search";
+          if (action === "tiktok_insight") finalAction = "search";
+          
           extensionSocket.send(JSON.stringify({
             method: "execute_action",
-            params: { action: "search", params: { query } },
+            params: { 
+              action: finalAction, 
+              params: params 
+            },
             requestId: requestId
           }));
         });
@@ -193,11 +205,10 @@ const server = http.createServer(async (req, res) => {
         let savePath = "";
         let saveWarning = "";
         if (Array.isArray(result) && result.length > 0) {
-          // 优先级: 1. 请求中传来的 save_dir 2. 环境变量 GECHO_DATA_DIR 3. 默认 data 目录
-          const dataDir = payload.save_dir || process.env.GECHO_DATA_DIR || path.join(__dirname, "..", "data");
+          const dataDir = payload.save_dir || process.env.GECHO_DATA_DIR || path.join(__dirname, "data");
           if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-          const safeName = toSafeFileName(query);
-          const fixedPath = path.join(dataDir, `${safeName}_search_results.json`);
+          const safeName = toSafeFileName(params.query || action);
+          const fixedPath = path.join(dataDir, `${safeName}_results.json`);
           try {
             fs.writeFileSync(fixedPath, JSON.stringify(result, null, 2), "utf8");
             savePath = fixedPath;

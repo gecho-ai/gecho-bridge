@@ -110,12 +110,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
-        name: "tiktok_search_top_200",
-        description: "在 TikTok 上搜索关键词，自动滚动加载至少 200 条结果，并全部返回。",
+        name: "tiktok_search",
+        description: "在 TikTok 上搜索关键词，自动滚动加载结果并返回。",
         inputSchema: {
           type: "object",
           properties: {
             query: { type: "string", description: "搜索关键词 (例如: '猫薄荷')" },
+            save_dir: { type: "string", description: "可选的保存目录绝对路径 (例如: '/Users/xxx/data')" }
+          },
+          required: ["query"]
+        }
+      },
+      {
+        name: "tiktok_insight",
+        description: "在 TikTok 搜索的基础上进行商机洞察和趋势分析。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: "搜索关键词 (例如: '户外野餐垫')" },
             save_dir: { type: "string", description: "可选的保存目录绝对路径 (例如: '/Users/xxx/data')" }
           },
           required: ["query"]
@@ -127,9 +139,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 // 2. 转发工具请求到 Service 层
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  if (request.params.name === "tiktok_search_top_200") {
-    const { query, save_dir } = request.params.arguments;
+  const toolName = request.params.name;
+  const args = request.params.arguments;
 
+  // 只要是 tiktok_ 开头的工具，都走通用转发逻辑
+  if (toolName.startsWith("tiktok_") || toolName.startsWith("x_") || toolName.startsWith("ins_")) {
     try {
       const requestService = () => new Promise((resolve, reject) => {
         const req = http.request(HTTP_SERVICE_URL, {
@@ -154,7 +168,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
 
         req.on("error", () => reject(new Error("Service Layer communication error")));
-        req.write(JSON.stringify({ query, save_dir }));
+        
+        // 【核心改动】：直接将工具名作为 action，所有参数作为 payload 透传
+        req.write(JSON.stringify({ 
+          action: toolName, 
+          ...args 
+        }));
         req.end();
       });
 
@@ -177,32 +196,33 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const result = serviceResponse.data;
       if (typeof result === 'object' && result !== null && result.error) {
-        return { content: [{ type: "text", text: `❌ 抓取错误: ${result.error}` }], isError: true };
+        return { content: [{ type: "text", text: `❌ 业务错误: ${result.error}` }], isError: true };
       }
 
       if (!Array.isArray(result)) {
-        return { content: [{ type: "text", text: `❌ 异常: 服务端未返回数组格式的数据` }], isError: true };
+        return { content: [{ type: "text", text: `❌ 异常: 插件未返回数组格式的结果` }], isError: true };
       }
 
       const savePath = serviceResponse.savePath || "";
       const saveLine = savePath
-        ? `📂 完整结果已保存到: ${savePath}\n\n`
-        : `📂 未返回保存路径，请检查服务端日志。\n\n`;
+        ? `📂 数据已存: ${savePath}\n\n`
+        : "";
+      
       const top20 = result.slice(0, 20);
       return {
         content: [
           { 
             type: "text", 
-            text: `✅ 抓取完成！共获取 ${result.length} 条数据。\n` +
+            text: `✅ [${toolName}] 执行成功，共 ${result.length} 条数据。\n` +
                   saveLine +
-                  `以下是点赞最高的前 20 条结果：\n` +
+                  `以下是部分结果展示：\n` +
                   JSON.stringify(top20, null, 2) 
           }
         ]
       };
     } catch (e) {
       return { 
-        content: [{ type: "text", text: `❌ 转发失败: ${e.message}.` }], 
+        content: [{ type: "text", text: `❌ 链路故障: ${e.message}.` }], 
         isError: true 
       };
     }
