@@ -174,6 +174,7 @@ const server = http.createServer(async (req, res) => {
 
         console.log(`🚀 Dispatching action: [${action}]`);
         const requestId = `svc-${Date.now()}-${requestIdCounter++}`;
+        const { action: _a, ...requestParams } = payload;
         
         const result = await new Promise((resolve) => {
           const timeoutId = setTimeout(() => {
@@ -183,9 +184,6 @@ const server = http.createServer(async (req, res) => {
 
           pendingRequests.set(requestId, { resolve, timeoutId });
 
-          // 通用透传逻辑：将 payload 中的所有参数（除去 action）作为 params 传给插件
-          const { action: _a, ...params } = payload;
-          
           // 🐷 兼容层：如果插件版本较旧，识别不了 tiktok_search，则映射回 search
           let finalAction = action;
           if (action === "tiktok_search") finalAction = "search";
@@ -195,7 +193,7 @@ const server = http.createServer(async (req, res) => {
             method: "execute_action",
             params: { 
               action: finalAction, 
-              params: params 
+              params: requestParams 
             },
             requestId: requestId
           }));
@@ -207,7 +205,7 @@ const server = http.createServer(async (req, res) => {
         if (Array.isArray(result) && result.length > 0) {
           const dataDir = payload.save_dir || process.env.GECHO_DATA_DIR || path.join(__dirname, "data");
           if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-          const safeName = toSafeFileName(params.query || action);
+          const safeName = toSafeFileName(requestParams.query || action);
           const fixedPath = path.join(dataDir, `${safeName}_results.json`);
           try {
             fs.writeFileSync(fixedPath, JSON.stringify(result, null, 2), "utf8");
