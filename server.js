@@ -186,15 +186,10 @@ const server = http.createServer(async (req, res) => {
           // 通用透传逻辑：将 payload 中的所有参数（除去 action）作为 params 传给插件
           const { action: _a, ...params } = payload;
           
-          // 🐷 兼容层：如果插件版本较旧，识别不了 tiktok_search，则映射回 search
-          let finalAction = action;
-          if (action === "tiktok_search") finalAction = "search";
-          if (action === "tiktok_insight") finalAction = "search";
-          
           extensionSocket.send(JSON.stringify({
             method: "execute_action",
             params: { 
-              action: finalAction, 
+              action: action, 
               params: params 
             },
             requestId: requestId
