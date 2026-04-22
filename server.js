@@ -174,7 +174,8 @@ const server = http.createServer(async (req, res) => {
 
         console.log(`🚀 Dispatching action: [${action}]`);
         const requestId = `svc-${Date.now()}-${requestIdCounter++}`;
-        
+        // 通用透传逻辑：将 payload 中的所有参数（除去 action）作为 params 传给插件
+        const { action: _a, ...params } = payload;
         const result = await new Promise((resolve) => {
           const timeoutId = setTimeout(() => {
             pendingRequests.delete(requestId);
@@ -183,8 +184,7 @@ const server = http.createServer(async (req, res) => {
 
           pendingRequests.set(requestId, { resolve, timeoutId });
 
-          // 通用透传逻辑：将 payload 中的所有参数（除去 action）作为 params 传给插件
-          const { action: _a, ...params } = payload;
+
           
           extensionSocket.send(JSON.stringify({
             method: "execute_action",
