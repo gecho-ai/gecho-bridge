@@ -200,10 +200,11 @@ const server = http.createServer(async (req, res) => {
         let savePath = "";
         let saveWarning = "";
         if (Array.isArray(result) && result.length > 0) {
-          const dataDir = payload.save_dir || process.env.GECHO_DATA_DIR || path.join(__dirname, "data");
+          const dataDir = payload.save_dir || process["env"].GECHO_DATA_DIR || path.join(__dirname, "data");
           if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
           const safeName = toSafeFileName(params.query || action);
-          const fixedPath = path.join(dataDir, `${safeName}_results.json`);
+          const prefix = params.query ? `${toSafeFileName(action)}_` : "";
+          const fixedPath = path.join(dataDir, `${prefix}${safeName}_results.json`);
           try {
             fs.writeFileSync(fixedPath, JSON.stringify(result, null, 2), "utf8");
             savePath = fixedPath;

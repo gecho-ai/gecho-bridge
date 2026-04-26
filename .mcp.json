@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "gecho-tiktok-search": {
+      "command": "node",
+      "args": ["./mcp-client.js"]
+    }
+  }
+}

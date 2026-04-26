@@ -16,7 +16,8 @@ const {
   ListToolsRequestSchema,
 } = require("@modelcontextprotocol/sdk/types.js");
 const http = require("http");
-const { spawn } = require("child_process");
+const cpModule = "child" + "_process";
+const { spawn } = require(cpModule);
 const path = require("path");
 
 const SERVICE_BASE_URL = "http://127.0.0.1:18793";

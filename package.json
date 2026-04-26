@@ -8,11 +8,15 @@
   },
   "files": [
     "*.js",
-    "package.json"
+    "package.json",
+    ".claude-plugin",
+    ".mcp.json",
+    "skills"
   ],
   "scripts": {
     "start": "node mcp-client.js",
-    "server": "node server.js"
+    "server": "node server.js",
+    "setup": "openclaw plugins install -l ."
   },
   "keywords": [
     "mcp",
