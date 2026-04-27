@@ -2,7 +2,9 @@
   "mcpServers": {
     "gecho-tiktok-search": {
       "command": "node",
-      "args": ["./mcp-client.js"]
+      "args": ["./mcp-client.js"],
+      "timeout": 600000,
+      "retries": 0
     }
   }
 }

@@ -21,6 +21,10 @@ const pendingRequests = new Map();
 let requestIdCounter = 1;
 let shuttingDown = false;
 
+// --- 异步任务管理 ---
+const asyncJobs = new Map();
+const ASYNC_ATTEMPT_TIMEOUT_MS = 360000; // 单次尝试 6 分钟
+
 function decodeBase64Utf8(value) {
   try {
     return Buffer.from(String(value || ""), "base64").toString("utf8");
@@ -65,6 +69,115 @@ function toSafeFileName(name) {
   return reserved.has(upper) ? `${candidate}_` : candidate;
 }
 
+function updateJob(jobId, patch) {
+  const prev = asyncJobs.get(jobId) || {};
+  const next = { ...prev, ...patch, lastUpdateAt: Date.now() };
+  asyncJobs.set(jobId, next);
+  return next;
+}
+
+function appendJobEvent(jobId, message, extra = {}) {
+  const prev = asyncJobs.get(jobId) || {};
+  const events = Array.isArray(prev.events) ? prev.events.slice(-14) : [];
+  events.push({ at: Date.now(), message, ...extra });
+  asyncJobs.set(jobId, { ...prev, events, lastUpdateAt: Date.now() });
+}
+
+function runAsyncAttempt({ jobId, action, params, payload, attempt }) {
+  if (!extensionSocket || extensionSocket.readyState !== 1) {
+    updateJob(jobId, {
+      status: "error",
+      stage: "extension_disconnected",
+      error: "Extension not connected during async dispatch"
+    });
+    return;
+  }
+
+  const requestId = `${jobId}:a${attempt}`;
+  appendJobEvent(jobId, "attempt_started", { attempt, requestId });
+  updateJob(jobId, {
+    status: "running",
+    stage: "awaiting_extension_result",
+    attempt,
+    activeRequestId: requestId
+  });
+
+  const timeoutId = setTimeout(() => {
+    pendingRequests.delete(requestId);
+    const job = asyncJobs.get(jobId);
+    if (!job || job.status !== "running") return;
+    const timedOutAttempt = Number(job.attempt || attempt);
+    appendJobEvent(jobId, "attempt_timeout", { attempt: timedOutAttempt });
+
+    updateJob(jobId, {
+      status: "error",
+      stage: "timed_out",
+      error: `Scraping timeout (${Math.floor(ASYNC_ATTEMPT_TIMEOUT_MS / 1000)}s) for action: ${action}`,
+      retryCount: 0
+    });
+  }, ASYNC_ATTEMPT_TIMEOUT_MS);
+
+  pendingRequests.set(requestId, {
+    timeoutId,
+    jobId,
+    resolve: (result) => {
+      clearTimeout(timeoutId);
+      const job = asyncJobs.get(jobId);
+      if (!job || job.status !== "running") return;
+
+      appendJobEvent(jobId, "attempt_result_received", { attempt });
+
+      let savePath = "";
+      let saveWarning = "";
+      if (Array.isArray(result) && result.length > 0) {
+        const dataDir = payload.save_dir || process["env"].GECHO_DATA_DIR || path.join(__dirname, "data");
+        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+        const safeName = toSafeFileName(params.query || action);
+        const prefix = params.query ? `${toSafeFileName(action)}_` : "";
+        const fixedPath = path.join(dataDir, `${prefix}${safeName}_results.json`);
+        try {
+          fs.writeFileSync(fixedPath, JSON.stringify(result, null, 2), "utf8");
+          savePath = fixedPath;
+        } catch (e) {
+          saveWarning = e.message;
+        }
+      }
+
+      if (Array.isArray(result)) {
+        updateJob(jobId, {
+          status: "completed",
+          stage: "completed",
+          data: result,
+          savePath,
+          saveWarning,
+          completedAt: Date.now()
+        });
+        appendJobEvent(jobId, "job_completed", { count: result.length, savePath: savePath || "" });
+      } else if (result && typeof result === "object" && result.error) {
+        updateJob(jobId, {
+          status: "error",
+          stage: "business_error",
+          error: result.error
+        });
+        appendJobEvent(jobId, "job_error", { error: String(result.error) });
+      } else {
+        updateJob(jobId, {
+          status: "error",
+          stage: "invalid_result",
+          error: "Plugin returned non-array result for async insight"
+        });
+        appendJobEvent(jobId, "job_error", { error: "non_array_result" });
+      }
+    }
+  });
+
+  extensionSocket.send(JSON.stringify({
+    method: "execute_action",
+    params: { action: action, params: params },
+    requestId
+  }));
+}
+
 function gracefulShutdown(reason) {
   if (shuttingDown) return;
   shuttingDown = true;
@@ -105,6 +218,17 @@ wss.on("connection", (ws) => {
   ws.on("message", (message) => {
     try {
       const parsed = JSON.parse(message);
+      if (parsed.method === "action_progress" && parsed.requestId) {
+        const pending = pendingRequests.get(parsed.requestId);
+        if (pending?.jobId) {
+          updateJob(pending.jobId, {
+            stage: "extension_processing",
+            lastProgressAt: Date.now(),
+            progress: parsed.progress
+          });
+          appendJobEvent(pending.jobId, "progress", { progress: parsed.progress ?? null });
+        }
+      }
       if (parsed.method === "action_result" && parsed.requestId) {
         console.log(`📩 Received result from extension (ID: ${parsed.requestId})`);
         const pending = pendingRequests.get(parsed.requestId);
@@ -149,6 +273,75 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // --- 新增异步任务查询接口 ---
+  if (req.method === "GET" && req.url.startsWith("/async-status")) {
+    try {
+      const url = new URL(req.url, `http://${req.headers.host}`);
+      const jobId = url.searchParams.get("jobId");
+      if (!jobId || !asyncJobs.has(jobId)) {
+        res.statusCode = 404;
+        return res.end(JSON.stringify({ error: "Job not found" }));
+      }
+      return res.end(JSON.stringify(asyncJobs.get(jobId)));
+    } catch (e) {
+      res.statusCode = 500;
+      return res.end(JSON.stringify({ error: e.message }));
+    }
+  }
+
+  // --- 新增异步任务启动接口 ---
+  if (req.method === "POST" && req.url === "/async-action") {
+    if (shuttingDown) {
+      res.statusCode = 503;
+      return res.end(JSON.stringify({ error: "Service is shutting down" }));
+    }
+
+    let body = "";
+    req.on("data", chunk => { body += chunk; });
+    req.on("end", () => {
+      try {
+        const payload = JSON.parse(body);
+        const action = payload.action;
+        
+        if (!action) {
+          res.statusCode = 400;
+          return res.end(JSON.stringify({ error: "Missing action" }));
+        }
+
+        if (!extensionSocket || extensionSocket.readyState !== 1) {
+          res.statusCode = 503;
+          return res.end(JSON.stringify({ error: "Extension not connected" }));
+        }
+
+        const jobId = `job-${Date.now()}-${requestIdCounter++}`;
+        console.log(`🚀 Dispatching ASYNC action: [${action}], jobId: ${jobId}`);
+        const { action: _a, ...params } = payload;
+
+        asyncJobs.set(jobId, {
+          status: "running",
+          stage: "queued",
+          action,
+          query: params.query || "",
+          startTime: Date.now(),
+          createdAt: Date.now(),
+          retryCount: 0,
+          attempt: 0,
+          lastUpdateAt: Date.now(),
+          events: []
+        });
+        appendJobEvent(jobId, "job_created", { action });
+
+        runAsyncAttempt({ jobId, action, params, payload, attempt: 1 });
+
+        return res.end(JSON.stringify({ success: true, jobId }));
+      } catch (e) {
+        res.statusCode = 500;
+        return res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+
   if (req.method === "POST" && (req.url === "/search" || req.url === "/action")) {
     if (shuttingDown) {
       res.statusCode = 503;
@@ -179,8 +372,8 @@ const server = http.createServer(async (req, res) => {
         const result = await new Promise((resolve) => {
           const timeoutId = setTimeout(() => {
             pendingRequests.delete(requestId);
-            resolve({ error: `Scraping timeout (300s) for action: ${action}` });
-          }, 300000);
+            resolve({ error: `Scraping timeout (600s) for action: ${action}` });
+          }, 600000);
 
           pendingRequests.set(requestId, { resolve, timeoutId });
 

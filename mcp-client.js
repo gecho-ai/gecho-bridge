@@ -93,17 +93,38 @@ async function waitForServiceUp() {
   return false;
 }
 
-/**
- * 启动即接管：每次启动 MCP 时先尝试关闭旧服务，再拉起当前服务
- */
 async function ensureServiceRunning() {
-  await requestShutdown();
-  await waitForServiceDown();
+  if (await checkServiceAlive()) {
+    return;
+  }
   startServiceDetached();
   const ready = await waitForServiceUp();
   if (!ready) {
     throw new Error("Failed to start Service Layer.");
   }
+}
+
+async function restartServiceRunning() {
+  await requestShutdown();
+  await waitForServiceDown();
+  startServiceDetached();
+  const ready = await waitForServiceUp();
+  if (!ready) {
+    throw new Error("Failed to restart Service Layer.");
+  }
+}
+
+function shouldRestartServiceForError(message, toolName) {
+  const text = String(message || "");
+  if (toolName === "tiktok_insight" && (text.includes("Not found") || text.includes("HTTP 404"))) {
+    return true;
+  }
+  return false;
+}
+
+function shouldRecoverServiceForError(message) {
+  const text = String(message || "");
+  return text.includes("communication error");
 }
 
 // 1. 定义工具
@@ -124,7 +145,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "tiktok_insight",
-        description: "在 TikTok 搜索的基础上进行商机洞察和趋势分析。",
+        description: "在 TikTok 搜索的基础上进行商机洞察和趋势分析。（异步工具：由于耗时较长，调用后会立即返回 job_id，你必须随后使用 check_insight_status 工具轮询结果）",
         inputSchema: {
           type: "object",
           properties: {
@@ -132,6 +153,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             save_dir: { type: "string", description: "可选的保存目录绝对路径 (例如: '/Users/xxx/data')" }
           },
           required: ["query"]
+        }
+      },
+      {
+        name: "check_insight_status",
+        description: "根据 job_id 查询异步洞察任务（如 tiktok_insight）的执行状态和结果。如果状态为 running，请等待几秒后再次查询。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            jobId: { type: "string", description: "从 tiktok_insight 获得的 job_id" }
+          },
+          required: ["jobId"]
         }
       }
     ]
@@ -142,18 +174,159 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const toolName = request.params.name;
   const args = request.params.arguments;
+  const progressToken = request.params._metadata?.progressToken;
+
+  // 处理 check_insight_status 工具
+  if (toolName === "check_insight_status") {
+    try {
+      const jobId = args.jobId;
+      const requestStatus = () => new Promise((resolve, reject) => {
+        const req = http.get(`${SERVICE_BASE_URL}/async-status?jobId=${encodeURIComponent(jobId)}`, (res) => {
+          let body = "";
+          res.on("data", (chunk) => body += chunk);
+          res.on("end", () => {
+            let parsed = {};
+            try { parsed = JSON.parse(body || "{}"); } catch (_e) {}
+            if (res.statusCode >= 400) {
+              reject(new Error(parsed.error || `HTTP ${res.statusCode}`));
+            } else {
+              resolve(parsed);
+            }
+          });
+        });
+        req.on("error", () => reject(new Error("Service Layer communication error")));
+      });
+      
+      let statusResponse;
+      try {
+        statusResponse = await requestStatus();
+      } catch (firstError) {
+        if (shouldRestartServiceForError(firstError.message, toolName)) {
+          await restartServiceRunning();
+          await new Promise(r => setTimeout(r, 800));
+          statusResponse = await requestStatus();
+        } else if (shouldRecoverServiceForError(firstError.message)) {
+          await ensureServiceRunning();
+          await new Promise(r => setTimeout(r, 800));
+          statusResponse = await requestStatus();
+        } else {
+          throw firstError;
+        }
+      }
+
+      if (statusResponse.status === "running") {
+        const elapsedSec = statusResponse.startTime
+          ? Math.floor((Date.now() - statusResponse.startTime) / 1000)
+          : -1;
+        const stage = statusResponse.stage || "running";
+        const attempt = Number(statusResponse.attempt || 0);
+        const retryCount = Number(statusResponse.retryCount || 0);
+        const lastUpdateSec = statusResponse.lastUpdateAt
+          ? Math.floor((Date.now() - statusResponse.lastUpdateAt) / 1000)
+          : -1;
+        const progressPart = typeof statusResponse.progress === "number"
+          ? `, progress=${statusResponse.progress}`
+          : "";
+        return {
+          content: [{
+            type: "text",
+            text:
+              `⏳ 任务 [${jobId}] 仍在执行中 ` +
+              `(已耗时 ${elapsedSec >= 0 ? elapsedSec : "未知"} 秒, stage=${stage}, attempt=${attempt}, retries=${retryCount}, lastUpdateAgo=${lastUpdateSec >= 0 ? lastUpdateSec : "未知"}s${progressPart})，请稍后再次查询。`
+          }]
+        };
+      }
+      
+      if (statusResponse.status === "error") {
+        const stage = statusResponse.stage ? ` (stage=${statusResponse.stage})` : "";
+        const retries = typeof statusResponse.retryCount === "number"
+          ? `, retries=${statusResponse.retryCount}`
+          : "";
+        return {
+          content: [{
+            type: "text",
+            text: `❌ 任务 [${jobId}] 执行失败${stage}${retries}: ${statusResponse.error}`
+          }],
+          isError: true
+        };
+      }
+
+      const result = statusResponse.data;
+      if (typeof result === 'object' && result !== null && result.error) {
+        return { content: [{ type: "text", text: `❌ 业务错误: ${result.error}` }], isError: true };
+      }
+
+      if (!Array.isArray(result)) {
+        return { content: [{ type: "text", text: `❌ 异常: 插件未返回数组格式的结果` }], isError: true };
+      }
+
+      const savePath = statusResponse.savePath || "";
+      const saveLine = savePath ? `📂 数据已存: ${savePath}\n\n` : "";
+      const top20 = result.slice(0, 20);
+
+      return {
+        content: [
+          { 
+            type: "text", 
+            text: `✅ 任务 [${jobId}] 执行成功！共获取 ${result.length} 条数据。\n` +
+                  saveLine +
+                  `以下是部分结果展示：\n` +
+                  JSON.stringify(top20, null, 2) 
+          }
+        ]
+      };
+
+    } catch (e) {
+      return { content: [{ type: "text", text: `❌ 状态查询故障: ${e.message}.` }], isError: true };
+    }
+  }
 
   // 只要是 tiktok_ 开头的工具，都走通用转发逻辑
   if (toolName.startsWith("tiktok_") || toolName.startsWith("x_") || toolName.startsWith("ins_")) {
+    // 设置进度上报定时器 (心跳)，防止 MCP 客户端超时
+    let progressValue = 0;
+    
+    // 如果有 progressToken，立即发送一条初始进度，告知客户端任务已开始
+    if (progressToken) {
+      server.notification({
+        method: "notifications/progress",
+        params: {
+          progressToken,
+          progress: 1,
+          total: 100
+        }
+      });
+    } else {
+      console.error(`[Warning] No progressToken provided for ${toolName}. Heartbeat will not be sent.`);
+    }
+
+    const progressInterval = setInterval(() => {
+      if (progressToken) {
+        progressValue = Math.min(progressValue + 5, 95);
+        server.notification({
+          method: "notifications/progress",
+          params: {
+            progressToken,
+            progress: progressValue,
+            total: 100
+          }
+        });
+      }
+    }, 10000); // 频率提高到 10 秒一次
+
     try {
+      const targetUrl = toolName === "tiktok_insight" ? `${SERVICE_BASE_URL}/async-action` : HTTP_SERVICE_URL;
+
       const requestService = () => new Promise((resolve, reject) => {
-        const req = http.request(HTTP_SERVICE_URL, {
+        const req = http.request(targetUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/json" }
+          headers: { "Content-Type": "application/json" },
+          timeout: 600000 // 10分钟超时
         }, (res) => {
           let body = "";
           res.on("data", (chunk) => body += chunk);
           res.on("end", () => {
+            clearInterval(progressInterval); // 任务结束，清除定时器
             let parsed = {};
             try {
               parsed = JSON.parse(body || "{}");
@@ -168,7 +341,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           });
         });
 
-        req.on("error", () => reject(new Error("Service Layer communication error")));
+        req.on("error", () => {
+          clearInterval(progressInterval);
+          reject(new Error("Service Layer communication error"));
+        });
+        req.on("timeout", () => {
+          req.destroy();
+          clearInterval(progressInterval);
+          reject(new Error("Service Layer request timed out (600s)"));
+        });
         
         // 【核心改动】：直接将工具名作为 action，所有参数作为 payload 透传
         req.write(JSON.stringify({ 
@@ -182,7 +363,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       try {
         serviceResponse = await requestService();
       } catch (firstError) {
-        if (String(firstError.message || "").includes("communication error")) {
+        if (shouldRestartServiceForError(firstError.message, toolName)) {
+          await restartServiceRunning();
+          await new Promise(r => setTimeout(r, 800));
+          serviceResponse = await requestService();
+        } else if (shouldRecoverServiceForError(firstError.message)) {
           await ensureServiceRunning();
           await new Promise(r => setTimeout(r, 800));
           serviceResponse = await requestService();
@@ -193,6 +378,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       if (serviceResponse.error) {
         return { content: [{ type: "text", text: `❌ 错误: ${serviceResponse.error}` }], isError: true };
+      }
+
+      // 如果是异步任务启动返回
+      if (toolName === "tiktok_insight" && serviceResponse.jobId) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `✅ 异步洞察任务已启动。\n\n任务 ID (job_id): ${serviceResponse.jobId}\n\n请使用 \`check_insight_status\` 工具并传入上述 jobId 来查询执行结果。因为该任务需要几分钟，建议你先等待 10-15 秒再进行第一次查询。`
+            }
+          ]
+        };
       }
 
       const result = serviceResponse.data;
@@ -226,6 +423,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         content: [{ type: "text", text: `❌ 链路故障: ${e.message}.` }], 
         isError: true 
       };
+    } finally {
+      clearInterval(progressInterval);
     }
   }
   throw new Error("Tool not found");

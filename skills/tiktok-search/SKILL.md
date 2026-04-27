@@ -48,23 +48,27 @@ You (the Agent) MUST NOT attempt to install Chrome, open browsers, or use tools 
 
 You MUST strictly adhere to the following rules when calling the MCP tools:
 1. **Single Tool Call Limit**: You MUST NOT execute more than ONE tool call (`tiktok_search` OR `tiktok_insight`) per conversational turn. You MUST wait for the user's feedback before initiating another search or insight request.
-2. **Strict Tool Binding (No Fallbacks)**: You MUST ONLY use the EXACT tools specified (`tiktok_search` or `tiktok_insight`) for TikTok searches. You are **STRICTLY FORBIDDEN** from using built-in browser tools (like `browser_navigate`, `puppeteer`, etc.), generic WebSearch, Bing, Google, or writing Python scrapers to visit TikTok.com. 
+2. **Strict Tool Binding (No Fallbacks)**: You MUST ONLY use the EXACT tools specified (`tiktok_search` or `tiktok_insight`) for TikTok searches. You are **STRICTLY FORBIDDEN** from falling back between these tools. For example, if the user asks for an insight (`tiktok_insight`) and it fails or times out, you MUST NOT try to call `tiktok_search` as a backup. Stop immediately and report the failure. You are also forbidden from using built-in browser tools, generic WebSearch, or writing Python scrapers to visit TikTok.com. 
 3. **Fail Fast & Explicit Reporting**: If the MCP tool fails, times out, or throws an error (e.g., `params is not defined`), you MUST STOP immediately. Do NOT offer alternative web search solutions. You MUST output the raw error message to the user.
 4. **No Parallel Execution**: Since this tool controls an active Chrome tab, it is strictly single-threaded. You MUST NEVER execute multiple `tiktok_search` tool calls in parallel simultaneously. You must wait for one search to completely finish before starting another.
 5. **Anti-Hallucination (No Fake Data)**: You MUST base your final response ONLY on the exact data returned by the tool. If the tool returns empty results (`[]`), you MUST NOT hallucinate or guess. Inform the user exactly what the tool returned.
 6. **Anti-Spam (No Infinite Loops)**: NEVER call the tool repeatedly with the exact same `query` if it fails or returns empty results.
-7. **No Retries**: If a call fails due to a timeout, network error, or any other reason, you MUST STOP immediately and return the error to the user. DO NOT retry.
-8. **Output Summarization (Avoid Chat Spam)**: If the tool returns a large number of results (e.g., 200 videos), DO NOT print the entire raw JSON array in your chat response. You must summarize the top 3-5 results, and utilize the `save_dir` parameter to save the full dataset to the user's disk.
+7. **No Retries (STRICT)**: If a call fails due to a timeout (`MCP error -32001`), network error, or any other reason, you MUST STOP immediately and return the error to the user. **DO NOT attempt to call the tool again** in the same turn or subsequent turns unless the user explicitly requests it.
+8. **Timeout Awareness**: The `tiktok_insight` tool can take up to 5 minutes to complete. If you receive a timeout error, inform the user that the operation was too complex or that they should check their browser for a CAPTCHA.
+9. **Output Summarization (Avoid Chat Spam)**: If the tool returns a large number of results (e.g., 200 videos), DO NOT print the entire raw JSON array in your chat response. You must summarize the top 3-5 results, and utilize the `save_dir` parameter to save the full dataset to the user's disk.
 
 ## Troubleshooting & Error Handling (Decision Tree)
 
 If the `tiktok_search` tool execution fails, follow this decision tree to assist the user:
 
-1. **Error: "Chrome extension not found/connected"**
+1. **Error: "MCP error -32001: Request timed out"**
+   - → **STOP IMMEDIATELY**. Do not retry.
+   - → Inform the user: *"The analysis/search is taking longer than expected. Please check your Chrome browser to see if TikTok is showing a CAPTCHA or if the page is stuck. You can try again after resolving any browser-side issues."*
+2. **Error: "Chrome extension not found/connected"**
    - → Inform the user: *"Please ensure the Gecho TikTok Chrome extension is installed, enabled, and you have an active TikTok tab open in Chrome."*
-2. **Error: "Timeout" or "No results found"**
-   - → Ask the user: *"Are you currently facing a CAPTCHA or login prompt on the active TikTok page? Please resolve it in your browser and try again."*
-3. **Error: "Tool not found"**
+3. **Error: "Timeout" (Service Level)**
+   - → Inform the user: *"The service layer timed out. This usually happens if the search volume is extremely high. Try a more specific query."*
+4. **Error: "Tool not found"**
    - → Inform the user: *"The tool is not registered. Please ensure the Gecho Bridge Plugin is installed and active."*
 
 ## Example Usage & Standard Operating Procedure (SOP)
