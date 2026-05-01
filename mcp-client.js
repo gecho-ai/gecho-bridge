@@ -138,7 +138,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: "object",
           properties: {
             query: { type: "string", description: "搜索关键词 (例如: '猫薄荷')" },
-            save_dir: { type: "string", description: "可选的保存目录绝对路径 (例如: '/Users/xxx/data')" }
+            save_dir: { type: "string", description: "可选的保存目录绝对路径（请提供文件夹路径，不要带 .json 等文件后缀，例如: '/Users/xxx/data'）" }
           },
           required: ["query"]
         }
@@ -150,7 +150,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: "object",
           properties: {
             query: { type: "string", description: "搜索关键词 (例如: '户外野餐垫')" },
-            save_dir: { type: "string", description: "可选的保存目录绝对路径 (例如: '/Users/xxx/data')" }
+            save_dir: { type: "string", description: "可选的保存目录绝对路径（请提供文件夹路径，不要带 .json 等文件后缀，例如: '/Users/xxx/data'）" }
           },
           required: ["query"]
         }

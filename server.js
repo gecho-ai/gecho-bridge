@@ -130,11 +130,21 @@ function runAsyncAttempt({ jobId, action, params, payload, attempt }) {
       let savePath = "";
       let saveWarning = "";
       if (Array.isArray(result) && result.length > 0) {
-        const dataDir = payload.save_dir || process["env"].GECHO_DATA_DIR || path.join(__dirname, "data");
-        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+        let dataDir = payload.save_dir || process["env"].GECHO_DATA_DIR || path.join(__dirname, "data");
+        let fixedPath;
         const safeName = toSafeFileName(params.query || action);
         const prefix = params.query ? `${toSafeFileName(action)}_` : "";
-        const fixedPath = path.join(dataDir, `${prefix}${safeName}_results.json`);
+        
+        if (dataDir.toLowerCase().endsWith(".json") || dataDir.toLowerCase().endsWith(".csv")) {
+          // 如果传入的 save_dir 误填成了文件路径，则将其作为最终文件路径，并提取所在目录
+          fixedPath = dataDir;
+          dataDir = path.dirname(fixedPath);
+        } else {
+          fixedPath = path.join(dataDir, `${prefix}${safeName}_results.json`);
+        }
+
+        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+        
         try {
           fs.writeFileSync(fixedPath, JSON.stringify(result, null, 2), "utf8");
           savePath = fixedPath;
@@ -298,7 +308,7 @@ const server = http.createServer(async (req, res) => {
 
     let body = "";
     req.on("data", chunk => { body += chunk; });
-    req.on("end", () => {
+    req.on("end", async () => {
       try {
         const payload = JSON.parse(body);
         const action = payload.action;
@@ -309,8 +319,32 @@ const server = http.createServer(async (req, res) => {
         }
 
         if (!extensionSocket || extensionSocket.readyState !== 1) {
-          res.statusCode = 503;
-          return res.end(JSON.stringify({ error: "Extension not connected" }));
+          // 如果尚未连接，提供更友好的等待机制而不是直接报错
+          console.log(`⏳ Extension not connected yet. Waiting for connection... (action: ${action})`);
+          
+          const maxWaitMs = 15000; // 最多等待 15 秒
+          const checkIntervalMs = 500;
+          let waited = 0;
+          
+          await new Promise((resolve) => {
+            const checkTimer = setInterval(() => {
+              waited += checkIntervalMs;
+              if (extensionSocket && extensionSocket.readyState === 1) {
+                clearInterval(checkTimer);
+                resolve();
+              } else if (waited >= maxWaitMs) {
+                clearInterval(checkTimer);
+                resolve(); // 等待超时后继续往下走，下面依然会判断并抛出错误
+              }
+            }, checkIntervalMs);
+          });
+          
+          if (!extensionSocket || extensionSocket.readyState !== 1) {
+            res.statusCode = 503;
+            return res.end(JSON.stringify({ 
+              error: "Extension not connected. Chrome 插件未连接。\n请检查：\n1. Chrome 是否保持打开状态\n2. Gecho TikTok Bridge 插件是否仍在运行（扩展图标是否亮着）\n3. TikTok tab 是否活跃（最好在 tiktok.com 页面上）\n如果插件刚启动，请等待几秒后再试。" 
+            }));
+          }
         }
 
         const jobId = `job-${Date.now()}-${requestIdCounter++}`;
@@ -361,8 +395,32 @@ const server = http.createServer(async (req, res) => {
         }
 
         if (!extensionSocket || extensionSocket.readyState !== 1) {
-          res.statusCode = 503;
-          return res.end(JSON.stringify({ error: "Extension not connected" }));
+          // 如果尚未连接，提供更友好的等待机制而不是直接报错
+          console.log(`⏳ Extension not connected yet. Waiting for connection... (action: ${action})`);
+          
+          const maxWaitMs = 15000; // 最多等待 15 秒
+          const checkIntervalMs = 500;
+          let waited = 0;
+          
+          await new Promise((resolve) => {
+            const checkTimer = setInterval(() => {
+              waited += checkIntervalMs;
+              if (extensionSocket && extensionSocket.readyState === 1) {
+                clearInterval(checkTimer);
+                resolve();
+              } else if (waited >= maxWaitMs) {
+                clearInterval(checkTimer);
+                resolve(); 
+              }
+            }, checkIntervalMs);
+          });
+          
+          if (!extensionSocket || extensionSocket.readyState !== 1) {
+            res.statusCode = 503;
+            return res.end(JSON.stringify({ 
+              error: "Extension not connected. Chrome 插件未连接。\n请检查：\n1. Chrome 是否保持打开状态\n2. Gecho TikTok Bridge 插件是否仍在运行（扩展图标是否亮着）\n3. TikTok tab 是否活跃（最好在 tiktok.com 页面上）\n如果插件刚启动，请等待几秒后再试。" 
+            }));
+          }
         }
 
         console.log(`🚀 Dispatching action: [${action}]`);
@@ -393,11 +451,21 @@ const server = http.createServer(async (req, res) => {
         let savePath = "";
         let saveWarning = "";
         if (Array.isArray(result) && result.length > 0) {
-          const dataDir = payload.save_dir || process["env"].GECHO_DATA_DIR || path.join(__dirname, "data");
-          if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+          let dataDir = payload.save_dir || process["env"].GECHO_DATA_DIR || path.join(__dirname, "data");
+          let fixedPath;
           const safeName = toSafeFileName(params.query || action);
           const prefix = params.query ? `${toSafeFileName(action)}_` : "";
-          const fixedPath = path.join(dataDir, `${prefix}${safeName}_results.json`);
+          
+          if (dataDir.toLowerCase().endsWith(".json") || dataDir.toLowerCase().endsWith(".csv")) {
+            // 如果传入的 save_dir 误填成了文件路径，则将其作为最终文件路径，并提取所在目录
+            fixedPath = dataDir;
+            dataDir = path.dirname(fixedPath);
+          } else {
+            fixedPath = path.join(dataDir, `${prefix}${safeName}_results.json`);
+          }
+  
+          if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+          
           try {
             fs.writeFileSync(fixedPath, JSON.stringify(result, null, 2), "utf8");
             savePath = fixedPath;
