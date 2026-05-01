@@ -351,6 +351,17 @@ const server = http.createServer(async (req, res) => {
         console.log(`🚀 Dispatching ASYNC action: [${action}], jobId: ${jobId}`);
         const { action: _a, ...params } = payload;
 
+        // 预先计算保存路径，以便立刻返回给客户端
+        let dataDir = payload.save_dir || process["env"].GECHO_DATA_DIR || path.join(__dirname, "data");
+        let anticipatedSavePath = "";
+        const safeName = toSafeFileName(params.query || action);
+        const prefix = params.query ? `${toSafeFileName(action)}_` : "";
+        if (dataDir.toLowerCase().endsWith(".json") || dataDir.toLowerCase().endsWith(".csv")) {
+          anticipatedSavePath = dataDir;
+        } else {
+          anticipatedSavePath = path.join(dataDir, `${prefix}${safeName}_results.json`);
+        }
+
         asyncJobs.set(jobId, {
           status: "running",
           stage: "queued",
@@ -361,13 +372,14 @@ const server = http.createServer(async (req, res) => {
           retryCount: 0,
           attempt: 0,
           lastUpdateAt: Date.now(),
+          anticipatedSavePath,
           events: []
         });
         appendJobEvent(jobId, "job_created", { action });
 
         runAsyncAttempt({ jobId, action, params, payload, attempt: 1 });
 
-        return res.end(JSON.stringify({ success: true, jobId }));
+        return res.end(JSON.stringify({ success: true, jobId, savePath: anticipatedSavePath }));
       } catch (e) {
         res.statusCode = 500;
         return res.end(JSON.stringify({ error: e.message }));

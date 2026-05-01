@@ -382,11 +382,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // 如果是异步任务启动返回
       if (toolName === "tiktok_insight" && serviceResponse.jobId) {
+        const anticipatedPath = serviceResponse.savePath || "";
+        const pathMsg = anticipatedPath ? `\n\n📂 预期保存路径: ${anticipatedPath}\n(请在洞察任务自动结束后前往该文件查看完整数据)` : "";
+        
         return {
           content: [
             {
               type: "text",
-              text: `✅ 异步洞察任务已启动。\n\n任务 ID (job_id): ${serviceResponse.jobId}\n\n请使用 \`check_insight_status\` 工具并传入上述 jobId 来查询执行结果。因为该任务需要几分钟，建议你先等待 10-15 秒再进行第一次查询。`
+              text: `✅ 异步洞察任务已启动。\n\n任务 ID (job_id): ${serviceResponse.jobId}${pathMsg}\n\n请使用 \`check_insight_status\` 工具并传入上述 jobId 来查询执行结果。因为该任务需要几分钟，建议你先等待 60 秒再进行第一次查询。`
             }
           ]
         };
