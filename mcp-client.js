@@ -116,7 +116,7 @@ async function restartServiceRunning() {
 
 function shouldRestartServiceForError(message, toolName) {
   const text = String(message || "");
-  if (toolName === "tiktok_insight" && (text.includes("Not found") || text.includes("HTTP 404"))) {
+  if ((toolName === "tiktok_insight" || toolName === "check_insight_status") && (text.includes("Not found") || text.includes("HTTP 404"))) {
     return true;
   }
   return false;
@@ -196,19 +196,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
         req.on("error", () => reject(new Error("Service Layer communication error")));
       });
+
+      const requestStatusWithRetry = async () => {
+        let lastError = null;
+        for (let i = 0; i < 3; i++) {
+          try {
+            return await requestStatus();
+          } catch (e) {
+            lastError = e;
+            const text = String(e?.message || "");
+            const retriable404 = text.includes("Not found") || text.includes("HTTP 404");
+            if (!retriable404 || i === 2) break;
+            await new Promise(r => setTimeout(r, 700));
+          }
+        }
+        throw lastError || new Error("Status request failed");
+      };
       
       let statusResponse;
       try {
-        statusResponse = await requestStatus();
+        statusResponse = await requestStatusWithRetry();
       } catch (firstError) {
         if (shouldRestartServiceForError(firstError.message, toolName)) {
           await restartServiceRunning();
           await new Promise(r => setTimeout(r, 800));
-          statusResponse = await requestStatus();
+          statusResponse = await requestStatusWithRetry();
         } else if (shouldRecoverServiceForError(firstError.message)) {
           await ensureServiceRunning();
           await new Promise(r => setTimeout(r, 800));
-          statusResponse = await requestStatus();
+          statusResponse = await requestStatusWithRetry();
         } else {
           throw firstError;
         }
