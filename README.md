@@ -35,6 +35,18 @@
 3. **网络与状态**：确保本地网络可稳定访问 TikTok，并在浏览器中登录账号，保持扩展在线。
 
 ### 方式一：在 OpenClaw 中一键安装 (ClawHub)
+ClawHub 中有两种安装方式：`Skill` 与 `Plugin`。
+
+#### 方案 A：Skill 安装（需先配置 MCP）
+Skill 安装后会通过 MCP 调用执行，因此需要先完成以下 MCP 配置：
+```bash
+openclaw mcp set gecho-bridge '{"command":"npx","args":["-y","@gecho-ai/gecho-bridge@latest"]}'
+openclaw gateway restart
+```
+*配置后，可通过 `openclaw mcp list` 检查状态。*
+*完成 MCP 配置后，再回到 ClawHub 选择 Skill 安装即可。*
+
+#### 方案 B：Plugin 安装（推荐）
 ```bash
 openclaw plugins install @gecho-ai/gecho-bridge
 openclaw gateway restart
