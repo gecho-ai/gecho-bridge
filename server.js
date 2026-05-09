@@ -670,6 +670,25 @@ wss.on("connection", (ws) => {
           console.warn(`WARN pendingRequests.size=${pendingRequests.size}, sampleKeys=${JSON.stringify(keys.slice(0, 10))}`);
         }
       }
+      if (parsed.method === "action_result" && !parsed.requestId) {
+        const keys = Array.from(pendingRequests.keys());
+        if (keys.length === 1) {
+          const recoveredRequestId = keys[0];
+          const pending = pendingRequests.get(recoveredRequestId);
+          console.warn(
+            `WARN action_result missing requestId; recovered using single pending request: ${recoveredRequestId}`
+          );
+          if (pending) {
+            clearTimeout(pending.timeoutId);
+            pending.resolve(parsed.data);
+            pendingRequests.delete(recoveredRequestId);
+          }
+        } else {
+          console.warn(
+            `WARN action_result missing requestId and cannot recover (pendingRequests.size=${keys.length})`
+          );
+        }
+      }
     } catch (e) {
       console.error("Error parsing extension message:", e);
     }
