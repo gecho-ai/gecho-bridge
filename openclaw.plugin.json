@@ -1,0 +1,32 @@
+{
+  "id": "gecho-bridge",
+  "name": "Gecho Bridge",
+  "description": "TikTok Search and Insight tools for OpenClaw, connecting LLMs to TikTok via Chrome Extension.",
+  "skills": ["skills"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "wsPort": {
+        "type": "integer",
+        "default": 18792,
+        "description": "The port used for WebSocket communication with the Chrome extension."
+      },
+      "httpPort": {
+        "type": "integer",
+        "default": 18793,
+        "description": "The port used for the HTTP API service layer."
+      },
+      "jobTtlMs": {
+        "type": "integer",
+        "default": 259200000,
+        "description": "Job data time-to-live in milliseconds (default 3 days)."
+      },
+      "maxPersistedJobs": {
+        "type": "integer",
+        "default": 2000,
+        "description": "Maximum number of jobs to persist in history."
+      }
+    }
+  }
+}
