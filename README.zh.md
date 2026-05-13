@@ -29,7 +29,7 @@
 欢迎加入我们的社区进行交流或反馈问题：
 
 - **Discord 社区**：[点击加入 Discord](https://discord.gg/RFDVZMR6Tn)
-- **企业微信群**：扫描下方二维码加入
+- **企业微信群**：扫描下方二维码加入（若图片未显示，请 [点击此处查看二维码](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg)）
 
 ![企业微信二维码](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg)
 

@@ -29,7 +29,7 @@ After installation, whether you use **OpenClaw**, **Hermes**, or **Trae**, your 
 Welcome to join our community for discussion or feedback:
 
 - **Discord Community**: [Join Discord](https://discord.gg/RFDVZMR6Tn)
-- **WeCom Group**: Scan the QR code below to join
+- **WeCom Group**: Scan the QR code below to join (or [click here to view the QR code](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg))
 
 ![WeCom QR Code](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg)
 
