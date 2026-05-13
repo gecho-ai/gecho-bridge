@@ -49,9 +49,11 @@ openclaw mcp list
 Recommended easier path:
 
 ```bash
-openclaw plugins install clawhub:@gecho-ai/gecho-bridge
+openclaw plugins install clawhub:@gecho-ai/gecho-bridge-bundle
 openclaw gateway restart
 ```
+
+When using the plugin route, Gecho Bridge may auto-start a local service process to talk to the Chrome extension. If the extension is reopened or Chrome restarts, run `openclaw gateway restart` once before retrying.
 
 ### 30-second checklist
 

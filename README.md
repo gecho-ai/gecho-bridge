@@ -66,6 +66,7 @@ openclaw gateway restart
 ```
 *This is the more hassle-free installation method. After installation, you generally do not need to separately configure the MCP that the Skill depends on.*
 *If you need to upgrade an installed version, use `openclaw plugins update clawhub:@gecho-ai/gecho-bridge-bundle`.*
+*The plugin will automatically start a local Gecho service when needed. If the browser extension was opened after the client, run `openclaw gateway restart` once to reconnect cleanly.*
 
 ### Option 2: One-Click Setup in Hermes (Hermes Skill Hub)
 You can quickly add the service to Hermes and restart it with the following commands:
@@ -96,7 +97,7 @@ In MCP clients that support manual configuration, open the corresponding `mcp.js
 After the environment is configured and your AI client has restarted, you can directly issue instructions to the AI in natural language.
 
 ### ✅ Self-Check Before First Use
-1. `gecho-bridge` MCP is configured, or the `@gecho-ai/gecho-bridge` Plugin is installed.
+1. `gecho-bridge` MCP is configured, or the `@gecho-ai/gecho-bridge-bundle` plugin is installed.
 2. The [Gecho browser extension](https://chromewebstore.google.com/detail/pjkaeenpekolahdbccjfenjcmanemlbj?utm_source=item-share-cb) is installed.
 3. TikTok is open in Chrome and the account is logged in.
 4. The Gecho extension is logged in and online, and the TikTok page is not stuck or left on a CAPTCHA page.
@@ -143,19 +144,24 @@ To better manage data assets, the large amount of scraped results needs to be sa
 ### 1. How to confirm the plugin is loaded? (Using OpenClaw as an example)
 Run:
 ```bash
-openclaw plugins info @gecho-ai/gecho-bridge
+openclaw plugins info @gecho-ai/gecho-bridge-bundle
 ```
 If installation is successful, you should see `Status: loaded` and `MCP servers: gecho-tiktok-search`.
 
-### 2. Error: Extension not connected
+### 2. Note about the local background service
+- Gecho Bridge automatically starts a local service on demand so the MCP client can talk to the browser extension.
+- This service only listens on `127.0.0.1` and is expected to stay available while you use the plugin.
+- If Chrome or the extension was restarted and requests start failing, first run `openclaw gateway restart`, then try again.
+
+### 3. Error: Extension not connected
 - Check whether the Gecho extension in Chrome is enabled.
 - Confirm that the TikTok account is logged in in the current browser environment, and that the TikTok page is not crashed or unresponsive.
 
-### 3. Error: Request timeout
+### 4. Error: Request timeout
 - Check whether a TikTok CAPTCHA challenge has appeared. If so, solve it manually first.
 - If the target keyword has very few results or the network is unstable, try a more specific keyword and retry.
 
-### 4. Error: Failed to save results
+### 5. Error: Failed to save results
 - Check whether the `save_dir` you asked the AI to specify is a valid absolute path.
 - Confirm that the current system user has write permission for the target directory.
 

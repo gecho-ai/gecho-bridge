@@ -29,6 +29,11 @@ const SHUTDOWN_URL = `${SERVICE_BASE_URL}/shutdown`;
 const DIST_SERVICE_PATH = path.join(__dirname, "server.cjs");
 const SOURCE_SERVICE_PATH = path.join(__dirname, "server.js");
 const SERVICE_PATH = fs.existsSync(DIST_SERVICE_PATH) ? DIST_SERVICE_PATH : SOURCE_SERVICE_PATH;
+const SUPPORTED_TOOL_NAMES = new Set([
+  "tiktok_search",
+  "tiktok_insight",
+  "check_insight_status"
+]);
 
 const CLIENT_VERSION = packageJson.version;
 
@@ -303,8 +308,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
-  // 只要是 tiktok_ 开头的工具，都走通用转发逻辑
-  if (toolName.startsWith("tiktok_") || toolName.startsWith("x_") || toolName.startsWith("ins_")) {
+  // 只转发已在 ListTools 中公开的官方工具，避免未文档化能力暴露出去
+  if (SUPPORTED_TOOL_NAMES.has(toolName) && toolName !== "check_insight_status") {
     // 设置进度上报定时器 (心跳)，防止 MCP 客户端超时
     let progressValue = 0;
     

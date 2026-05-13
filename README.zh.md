@@ -66,6 +66,7 @@ openclaw gateway restart
 ```
 *这是更省心的安装方式。安装完成后，一般不需要再单独配置 Skill 所依赖的 MCP。*
 *如需升级已安装的版本，使用 `openclaw plugins update clawhub:@gecho-ai/gecho-bridge-bundle` 即可。*
+*插件会在需要时自动启动本地 Gecho Service。如果是先打开了客户端、后打开浏览器扩展，建议再执行一次 `openclaw gateway restart` 重新建立连接。*
 
 ### 方式二：在 Hermes 中一键配置 (Hermes Skill Hub)
 你可以通过以下命令将服务快捷添加到 Hermes 并重启：
@@ -96,7 +97,7 @@ hermes restart
 环境配置完毕并重启 AI 客户端后，你可以直接通过自然语言向 AI 下达指令。
 
 ### ✅ 首次使用前自检
-1. 已配置 `gecho-bridge` MCP，或已安装 `@gecho-ai/gecho-bridge` Plugin。
+1. 已配置 `gecho-bridge` MCP，或已安装 `@gecho-ai/gecho-bridge-bundle` Plugin。
 2. 已安装 [Gecho 浏览器扩展](https://chromewebstore.google.com/detail/pjkaeenpekolahdbccjfenjcmanemlbj?utm_source=item-share-cb)。
 3. Chrome 中已打开 TikTok 并登录账号。
 4. Gecho 扩展已登录并处于在线状态，TikTok 页面未卡住或未停在验证码页面。
@@ -143,19 +144,24 @@ hermes restart
 ### 1. 如何确认插件已加载？（以 OpenClaw 为例）
 执行：
 ```bash
-openclaw plugins info @gecho-ai/gecho-bridge
+openclaw plugins info @gecho-ai/gecho-bridge-bundle
 ```
 如果安装成功，你应看到 `Status: loaded` 以及 `MCP servers: gecho-tiktok-search`。
 
-### 2. 报错：提示扩展未连接
+### 2. 关于本地后台服务的说明
+- Gecho Bridge 会在需要时自动拉起本地服务，用来让 MCP 客户端和浏览器扩展通信。
+- 这个服务只监听 `127.0.0.1`，在你使用插件期间保持可用属于正常行为。
+- 如果你重启了 Chrome 或扩展，随后请求开始失败，先执行一次 `openclaw gateway restart`，再重试。
+
+### 3. 报错：提示扩展未连接
 - 检查 Chrome 浏览器中的 Gecho 扩展是否已开启。
 - 确认当前浏览器环境中已登录 TikTok 账号，且 TikTok 页面未处于崩溃或无响应状态。
 
-### 3. 报错：请求超时
+### 4. 报错：请求超时
 - 检查 TikTok 页面是否弹出了人机验证码（CAPTCHA），如果是，请手动滑动解决。
 - 若目标关键词本身结果极少或网络卡顿，可尝试更换更具体的关键词后重试。
 
-### 4. 报错：无法保存结果
+### 5. 报错：无法保存结果
 - 检查你让 AI 指定的 `save_dir` 是否为合法的绝对路径。
 - 确认当前系统用户是否具有该目标目录的写入权限。
 
