@@ -9,10 +9,6 @@ const esbuild = require("esbuild");
 // so both the MCP entrypoint and the service are bundled into dist/.
 const projectRoot = path.resolve(__dirname, "..");
 const distDir = path.join(projectRoot, "dist");
-const packageJson = JSON.parse(
-  fs.readFileSync(path.join(projectRoot, "package.json"), "utf8")
-);
-const buildVersion = process.env.GECHO_BRIDGE_VERSION || packageJson.version;
 
 async function build() {
   // Start from a clean dist/ so old artifacts never leak into a release.
@@ -26,10 +22,7 @@ async function build() {
     format: "cjs",
     target: "node20",
     sourcemap: false,
-    legalComments: "none",
-    define: {
-      "process.env.GECHO_BRIDGE_VERSION": JSON.stringify(buildVersion)
-    }
+    legalComments: "none"
   };
 
   // MCP stdio entry used by OpenClaw / ClawHub at runtime.

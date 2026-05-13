@@ -30,7 +30,7 @@ const DIST_SERVICE_PATH = path.join(__dirname, "server.cjs");
 const SOURCE_SERVICE_PATH = path.join(__dirname, "server.js");
 const SERVICE_PATH = fs.existsSync(DIST_SERVICE_PATH) ? DIST_SERVICE_PATH : SOURCE_SERVICE_PATH;
 
-const CLIENT_VERSION = process.env.GECHO_BRIDGE_VERSION || packageJson.version;
+const CLIENT_VERSION = packageJson.version;
 
 const server = new Server(
   { name: "tiktok-bridge-client", version: CLIENT_VERSION },

@@ -254,4 +254,4 @@ npm run sync:version
 另外：
 
 - `mcp-client.js` 不再手写版本号，而是直接读取 `package.json.version`
-- 发布时如果设置了 `CLAWHUB_VERSION`，构建出的 `dist` 产物也会使用这个版本
+- 如果要发布新版本，先更新 `package.json.version`，再执行 `npm run sync:version`

@@ -65,7 +65,7 @@ echo "Mode:         $MODE"
 echo
 echo "Building dist artifacts..."
 # Bundle runtime dependencies into dist/ before staging for ClawHub.
-(cd "$PROJECT_ROOT" && GECHO_BRIDGE_VERSION="${CLAWHUB_VERSION:-}" npm run build:bundle)
+(cd "$PROJECT_ROOT" && npm run build:bundle)
 
 # Recreate a clean staging folder so each publish starts from known contents.
 rm -rf "$STAGE_DIR"
