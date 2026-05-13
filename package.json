@@ -1,22 +1,33 @@
 {
   "name": "@gecho-ai/gecho-bridge",
-  "version": "1.1.6",
-  "description": "MCP Bridge for TikTok Extension Relay - Connecting LLMs to TikTok via Chrome Extension",
+  "version": "1.1.16",
+  "description": "TikTok Search and Insight tools for OpenClaw, connecting LLMs to TikTok via Chrome Extension.",
   "main": "mcp-client.js",
   "bin": {
     "gecho-bridge": "mcp-client.js"
   },
   "files": [
     "*.js",
+    "dist",
     "package.json",
     ".claude-plugin",
     ".mcp.json",
-    "skills"
+    "openclaw.plugin.json",
+    "skills",
+    "README.md",
+    "README.en.md",
+    "qywx.jpg"
   ],
   "scripts": {
     "start": "node mcp-client.js",
     "server": "node server.js",
-    "setup": "openclaw plugins install -l ."
+    "setup": "openclaw plugins install -l .",
+    "sync:version": "node ./scripts/sync-version.js",
+    "build:bundle": "node ./scripts/build-bundle.js",
+    "bundle:stage": "bash ./scripts/publish-bundle-dist.sh stage",
+    "bundle:publish": "bash ./scripts/publish-bundle-dist.sh publish",
+    "bundle:stage:dist": "bash ./scripts/publish-bundle-dist.sh stage",
+    "bundle:publish:dist": "bash ./scripts/publish-bundle-dist.sh publish"
   },
   "keywords": [
     "mcp",
@@ -32,6 +43,9 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.4"
   },
   "publishConfig": {
     "access": "public"

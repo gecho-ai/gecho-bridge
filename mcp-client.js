@@ -9,6 +9,7 @@
  * 4. 转发工具请求到 Service 层。
  */
 
+const fs = require("fs");
 const { Server } = require("@modelcontextprotocol/sdk/server/index.js");
 const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
 const {
@@ -19,15 +20,20 @@ const http = require("http");
 const cpModule = "child" + "_process";
 const { spawn } = require(cpModule);
 const path = require("path");
+const packageJson = require("./package.json");
 
 const SERVICE_BASE_URL = "http://127.0.0.1:18793";
 const HTTP_SERVICE_URL = `${SERVICE_BASE_URL}/search`;
 const PING_URL = `${SERVICE_BASE_URL}/ping`;
 const SHUTDOWN_URL = `${SERVICE_BASE_URL}/shutdown`;
-const SERVICE_PATH = path.join(__dirname, "server.js");
+const DIST_SERVICE_PATH = path.join(__dirname, "server.cjs");
+const SOURCE_SERVICE_PATH = path.join(__dirname, "server.js");
+const SERVICE_PATH = fs.existsSync(DIST_SERVICE_PATH) ? DIST_SERVICE_PATH : SOURCE_SERVICE_PATH;
+
+const CLIENT_VERSION = process.env.GECHO_BRIDGE_VERSION || packageJson.version;
 
 const server = new Server(
-  { name: "tiktok-bridge-client", version: "1.1.1" },
+  { name: "tiktok-bridge-client", version: CLIENT_VERSION },
   { capabilities: { tools: {} } }
 );
 
