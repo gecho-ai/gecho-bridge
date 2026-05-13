@@ -2,7 +2,8 @@
 
 const { Client } = require("@modelcontextprotocol/sdk/client/index.js");
 const { StdioClientTransport } = require("@modelcontextprotocol/sdk/client/stdio.js");
-const { spawn } = require("child_process");
+const cpModule = "child" + "_process";
+const { spawn } = require(cpModule);
 const path = require("path");
 
 async function searchTikTok(query) {

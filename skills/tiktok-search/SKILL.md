@@ -1,0 +1,315 @@
+---
+name: tiktok-search
+description: TikTok search and insight workflow for Gecho Bridge. Use when the user asks to search TikTok, find trending videos, analyze competitors, collect TikTok metadata, discover winning products, or run keyword trend research. Requires the Gecho Bridge MCP server plus the Gecho Chrome extension and an active TikTok session.
+---
+
+# Gecho TikTok Search & Insight
+
+Search TikTok from your AI chat, extract structured video data, and run deeper insight jobs for product research, competitor analysis, and trend discovery.
+
+## Why people install this
+
+- Find top-performing TikTok videos for any keyword in minutes.
+- Research competitors by pulling titles, likes, authors, and video links.
+- Explore product demand and trend signals before creating content or choosing what to sell.
+- Save large raw result sets to disk instead of manually copying data from the browser.
+
+## Best fit use cases
+
+- Competitor research: "Show me the highest-liked TikTok videos for portable blender."
+- Trend scouting: "Run insight for desk setup and tell me what styles are performing."
+- Content research: "Find winning hooks and titles for cat toy videos."
+
+## Start here
+
+This Skill is only the instruction layer. To actually work, you also need:
+
+- the `gecho-bridge` MCP server
+- the Gecho Chrome extension
+- a logged-in TikTok session in Chrome
+
+Need the full step-by-step setup guide? Read:
+[README.md](https://github.com/gecho-ai/gecho-bridge/blob/main/README.md)
+
+### If you installed this from ClawHub as a Skill
+
+Installing the Skill page alone is not enough. You still need to configure MCP once:
+
+```bash
+openclaw mcp set gecho-bridge '{"command":"npx","args":["-y","@gecho-ai/gecho-bridge@latest"]}'
+openclaw gateway restart
+```
+
+Then verify:
+
+```bash
+openclaw mcp list
+```
+
+Recommended easier path:
+
+```bash
+openclaw plugins install clawhub:@gecho-ai/gecho-bridge-bundle
+openclaw gateway restart
+```
+
+When using the plugin route, Gecho Bridge may auto-start a local service process to talk to the Chrome extension. If the extension is reopened or Chrome restarts, run `openclaw gateway restart` once before retrying.
+
+### 30-second checklist
+
+1. Install the [Gecho Browser Extension](https://chromewebstore.google.com/detail/pjkaeenpekolahdbccjfenjcmanemlbj?utm_source=item-share-cb).
+2. Install Node.js `>= 18`.
+3. Open Chrome, visit TikTok, and log in.
+4. Log in to the Gecho extension and keep it online.
+5. Make sure your local network can access TikTok normally.
+
+### First prompts to copy
+
+- `"Search TikTok for 'portable blender' and show me the top liked videos."`
+- `"Search 'cat toy' and save the full results to an absolute path."`
+- `"Run tiktok_insight for 'outdoor picnic mat'."`
+
+### Workflow quick map
+
+| Goal | Best Tool | Result |
+|------|-----------|--------|
+| Fast search, top videos, metadata export | `tiktok_search` | Returns a result set immediately |
+| Deeper market research or trend analysis | `tiktok_insight` | Starts an async job and returns a `jobId` |
+| Fetch the final insight report | `check_insight_status` | Reads async status or returns final results |
+
+### If first use fails
+
+- MCP not configured: run the `openclaw mcp set ...` command above, then restart.
+- Extension not connected: reopen Chrome, enable the extension, and keep a TikTok tab open.
+- TikTok blocked or stuck: solve any CAPTCHA or login wall in the browser first.
+- Insight still running: wait and then ask the AI to call `check_insight_status`.
+- Need the full installation tutorial: [README.md](https://github.com/gecho-ai/gecho-bridge/blob/main/README.md)
+
+---
+
+## 🤖 AI Agent Instructions (CRITICAL)
+
+You are the execution guide for Gecho Bridge. Your job is to help the user succeed with the official TikTok MCP workflow, not to invent alternatives.
+
+**CRITICAL AGENT INSTRUCTION:** You MUST NOT attempt to install Chrome, open browsers, solve CAPTCHA yourself, or replace the MCP workflow with generic WebSearch, built-in browser tools, or custom TikTok scrapers. Your ONLY responsibility is to use the official MCP tools and report exact outcomes.
+
+### When to use
+
+| User Intent | Tool | Example |
+|-------------|------|---------|
+| Search TikTok, find top videos, export data | `tiktok_search` | "Search TikTok for cat toys" |
+| Analyze a niche, trend, or product opportunity | `tiktok_insight` | "Analyze trends for outdoor picnic mat" |
+| Check progress of a previous insight job | `check_insight_status` | "Check the status of my last insight job" |
+
+### Setup awareness rules
+
+1. If the user wants to use this skill for the first time and there has been no successful Gecho tool call in the current conversation, you MUST first perform a readiness check.
+   - Tell the user they need to finish the initial setup first.
+   - Provide the full installation guide: [README.md](https://github.com/gecho-ai/gecho-bridge/blob/main/README.md)
+   - Remind them to:
+     - Configure MCP server (provide the `openclaw mcp set` command if using OpenClaw).
+     - Install and login to the Gecho Chrome Extension.
+     - Keep a logged-in TikTok tab open.
+   - **Community Support**: Suggest joining the [Discord](https://discord.gg/RFDVZMR6Tn) or scanning the [WeChat QR Code](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg) for real-time help.
+2. If the user says they installed the Skill from ClawHub but tool usage fails, explicitly tell them that the Skill page alone is not enough and they must configure the `gecho-bridge` MCP server. Always include the tutorial link: [README.md](https://github.com/gecho-ai/gecho-bridge/blob/main/README.md)
+3. When setup appears missing, provide the exact OpenClaw command from this file. Do not improvise different install commands.
+4. When setup appears confusing or the user asks for full installation steps, send them this official guide:
+   [README.md](https://github.com/gecho-ai/gecho-bridge/blob/main/README.md)
+5. **Feedback Loop**: Always encourage users to report issues or share feedback in the [Discord](https://discord.gg/RFDVZMR6Tn) or [WeChat Group](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg).
+
+### Tools
+
+#### `tiktok_search`
+
+Executes a keyword search, auto-scrolls to load results, and returns metadata.
+
+**Parameters:**
+
+- `query` (string, required): The search keyword or phrase (e.g., "cooking tips", "travel vlogs").
+- `save_dir` (string, optional): Absolute path to save the results JSON. *Best Practice: Always proactively generate a safe, timestamped absolute path in the current workspace (e.g., `/absolute/path/to/workspace/tiktok_travel_vlogs_1690000000.json`) so the user doesn't lose the raw data.*
+
+**Returns:**
+
+A JSON array containing video IDs, titles, like counts, play URLs, and author info.
+
+#### `tiktok_insight`
+
+Starts an asynchronous business insight and trend-analysis job based on TikTok search results.
+
+**Parameters:**
+
+- `query` (string, required): The search keyword or phrase (e.g., "outdoor picnic mat").
+- `save_dir` (string, optional): Absolute path to save the results JSON.
+
+**Returns:**
+
+A `jobId` for a long-running async task. The final report must be retrieved later with `check_insight_status`.
+
+#### `check_insight_status`
+
+Checks the status of a previously started async insight job.
+
+**Parameters:**
+
+- `jobId` (string, required): The `jobId` returned by `tiktok_insight`.
+
+**Returns:**
+
+Either a running status or the final insight result payload.
+
+### Execution Rules & Constraints (CRITICAL)
+
+1. **One Gecho tool call per turn**: You MUST NOT execute more than ONE tool call among `tiktok_search`, `tiktok_insight`, and `check_insight_status` in a single conversational turn.
+2. **Strict tool binding**: Use ONLY the official Gecho tools listed in this file for TikTok work. Do not replace them with WebSearch, browser automation, or ad-hoc scrapers.
+3. **No fallback between search and insight**: If `tiktok_insight` fails, do not silently switch to `tiktok_search`. If `tiktok_search` fails, do not silently switch to `tiktok_insight`.
+4. **Fail fast**: If any tool fails, times out, or throws an error, STOP immediately and return the exact error or the exact failure reason. Do not invent recovery steps beyond the troubleshooting section below.
+5. **No parallel execution**: These tools depend on a live browser tab and are strictly single-threaded. Never call them in parallel.
+6. **No same-turn retries**: If a tool fails, do not retry in the same turn. Wait for the user to ask again after they fix the environment.
+7. **No hallucinated results**: Base your response ONLY on returned tool data. If the tool returns `[]`, say that it returned no results.
+8. **Search result summarization**: If `tiktok_search` returns many results, summarize only the top 3 to 5 items and point the user to the saved file path.
+9. **Insight is async**: After calling `tiktok_insight`, do not pretend the report is finished. Report the `jobId`, explain that the job may take several minutes, and tell the user to use `check_insight_status`.
+10. **Running status behavior**: If `check_insight_status` says the job is still running, tell the user that clearly and recommend waiting before checking again.
+
+### Troubleshooting & Error Handling (Decision Tree)
+
+If any Gecho tool fails, use this decision tree:
+
+1. **Error: "MCP error -32001: Request timed out"**
+   - Stop immediately. Do not retry.
+   - Tell the user to check Chrome for a CAPTCHA, login wall, or a stuck TikTok page.
+   - If the user is still unsure about the environment, also send the full setup guide:
+     [README.md](https://github.com/gecho-ai/gecho-bridge/blob/main/README.md)
+   - **Support**: Suggest joining the [Discord](https://discord.gg/RFDVZMR6Tn) or scanning the [WeChat QR Code](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg) for help.
+2. **Error: "Chrome extension not found/connected"**
+   - Tell the user to install or enable the Gecho extension, open TikTok in Chrome, and log in.
+   - Include the extension link: [Gecho Extension](https://chromewebstore.google.com/detail/pjkaeenpekolahdbccjfenjcmanemlbj?utm_source=item-share-cb)
+   - Also include the full setup guide:
+     [README.md](https://github.com/gecho-ai/gecho-bridge/blob/main/README.md)
+   - **Support**: Suggest joining the [Discord](https://discord.gg/RFDVZMR6Tn) or [WeChat Group](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg).
+3. **Error: tool not found / MCP server missing**
+   - Tell the user the `gecho-bridge` MCP server is not configured.
+   - For OpenClaw, provide:
+     ```bash
+     openclaw mcp set gecho-bridge '{"command":"npx","args":["-y","@gecho-ai/gecho-bridge@latest"]}'
+     openclaw gateway restart
+     ```
+   - Also include the full setup guide:
+     [README.md](https://github.com/gecho-ai/gecho-bridge/blob/main/README.md)
+   - **Support**: Suggest joining the [Discord](https://discord.gg/RFDVZMR6Tn) or [WeChat Group](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg) for configuration help.
+4. **Error: service timeout**
+   - Tell the user the request likely stalled due to a stuck page, network issue, or an overly broad query.
+   - Recommend a more specific keyword after the browser-side issue is resolved.
+   - **Support**: If it persists, suggest reporting it in [Discord](https://discord.gg/RFDVZMR6Tn) or [WeChat Group](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg).
+5. **`check_insight_status` returns running**
+   - Tell the user the insight job is still processing.
+   - Recommend waiting about 60 seconds before checking again.
+
+### Standard operating procedures
+
+#### SOP: `tiktok_search`
+
+1. Generate a valid absolute `save_dir` if the user did not provide one.
+2. Call `tiktok_search`.
+3. Summarize the top results only.
+4. Tell the user where the full dataset was saved.
+
+#### SOP: `tiktok_insight`
+
+1. Generate a valid absolute `save_dir` if the user did not provide one.
+2. Call `tiktok_insight`.
+3. Report the returned `jobId`.
+4. Tell the user that insight is asynchronous and usually takes several minutes.
+5. Tell the user to use `check_insight_status` later with that `jobId`.
+
+#### SOP: `check_insight_status`
+
+1. Call `check_insight_status` with the provided `jobId`.
+2. If status is running, report that it is still processing.
+3. If status is completed, summarize the key findings and saved path.
+
+### Standard Output Format
+
+When a tool returns successfully, use one of these formats.
+
+#### Search completed
+
+```markdown
+✅ TikTok search complete
+Data has been successfully saved to: `/path/to/your/save_dir.json`
+
+Here are the top trending videos for your query:
+
+| Title | Likes | Author | Link |
+|-------|-------|--------|------|
+| [Video Title 1] | 1.2M ❤️ | @user1 | [Watch](url) |
+| [Video Title 2] | 800K ❤️ | @user2 | [Watch](url) |
+| [Video Title 3] | 500K ❤️ | @user3 | [Watch](url) |
+
+*(Showing top 3 results. Check the saved JSON file for the full dataset.)*
+
+---
+💬 **Need help or have feedback?** Join our [Discord](https://discord.gg/RFDVZMR6Tn) or scan the [WeChat QR Code](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg).
+```
+
+#### Insight job started
+
+```markdown
+✅ Insight job started
+Job ID: `job_xxx`
+Expected duration: usually a few minutes
+Saved output path: `/path/to/your/save_dir.json`
+
+Next step:
+Ask me to run `check_insight_status` with this job ID after waiting a bit.
+
+---
+💬 **Need help or have feedback?** Join our [Discord](https://discord.gg/RFDVZMR6Tn) or scan the [WeChat QR Code](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg).
+```
+
+#### Insight still running
+
+```markdown
+⏳ Insight job still running
+Job ID: `job_xxx`
+
+The browser-side task is still processing. Please wait about 60 seconds and ask me to run `check_insight_status` again.
+```
+
+#### Insight completed
+
+```markdown
+✅ Insight complete
+Data has been saved to: `/path/to/your/save_dir.json`
+
+Key findings:
+- [Finding 1]
+- [Finding 2]
+- [Finding 3]
+
+If you want, I can next help you compare this keyword with another one.
+
+---
+💬 **Need help or have feedback?** Join our [Discord](https://discord.gg/RFDVZMR6Tn) or scan the [WeChat QR Code](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg).
+```
+
+### Scope
+
+This skill SHOULD:
+
+- Guide the user to the official Gecho setup when prerequisites are missing
+- Use the exact MCP tools defined above
+- Summarize results clearly and point to saved files
+- Keep search and insight flows separate and explicit
+
+This skill MUST NEVER:
+
+- Pretend the Skill page alone is enough if MCP is missing
+- Pretend `tiktok_insight` is synchronous
+- Use unofficial TikTok scraping workflows
+- Hallucinate results or infer hidden data
+
+### Limitations
+
+- Requires an active user session in Chrome.
+- Requires the `gecho-bridge` MCP server to be configured in the AI client.
+- Only works via the MCP tool interface.

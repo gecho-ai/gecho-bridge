@@ -55,7 +55,10 @@ async function searchTikTok(query) {
       reject(error);
     });
     
-    req.write(JSON.stringify({ query }));
+    req.write(JSON.stringify({
+      action:'tiktok_insight',
+      query:query,
+    }));
     req.end();
   });
 }
