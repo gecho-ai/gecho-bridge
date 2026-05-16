@@ -76,6 +76,7 @@ hermes mcp add gecho-bridge --command npx --args="-y" --args="@gecho-ai/gecho-br
 hermes restart
 ```
 *重启后，可通过 `hermes mcp list` 检查安装状态。*
+*仅供参考：如果你的机器已经安装了 Node，但 Hermes 仍提示 `npx` 或 `node` 不存在，这通常是 Hermes 自身 shell/PATH 环境的问题，不是 Gecho Bridge 的问题。在 macOS + Homebrew 下，一个常见绕过方式是改用绝对路径注册 MCP：`hermes mcp add gecho-bridge --command /opt/homebrew/bin/npx --args="-y" --args="@gecho-ai/gecho-bridge@latest"`，然后执行 `hermes restart`。*
 
 ### 方式三：在 Trae / Claude Desktop 等通用客户端配置
 在支持手动配置的 MCP 客户端中，打开对应的 `mcp.json` 或 `claude_desktop_config.json` 文件，添加如下节点：
@@ -89,6 +90,16 @@ hermes restart
   }
 }
 ```
+
+### 方式四：在 Claude Code 中一键配置
+你可以通过以下命令将服务快捷添加到 Claude Code 中：
+```bash
+claude mcp add gecho-bridge -- npx -y @gecho-ai/gecho-bridge@latest
+```
+- 默认情况下，该配置保存在**项目级别**（`.claude/settings.json`）。
+- 可以添加 `--scope user` 使其对所有项目生效，或使用 `--scope local` 仅在当前目录生效。
+- 添加完成后，使用 `claude mcp list` 验证服务是否注册成功。
+- 如果 MCP 工具没有立即出现，请重启 Claude Code。
 
 ---
 

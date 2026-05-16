@@ -76,6 +76,7 @@ hermes mcp add gecho-bridge --command npx --args="-y" --args="@gecho-ai/gecho-br
 hermes restart
 ```
 *After restart, you can check the installation status with `hermes mcp list`.*
+*Reference only: if Hermes reports `npx` or `node` as missing even though Node is installed on your machine, that is usually a Hermes shell/PATH issue rather than a Gecho Bridge issue. On macOS with Homebrew, one workaround is to register the MCP server with an absolute command path: `hermes mcp add gecho-bridge --command /opt/homebrew/bin/npx --args="-y" --args="@gecho-ai/gecho-bridge@latest"` and then run `hermes restart`.*
 
 ### Option 3: Configure in General Clients Such as Trae / Claude Desktop
 In MCP clients that support manual configuration, open the corresponding `mcp.json` or `claude_desktop_config.json` file and add the following node:
@@ -89,6 +90,16 @@ In MCP clients that support manual configuration, open the corresponding `mcp.js
   }
 }
 ```
+
+### Option 4: One-Click Setup in Claude Code
+You can quickly add the service to Claude Code with the following command:
+```bash
+claude mcp add gecho-bridge -- npx -y @gecho-ai/gecho-bridge@latest
+```
+- By default, the configuration is saved at the **project level** (`.claude/settings.json`).
+- Use `--scope user` to make it available for all projects, or `--scope local` for a local-only configuration.
+- After adding, use `claude mcp list` to verify the server is registered.
+- Restart Claude Code if the MCP tools don't appear immediately.
 
 ---
 

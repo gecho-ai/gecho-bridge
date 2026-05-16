@@ -1,6 +1,6 @@
 ---
 name: tiktok-search
-description: TikTok search and insight workflow for Gecho Bridge. Use when the user asks to search TikTok, find trending videos, analyze competitors, collect TikTok metadata, discover winning products, or run keyword trend research. Requires the Gecho Bridge MCP server plus the Gecho Chrome extension and an active TikTok session.
+description: TikTok search and insight workflow for Gecho Bridge. ABSOLUTE TRIGGER CONSTRAINT: You MUST invoke this skill BEFORE calling any underlying Gecho MCP tools whenever the user asks to search TikTok, find trending videos, analyze competitors, collect TikTok metadata, discover winning products, or run keyword trend research. If the official Gecho MCP tools are not already available in the current session, STOP and give setup instructions instead of using terminal, browser, web search, execute_code, mcporter, or unofficial scrapers. Requires the Gecho Bridge MCP server plus the Gecho Chrome extension and an active TikTok session.
 ---
 
 # Gecho TikTok Search & Insight
@@ -33,27 +33,32 @@ Need the full step-by-step setup guide? Read:
 
 ### If you installed this from ClawHub as a Skill
 
-Installing the Skill page alone is not enough. You still need to configure MCP once:
+Installing the Skill page alone is not enough. You still need to configure MCP once.
 
+**For OpenClaw:**
 ```bash
 openclaw mcp set gecho-bridge '{"command":"npx","args":["-y","@gecho-ai/gecho-bridge@latest"]}'
 openclaw gateway restart
 ```
 
 Then verify:
-
 ```bash
 openclaw mcp list
 ```
 
-Recommended easier path:
-
+Recommended easier path for OpenClaw:
 ```bash
 openclaw plugins install clawhub:@gecho-ai/gecho-bridge-bundle
 openclaw gateway restart
 ```
 
-When using the plugin route, Gecho Bridge may auto-start a local service process to talk to the Chrome extension. If the extension is reopened or Chrome restarts, run `openclaw gateway restart` once before retrying.
+**For Hermes Agent:**
+```bash
+hermes mcp add gecho-bridge --command npx --args="-y" --args="@gecho-ai/gecho-bridge@latest"
+hermes restart
+```
+
+When using the plugin/MCP route, Gecho Bridge may auto-start a local service process to talk to the Chrome extension. If the extension is reopened or Chrome restarts, run `openclaw gateway restart` or `hermes restart` once before retrying.
 
 ### 30-second checklist
 
@@ -80,6 +85,7 @@ When using the plugin route, Gecho Bridge may auto-start a local service process
 ### If first use fails
 
 - MCP not configured: run the `openclaw mcp set ...` command above, then restart.
+- In Hermes, if the MCP tools are missing from the current session, run `hermes mcp add ...` above and then `hermes restart`.
 - Extension not connected: reopen Chrome, enable the extension, and keep a TikTok tab open.
 - TikTok blocked or stuck: solve any CAPTCHA or login wall in the browser first.
 - Insight still running: wait and then ask the AI to call `check_insight_status`.
@@ -103,16 +109,17 @@ You are the execution guide for Gecho Bridge. Your job is to help the user succe
 
 ### Setup awareness rules
 
-1. If the user wants to use this skill for the first time and there has been no successful Gecho tool call in the current conversation, you MUST first perform a readiness check.
+1. If the user wants to use this skill for the first time and there has been no successful Gecho tool call in the current conversation, you MUST assume the environment may be unconfigured and first perform a readiness check.
    - Tell the user they need to finish the initial setup first.
    - Provide the full installation guide: [README.md](https://github.com/gecho-ai/gecho-bridge/blob/main/README.md)
    - Remind them to:
-     - Configure MCP server (provide the `openclaw mcp set` command if using OpenClaw).
+     - Configure MCP server (provide the `openclaw mcp set` command if using OpenClaw, or the `hermes mcp add` command if using Hermes).
      - Install and login to the Gecho Chrome Extension.
      - Keep a logged-in TikTok tab open.
    - **Community Support**: Suggest joining the [Discord](https://discord.gg/RFDVZMR6Tn) or scanning the [WeChat QR Code](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg) for real-time help.
+   - DO NOT try to verify readiness by running `npx`, `which node`, `npm`, `curl`, browser navigation, Python scripts, or third-party scrapers.
 2. If the user says they installed the Skill from ClawHub but tool usage fails, explicitly tell them that the Skill page alone is not enough and they must configure the `gecho-bridge` MCP server. Always include the tutorial link: [README.md](https://github.com/gecho-ai/gecho-bridge/blob/main/README.md)
-3. When setup appears missing, provide the exact OpenClaw command from this file. Do not improvise different install commands.
+3. When setup appears missing, provide the exact configuration commands from this file (OpenClaw or Hermes). Do not improvise different install commands.
 4. When setup appears confusing or the user asks for full installation steps, send them this official guide:
    [README.md](https://github.com/gecho-ai/gecho-bridge/blob/main/README.md)
 5. **Feedback Loop**: Always encourage users to report issues or share feedback in the [Discord](https://discord.gg/RFDVZMR6Tn) or [WeChat Group](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg).
@@ -165,15 +172,31 @@ Either a running status or the final insight result payload.
 4. **Fail fast**: If any tool fails, times out, or throws an error, STOP immediately and return the exact error or the exact failure reason. Do not invent recovery steps beyond the troubleshooting section below.
 5. **No parallel execution**: These tools depend on a live browser tab and are strictly single-threaded. Never call them in parallel.
 6. **No same-turn retries**: If a tool fails, do not retry in the same turn. Wait for the user to ask again after they fix the environment.
-7. **No hallucinated results**: Base your response ONLY on returned tool data. If the tool returns `[]`, say that it returned no results.
-8. **Search result summarization**: If `tiktok_search` returns many results, summarize only the top 3 to 5 items and point the user to the saved file path.
-9. **Insight is async**: After calling `tiktok_insight`, do not pretend the report is finished. Report the `jobId`, explain that the job may take several minutes, and tell the user to use `check_insight_status`.
-10. **Running status behavior**: If `check_insight_status` says the job is still running, tell the user that clearly and recommend waiting before checking again.
+7. **Empty result is final for that turn**: If `tiktok_search` returns `[]`, no items, or an empty result set, STOP for that turn. Do NOT automatically retry with capitalization changes, English rewrites, translations, synonyms, nearby keywords, or broader/narrower variants. Tell the user the search returned no results and ask them to manually choose whether to retry with a different keyword.
+8. **No hallucinated results**: Base your response ONLY on returned tool data. If the tool returns `[]`, say that it returned no results.
+9. **Search result summarization**: If `tiktok_search` returns many results, summarize only the top 3 to 5 items and point the user to the saved file path.
+10. **Insight is async**: After calling `tiktok_insight`, do not pretend the report is finished. Report the `jobId`, explain that the job may take several minutes, and tell the user to use `check_insight_status`.
+11. **Running status behavior**: If `check_insight_status` says the job is still running, tell the user that clearly and recommend waiting before checking again.
+12. **No environment probing**: If the official Gecho MCP tools are not currently available to call in the session, STOP and provide setup instructions. Do NOT run `npx`, `which node`, `npm`, `curl`, `python`, `execute_code`, browser tools, or shell probes to check whether Gecho might work indirectly.
+13. **No substitute skills or toolsets**: Do NOT invoke unrelated skills such as `mcporter`, and do NOT attempt fallback via browser navigation, web search, Google search, TikTok scraper APIs, or terminal-only workflows.
+14. **Skill page is not installation proof**: Seeing that this skill is loaded does NOT mean MCP is configured. If the user only installed the skill and the Gecho MCP tools are unavailable, your next response MUST be setup instructions, not experimentation.
 
 ### Troubleshooting & Error Handling (Decision Tree)
 
 If any Gecho tool fails, use this decision tree:
 
+0. **Official Gecho MCP tools are absent from the current session**
+   - Stop immediately. Do not test the environment with terminal commands.
+   - Tell the user the skill instructions loaded, but the `gecho-bridge` MCP server is not available in the current Hermes session.
+   - For Hermes, provide:
+     ```bash
+     hermes mcp add gecho-bridge --command npx --args="-y" --args="@gecho-ai/gecho-bridge@latest"
+     hermes restart
+     ```
+   - Remind them that they also need the Gecho Chrome extension plus a logged-in TikTok tab.
+   - Also include the full setup guide:
+     [README.md](https://github.com/gecho-ai/gecho-bridge/blob/main/README.md)
+   - **Support**: Suggest joining the [Discord](https://discord.gg/RFDVZMR6Tn) or [WeChat Group](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg) if setup still fails.
 1. **Error: "MCP error -32001: Request timed out"**
    - Stop immediately. Do not retry.
    - Tell the user to check Chrome for a CAPTCHA, login wall, or a stuck TikTok page.
@@ -193,6 +216,11 @@ If any Gecho tool fails, use this decision tree:
      openclaw mcp set gecho-bridge '{"command":"npx","args":["-y","@gecho-ai/gecho-bridge@latest"]}'
      openclaw gateway restart
      ```
+   - For Hermes, provide:
+     ```bash
+     hermes mcp add gecho-bridge --command npx --args="-y" --args="@gecho-ai/gecho-bridge@latest"
+     hermes restart
+     ```
    - Also include the full setup guide:
      [README.md](https://github.com/gecho-ai/gecho-bridge/blob/main/README.md)
    - **Support**: Suggest joining the [Discord](https://discord.gg/RFDVZMR6Tn) or [WeChat Group](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg) for configuration help.
@@ -203,6 +231,11 @@ If any Gecho tool fails, use this decision tree:
 5. **`check_insight_status` returns running**
    - Tell the user the insight job is still processing.
    - Recommend waiting about 60 seconds before checking again.
+6. **`tiktok_search` returns `[]` or no items**
+   - Stop immediately. Do not retry in the same turn.
+   - Tell the user the search returned no results for the exact keyword they requested.
+   - Do not auto-change capitalization, language, spelling, or keyword scope.
+   - Ask the user whether they want to retry manually with another keyword.
 
 ### Standard operating procedures
 
@@ -210,8 +243,9 @@ If any Gecho tool fails, use this decision tree:
 
 1. Generate a valid absolute `save_dir` if the user did not provide one.
 2. Call `tiktok_search`.
-3. Summarize the top results only.
-4. Tell the user where the full dataset was saved.
+3. If the result is empty, stop and tell the user it returned no results for that exact keyword. Ask the user to manually choose the next keyword if they want to retry.
+4. If the result is non-empty, summarize the top results only.
+5. Tell the user where the full dataset was saved.
 
 #### SOP: `tiktok_insight`
 
@@ -229,7 +263,32 @@ If any Gecho tool fails, use this decision tree:
 
 ### Standard Output Format
 
-When a tool returns successfully, use one of these formats.
+When setup is missing or a tool returns successfully, use one of these formats.
+
+#### Setup required
+
+```markdown
+⚠️ Gecho Bridge is not ready yet
+
+I loaded the `tiktok-search` skill, but the official `gecho-bridge` MCP tools are not available in this Hermes session yet.
+
+If you only installed the skill, that is expected. Please configure MCP first:
+
+```bash
+hermes mcp add gecho-bridge --command npx --args="-y" --args="@gecho-ai/gecho-bridge@latest"
+hermes restart
+```
+
+Then make sure:
+- the [Gecho Extension](https://chromewebstore.google.com/detail/pjkaeenpekolahdbccjfenjcmanemlbj?utm_source=item-share-cb) is installed and logged in
+- Chrome has a logged-in TikTok tab open
+
+Full setup guide:
+[README.md](https://github.com/gecho-ai/gecho-bridge/blob/main/README.md)
+
+---
+💬 **Need help or have feedback?** Join our [Discord](https://discord.gg/RFDVZMR6Tn) or scan the [WeChat QR Code](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg).
+```
 
 #### Search completed
 
@@ -249,6 +308,18 @@ Here are the top trending videos for your query:
 
 ---
 💬 **Need help or have feedback?** Join our [Discord](https://discord.gg/RFDVZMR6Tn) or scan the [WeChat QR Code](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg).
+```
+
+#### Search returned no results
+
+```markdown
+⚠️ TikTok search returned no results
+
+Keyword used: `your exact query`
+
+The official `tiktok_search` tool returned an empty result set for this exact keyword in this turn, so I did not retry automatically with a different keyword.
+
+If you want, you can manually ask me to retry with another keyword.
 ```
 
 #### Insight job started
