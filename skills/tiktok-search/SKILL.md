@@ -46,7 +46,7 @@ Then verify:
 openclaw mcp list
 ```
 
-Recommended easier path for OpenClaw:
+Optional alternative for OpenClaw if you explicitly prefer plugin management:
 ```bash
 openclaw plugins install clawhub:@gecho-ai/gecho-bridge-bundle
 openclaw gateway restart
@@ -119,7 +119,7 @@ You are the execution guide for Gecho Bridge. Your job is to help the user succe
    - **Community Support**: Suggest joining the [Discord](https://discord.gg/RFDVZMR6Tn) or scanning the [WeChat QR Code](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg) for real-time help.
    - DO NOT try to verify readiness by running `npx`, `which node`, `npm`, `curl`, browser navigation, Python scripts, or third-party scrapers.
 2. If the user says they installed the Skill from ClawHub but tool usage fails, explicitly tell them that the Skill page alone is not enough and they must configure the `gecho-bridge` MCP server. Always include the tutorial link: [README.md](https://github.com/gecho-ai/gecho-bridge/blob/main/README.md)
-3. When setup appears missing, provide the exact configuration commands from this file (OpenClaw or Hermes). Do not improvise different install commands.
+3. When setup appears missing, use the primary MCP configuration command for the user's client: `openclaw mcp set` for OpenClaw, or `hermes mcp add` for Hermes. Mention the OpenClaw plugin route only as an optional alternative when the user explicitly wants plugin-based management.
 4. When setup appears confusing or the user asks for full installation steps, send them this official guide:
    [README.md](https://github.com/gecho-ai/gecho-bridge/blob/main/README.md)
 5. **Feedback Loop**: Always encourage users to report issues or share feedback in the [Discord](https://discord.gg/RFDVZMR6Tn) or [WeChat Group](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg).
@@ -187,12 +187,18 @@ If any Gecho tool fails, use this decision tree:
 
 0. **Official Gecho MCP tools are absent from the current session**
    - Stop immediately. Do not test the environment with terminal commands.
-   - Tell the user the skill instructions loaded, but the `gecho-bridge` MCP server is not available in the current Hermes session.
-   - For Hermes, provide:
+   - Tell the user the skill instructions loaded, but the `gecho-bridge` MCP server is not available in the current client session yet.
+   - If the user is on OpenClaw, provide:
+     ```bash
+     openclaw mcp set gecho-bridge '{"command":"npx","args":["-y","@gecho-ai/gecho-bridge@latest"]}'
+     openclaw gateway restart
+     ```
+   - If the user is on Hermes, provide:
      ```bash
      hermes mcp add gecho-bridge --command npx --args="-y" --args="@gecho-ai/gecho-bridge@latest"
      hermes restart
      ```
+   - For OpenClaw, do not redirect the user to plugin installation unless they explicitly ask for a plugin-based setup path.
    - Remind them that they also need the Gecho Chrome extension plus a logged-in TikTok tab.
    - Also include the full setup guide:
      [README.md](https://github.com/gecho-ai/gecho-bridge/blob/main/README.md)
@@ -270,9 +276,18 @@ When setup is missing or a tool returns successfully, use one of these formats.
 ```markdown
 ⚠️ Gecho Bridge is not ready yet
 
-I loaded the `tiktok-search` skill, but the official `gecho-bridge` MCP tools are not available in this Hermes session yet.
+I loaded the `tiktok-search` skill, but the official `gecho-bridge` MCP tools are not available in this session yet.
 
 If you only installed the skill, that is expected. Please configure MCP first:
+
+If you are using OpenClaw:
+
+```bash
+openclaw mcp set gecho-bridge '{"command":"npx","args":["-y","@gecho-ai/gecho-bridge@latest"]}'
+openclaw gateway restart
+```
+
+If you are using Hermes:
 
 ```bash
 hermes mcp add gecho-bridge --command npx --args="-y" --args="@gecho-ai/gecho-bridge@latest"
