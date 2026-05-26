@@ -75,6 +75,22 @@ function logToFile(level, message, context = {}) {
   }
 }
 
+function ensureJobsDirReady() {
+  if (!fs.existsSync(JOBS_DIR)) {
+    fs.mkdirSync(JOBS_DIR, { recursive: true });
+  }
+}
+
+function ensureJobDetailsDirReady() {
+  ensureJobsDirReady();
+  if (!fs.existsSync(JOB_DETAILS_DIR)) {
+    fs.mkdirSync(JOB_DETAILS_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(LOGS_DIR)) {
+    fs.mkdirSync(LOGS_DIR, { recursive: true });
+  }
+}
+
 function getJobDetailPath(jobId) {
   return path.join(JOB_DETAILS_DIR, `${jobId}.json`);
 }
@@ -860,8 +876,9 @@ const server = http.createServer(async (req, res) => {
         // 预先计算保存路径，以便立刻返回给客户端
         let dataDir = payload.save_dir || process["env"].GECHO_DATA_DIR || path.join(__dirname, "data");
         let anticipatedSavePath = "";
-        const safeName = toSafeFileName(params.query || action);
-        const prefix = params.query ? `${toSafeFileName(action)}_` : "";
+        const fileNameSeed = params.uniqueId || params.query || action;
+        const safeName = toSafeFileName(fileNameSeed);
+        const prefix = (params.uniqueId || params.query) ? `${toSafeFileName(action)}_` : "";
         if (dataDir.toLowerCase().endsWith(".json") || dataDir.toLowerCase().endsWith(".csv")) {
           anticipatedSavePath = dataDir;
         } else {
@@ -980,6 +997,9 @@ const server = http.createServer(async (req, res) => {
             fixedPath = dataDir;
             dataDir = path.dirname(fixedPath);
           } else {
+            const fileNameSeed = params.uniqueId || params.query || action;
+            const safeName = toSafeFileName(fileNameSeed);
+            const prefix = (params.uniqueId || params.query) ? `${toSafeFileName(action)}_` : "";
             fixedPath = path.join(dataDir, `${prefix}${safeName}_results.json`);
           }
   

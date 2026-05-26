@@ -128,7 +128,7 @@ async function restartServiceRunning() {
 
 function shouldRestartServiceForError(message, toolName) {
   const text = String(message || "");
-  if ((toolName === "tiktok_insight" || toolName === "check_insight_status") && (text.includes("Not found") || text.includes("HTTP 404"))) {
+  if ((toolName === "tiktok_insight" || toolName === "tiktok_influencer" || toolName === "check_insight_status") && (text.includes("Not found") || text.includes("HTTP 404"))) {
     return true;
   }
   return false;
@@ -180,12 +180,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "tiktok_influencer",
-        description: "获取指定 TikTok 达人主页发布的所有视频数据。",
+        description: "获取指定 TikTok 达人主页发布的所有视频数据。(同步工具：会自动滚动采集并直接返回结果，建议 targetCount 不超过 500)",
         inputSchema: {
           type: "object",
           properties: {
             uniqueId: { type: "string", description: "达人的 unique_id (例如: 'zachking')" },
-            targetCount: { type: "number", description: "预期采集的视频数量，默认 500" }
+            targetCount: { type: "number", description: "预期采集的视频数量，默认 200" }
           },
           required: ["uniqueId"]
         }
@@ -355,7 +355,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }, 10000); // 频率提高到 10 秒一次
 
     try {
-      const targetUrl = (toolName === "tiktok_insight" || toolName === "tiktok_influencer") ? `${SERVICE_BASE_URL}/async-action` : HTTP_SERVICE_URL;
+      const isAsyncTool = toolName === "tiktok_insight";
+      const targetUrl = isAsyncTool ? `${SERVICE_BASE_URL}/async-action` : HTTP_SERVICE_URL;
+      
+      process.stderr.write(`[Debug] Requesting ${targetUrl} for ${toolName}\n`);
 
       const requestService = () => new Promise((resolve, reject) => {
         const req = http.request(targetUrl, {
@@ -420,28 +423,48 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: "text", text: `❌ 错误: ${serviceResponse.error}` }], isError: true };
       }
 
-      // 如果是异步任务启动返回
-      if (toolName === "tiktok_insight" && serviceResponse.jobId) {
+      // console.error(`[Debug] toolName: ${toolName}, jobId: ${serviceResponse.jobId}`);
+
+      process.stderr.write(`[Debug] toolName: ${toolName}, serviceResponse: ${JSON.stringify(serviceResponse)}\n`);
+
+      // 鲁棒性修复：只要 serviceResponse 中包含 jobId，不论什么工具都按异步处理返回给 MCP
+      if (serviceResponse.jobId) {
         const anticipatedPath = serviceResponse.savePath || "";
-        const pathMsg = anticipatedPath ? `\n\n📂 预期保存路径: ${anticipatedPath}\n(请在洞察任务自动结束后前往该文件查看完整数据)` : "";
+        const actionDesc = toolName === "tiktok_insight" ? "深度洞察任务" : 
+                           toolName === "tiktok_influencer" ? "达人采集任务" : "异步采集任务";
+        const pathMsg = anticipatedPath ? `\n\n📂 预期保存路径: ${anticipatedPath}\n(请在任务自动结束后前往该文件查看完整数据)` : "";
         
         return {
           content: [
             {
               type: "text",
-              text: `✅ 异步洞察任务已启动。\n\n任务 ID (job_id): ${serviceResponse.jobId}${pathMsg}\n\n请使用 \`check_insight_status\` 工具并传入上述 jobId 来查询执行结果。因为该任务需要几分钟，建议你先等待 60 秒再进行第一次查询。`
+              text: `✅ ${actionDesc}已启动。\n\n任务 ID (job_id): ${serviceResponse.jobId}${pathMsg}\n\n请使用 \`check_insight_status\` 工具并传入上述 jobId 来查询执行结果。建议你先等待 30-60 秒再进行第一次查询。`
             }
           ]
         };
       }
 
+      // 如果不是异步启动，且响应成功，则校验数据
       const result = serviceResponse.data;
+      if (serviceResponse.success && result === undefined) {
+         // 针对某些同步接口可能只返回 success: true 的情况 (虽然目前 search 接口通常返回 data)
+         return { content: [{ type: "text", text: "✅ 操作执行成功。" }] };
+      }
+
       if (typeof result === 'object' && result !== null && result.error) {
         return { content: [{ type: "text", text: `❌ 业务错误: ${result.error}` }], isError: true };
       }
 
       if (!Array.isArray(result)) {
-        return { content: [{ type: "text", text: `❌ 异常: 插件未返回数组格式的结果` }], isError: true };
+        // 如果不是数组也不是异步 jobId，记录更多上下文以便调试
+        const rawResponse = JSON.stringify(serviceResponse).slice(0, 200);
+        return { 
+          content: [{ 
+            type: "text", 
+            text: `❌ 异常: 插件未返回数组格式的结果。\n工具: ${toolName}\n响应摘要: ${rawResponse}` 
+          }], 
+          isError: true 
+        };
       }
 
       const savePath = serviceResponse.savePath || "";
