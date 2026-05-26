@@ -16,6 +16,7 @@ const path = require("path");
 const WS_PORT = 18792;
 const HTTP_PORT = 18793;
 const JOBS_DIR = path.join(__dirname, "data");
+const LOGS_DIR = path.join(__dirname, "logs"); // 🐷 新增：日志目录
 const JOBS_STORE_PATH = path.join(JOBS_DIR, ".async_jobs.json");
 const JOB_DETAILS_DIR = path.join(JOBS_DIR, "jobs");
 const REQUEST_INDEX_PATH = path.join(JOBS_DIR, ".async_request_index.json");
@@ -47,6 +48,30 @@ function ensureJobDetailsDirReady() {
   ensureJobsDirReady();
   if (!fs.existsSync(JOB_DETAILS_DIR)) {
     fs.mkdirSync(JOB_DETAILS_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(LOGS_DIR)) {
+    fs.mkdirSync(LOGS_DIR, { recursive: true });
+  }
+}
+
+/**
+ * 🐷 全局持久化日志函数
+ */
+function logToFile(level, message, context = {}) {
+  const timestamp = new Date().toISOString();
+  const logEntry = JSON.stringify({ timestamp, level, message, ...context }) + "\n";
+  const dateStr = new Date().toISOString().split('T')[0];
+  const logPath = path.join(LOGS_DIR, `bridge-${dateStr}.log`);
+  
+  fs.appendFile(logPath, logEntry, (err) => {
+    if (err) console.error("❌ Failed to write to log file:", err);
+  });
+  
+  // 同时输出到控制台
+  if (level === 'ERROR') {
+    console.error(`[${timestamp}] 🔴 ${message}`, context);
+  } else {
+    console.log(`[${timestamp}] ⚪ ${message}`, context);
   }
 }
 
@@ -722,6 +747,23 @@ const server = http.createServer(async (req, res) => {
   // 健康检查接口
   if (req.method === "GET" && req.url === "/ping") {
     return res.end(JSON.stringify({ status: "ok" }));
+  }
+
+  // --- 🐷 新增：接收来自插件的日志上报 ---
+  if (req.method === "POST" && req.url === "/log") {
+    let body = "";
+    req.on("data", chunk => { body += chunk; });
+    req.on("end", () => {
+      try {
+        const payload = JSON.parse(body);
+        logToFile(payload.level || 'INFO', `[Extension] ${payload.message}`, payload.context || {});
+        res.end(JSON.stringify({ status: "ok" }));
+      } catch (e) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: "Invalid log payload" }));
+      }
+    });
+    return;
   }
 
   if (req.method === "POST" && req.url === "/shutdown") {

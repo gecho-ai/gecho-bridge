@@ -32,7 +32,8 @@ const SERVICE_PATH = fs.existsSync(DIST_SERVICE_PATH) ? DIST_SERVICE_PATH : SOUR
 const SUPPORTED_TOOL_NAMES = new Set([
   "tiktok_search",
   "tiktok_insight",
-  "check_insight_status"
+  "check_insight_status",
+  "tiktok_influencer"
 ]);
 
 const CLIENT_VERSION = packageJson.version;
@@ -175,6 +176,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             jobId: { type: "string", description: "从 tiktok_insight 获得的 job_id" }
           },
           required: ["jobId"]
+        }
+      },
+      {
+        name: "tiktok_influencer",
+        description: "获取指定 TikTok 达人主页发布的所有视频数据。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            uniqueId: { type: "string", description: "达人的 unique_id (例如: 'zachking')" },
+            targetCount: { type: "number", description: "预期采集的视频数量，默认 500" }
+          },
+          required: ["uniqueId"]
         }
       }
     ]
@@ -342,7 +355,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }, 10000); // 频率提高到 10 秒一次
 
     try {
-      const targetUrl = toolName === "tiktok_insight" ? `${SERVICE_BASE_URL}/async-action` : HTTP_SERVICE_URL;
+      const targetUrl = (toolName === "tiktok_insight" || toolName === "tiktok_influencer") ? `${SERVICE_BASE_URL}/async-action` : HTTP_SERVICE_URL;
 
       const requestService = () => new Promise((resolve, reject) => {
         const req = http.request(targetUrl, {
