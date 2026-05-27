@@ -57,6 +57,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 STAGE_DIR="${STAGE_DIR:-/tmp/clean_publish_gecho_bridge_dist}"
 CLAWHUB_FAMILY="${CLAWHUB_FAMILY:-bundle-plugin}"
+CLAWHUB_NAME="${CLAWHUB_NAME:-@gecho-ai/gecho-bridge-bundle}"
 
 echo "Project root: $PROJECT_ROOT"
 echo "Stage dir:    $STAGE_DIR"
