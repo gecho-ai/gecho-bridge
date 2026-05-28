@@ -157,6 +157,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: "object",
           properties: {
             query: { type: "string", description: "搜索关键词 (例如: '猫薄荷')" },
+            targetCount: { type: "number", description: "预期采集的数量，默认 100", default: 100 },
             save_dir: { type: "string", description: "可选的保存目录绝对路径（请提供文件夹路径，不要带 .json 等文件后缀，例如: '/Users/xxx/data'）" }
           },
           required: ["query"]
@@ -187,12 +188,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "tiktok_influencer",
-        description: "获取指定 TikTok 达人主页发布的所有视频数据。(同步工具：会自动滚动采集并直接返回结果，建议 targetCount 不超过 500)",
+        description: "获取指定 TikTok 达人主页发布的所有视频 data。(同步工具：会自动滚动采集并直接返回结果，建议 targetCount 不超过 500)",
         inputSchema: {
           type: "object",
           properties: {
             uniqueId: { type: "string", description: "达人的 unique_id (例如: 'zachking')" },
-            targetCount: { type: "number", description: "预期采集的视频数量，默认 200" }
+            targetCount: { type: "number", description: "预期采集的视频数量，默认 100", default: 100 }
           },
           required: ["uniqueId"]
         }
@@ -204,7 +205,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: "object",
           properties: {
             query: { type: "string", description: "搜索关键词 (例如: 'lulu clothes')" },
-            targetCount: { type: "number", description: "预期获取的商品数量，默认 500，设为更高值以获取更多数据" },
+            targetCount: { type: "number", description: "预期获取的商品数量，默认 100，设为更高值以获取更多数据", default: 100 },
             save_dir: { type: "string", description: "可选的保存目录绝对路径（请提供文件夹路径，不要带 .json 等文件后缀，例如: '/Users/xxx/data'）" }
           },
           required: ["query"]
@@ -229,7 +230,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: "object",
           properties: {
             query: { type: "string", description: "搜索关键词 (例如: 'trump')" },
-            targetCount: { type: "number", description: "预期采集的推文数量，默认 200", default: 200 },
+            targetCount: { type: "number", description: "预期采集的推文数量，默认 100", default: 100 },
             save_dir: { type: "string", description: "可选的保存目录绝对路径" }
           },
           required: ["query"]
@@ -255,7 +256,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: "object",
           properties: {
             query: { type: "string", description: "搜索关键词 (例如: 'clothes')" },
-            targetPages: { type: "number", description: "预期采集的页数，默认 5", default: 5 },
+            targetPages: { type: "number", description: "预期采集的页数，默认 5 (约100条)", default: 5 },
             save_dir: { type: "string", description: "可选的保存目录绝对路径" }
           },
           required: ["query"]
@@ -280,7 +281,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: "object",
           properties: {
             product_url: { type: "string", description: "商品详情页 URL 或 ASIN (例如: 'B0CXJJHY8B' 或 'https://www.amazon.com/product-reviews/...') " },
-            targetPages: { type: "number", description: "预期采集的页数，默认 5", default: 5 },
+            targetCount: { type: "number", description: "预期采集的评论数量，默认 100", default: 100 },
             save_dir: { type: "string", description: "可选的保存目录绝对路径" }
           },
           required: ["product_url"]
