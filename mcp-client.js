@@ -33,7 +33,8 @@ const SUPPORTED_TOOL_NAMES = new Set([
   "tiktok_search",
   "tiktok_insight",
   "check_insight_status",
-  "tiktok_influencer"
+  "tiktok_influencer",
+  "tiktok_shop_search"
 ]);
 
 const CLIENT_VERSION = packageJson.version;
@@ -188,6 +189,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             targetCount: { type: "number", description: "预期采集的视频数量，默认 200" }
           },
           required: ["uniqueId"]
+        }
+      },
+      {
+        name: "tiktok_shop_search",
+        description: "在 TikTok Shop 中搜索关键词，获取返回的所有商品信息。支持自动下滑获取更多数据。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: "搜索关键词 (例如: 'lulu clothes')" },
+            targetCount: { type: "number", description: "预期获取的商品数量，默认 500，设为更高值以获取更多数据" },
+            save_dir: { type: "string", description: "可选的保存目录绝对路径（请提供文件夹路径，不要带 .json 等文件后缀，例如: '/Users/xxx/data'）" }
+          },
+          required: ["query"]
         }
       }
     ]

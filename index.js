@@ -62,20 +62,31 @@ function initWss() {
 
     ws.on("message", (message) => {
       try {
-        const parsed = JSON.parse(message);
-        // 🐷 1.4.2 响应匹配逻辑: 使用 requestId 确保结果精准回传给对应的 MCP 请求。
-        // 参考了 mcp-chrome-bridge/dist/native-messaging-host.js [L54] 的 handleMessage 逻辑。
-        if (parsed.method === "action_result" && parsed.requestId) {
-          console.error(`🐷 收到插件抓取的数据结果 (ID: ${parsed.requestId})`);
-          const pending = pendingRequests.get(parsed.requestId);
-          if (pending) {
-            clearTimeout(pending.timeoutId);
-            pending.resolve(parsed.data);
-            pendingRequests.delete(parsed.requestId);
+        const data = JSON.parse(message);
+        
+        // 🐷 监控所有来自插件的消息
+        const method = data.method || data.action || "unknown";
+        const requestId = data.requestId || data.id || "no-id";
+        console.error(`🐷 [BRIDGE_RECEIVE_RAW] 收到原始消息. Method: ${method}, ID: ${requestId}`);
+
+        // 🐷 5.1 响应处理: 处理 execute_action 的回传结果
+        if (method === "search_result" || method === "SEARCH_RESULT_DATA" || method === "action_result") {
+          // 兼容多种数据包装格式
+          const finalData = data.params || data.data || (data.method ? data : null);
+          
+          if (requestId && pendingRequests.has(requestId)) {
+            const { resolve, timeoutId } = pendingRequests.get(requestId);
+            clearTimeout(timeoutId);
+            pendingRequests.delete(requestId);
+            
+            console.error(`🐷 [BRIDGE_SUCCESS] 成功匹配 RequestId: ${requestId}, 准备返回给 MCP`);
+            resolve(finalData);
+          } else {
+            console.error(`🐷 [BRIDGE_MISMATCH] 收到数据但无法匹配 RequestId: ${requestId}`);
           }
         }
       } catch (e) {
-        console.error("Error parsing extension message:", e);
+        console.error("🐷 [BRIDGE_ERROR] 解析插件消息失败:", e);
       }
     });
 
@@ -120,6 +131,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["query"]
         }
+      },
+      {
+        name: "tiktok_shop_search",
+        description: "在 TikTok Shop 中搜索关键词，获取返回的所有商品信息。支持自动下滑获取更多数据。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "搜索关键词 (例如: 'lulu clothes')"
+            },
+            targetCount: {
+              type: "number",
+              description: "预期获取的商品数量，默认 500，设为更高值以获取更多数据",
+              default: 500
+            }
+          },
+          required: ["query"]
+        }
       }
     ]
   };
@@ -127,8 +157,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 // 🐷 4.1 MCP 标准格式: 处理具体的工具调用请求。
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  if (request.params.name === "tiktok_search_top_200") {
+  const toolName = request.params.name;
+  if (toolName === "tiktok_search_top_200" || toolName === "tiktok_shop_search") {
     const { query } = request.params.arguments;
+    const action = toolName === "tiktok_shop_search" ? "tiktok_shop_search" : "search";
 
     // 🐷 4.2 桥接逻辑: 参考 mcp-chrome-bridge/dist/server/index.js [L48] 的逻辑，先确保连接就绪。
     // 增加 10s 的异步等待窗口，防止插件重连期间直接报错。
@@ -145,18 +177,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const result = await new Promise((resolve, reject) => {
       const requestId = `mcp-${Date.now()}-${requestIdCounter++}`;
       
+      console.error(`🐷 [BRIDGE_CALL] 发送指令: ${action}, ID: ${requestId}. 正在等待插件响应...`);
+      
       const timeoutId = setTimeout(() => {
         if (pendingRequests.has(requestId)) {
           pendingRequests.delete(requestId);
-          resolve({ error: "抓取超时 (300s)，请检查浏览器是否已停止滚动" });
+          console.error(`❌ [BRIDGE_TIMEOUT] 响应超时 (30s). ID: ${requestId}`);
+          resolve({ error: "抓取超时 (30s)，请检查浏览器是否已停止滚动或查看控制台日志" });
         }
-      }, 300000);
+      }, 30000); // 🐷 进一步缩短到 30 秒，与用户预期一致
 
       pendingRequests.set(requestId, { resolve, reject, timeoutId });
 
       const payload = {
         method: "execute_action",
-        params: { action: "search", params: { query } },
+        params: { action: action, params: { query } },
         requestId: requestId // 🐷 关键: 发送请求 ID
       };
       extensionSocket.send(JSON.stringify(payload));
@@ -171,13 +206,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
       
       // 1. 生成固定文件名 (适配 OpenClaw 预期)
-      const fixedFilename = `${query}_search_results.json`;
+      const prefix = toolName === "tiktok_shop_search" ? "shop_" : "";
+      const fixedFilename = `${prefix}${query}_search_results.json`;
       const fixedPath = path.join(dataDir, fixedFilename);
       fs.writeFileSync(fixedPath, JSON.stringify(result, null, 2), "utf8");
       
       // 2. 生成带时间戳的备份
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const backupFilename = `${query}_${timestamp}.json`;
+      const backupFilename = `${prefix}${query}_${timestamp}.json`;
       const backupPath = path.join(dataDir, backupFilename);
       fs.writeFileSync(backupPath, JSON.stringify(result, null, 2), "utf8");
       
@@ -187,14 +223,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // 🐷 4.6 MCP 标准格式: 返回抓取到的前 20 条高赞视频给 AI，并告知存储路径。
     const top20 = Array.isArray(result) ? result.slice(0, 20) : [];
+    const dataType = toolName === "tiktok_shop_search" ? "商品" : "视频";
     
     return {
       content: [
         { 
           type: "text", 
-          text: `✅ 抓取完成！共获取 ${Array.isArray(result) ? result.length : 0} 条数据。\n` +
+          text: `✅ 抓取完成！共获取 ${Array.isArray(result) ? result.length : 0} 条${dataType}数据。\n` +
                 `📂 原始数据已存储至: ${savedPath}\n\n` +
-                `以下是点赞最高的前 20 条结果：\n` +
+                `以下是销量/热度最高的前 20 条结果：\n` +
                 JSON.stringify(top20, null, 2) 
         }
       ]
