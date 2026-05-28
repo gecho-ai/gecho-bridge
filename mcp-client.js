@@ -37,7 +37,8 @@ const SUPPORTED_TOOL_NAMES = new Set([
   "tiktok_shop_search",
   "tiktok_product",
   "x_search",
-  "x_post_detail"
+  "x_post_detail",
+  "amazon_search"
 ]);
 
 const CLIENT_VERSION = packageJson.version;
@@ -243,6 +244,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             save_dir: { type: "string", description: "可选的保存目录绝对路径" }
           },
           required: ["url"]
+        }
+      },
+      {
+        name: "amazon_search",
+        description: "在 Amazon 上搜索关键词，自动采集多页商品信息（支持自动翻页）。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: "搜索关键词 (例如: 'clothes')" },
+            targetPages: { type: "number", description: "预期采集的页数，默认 5", default: 5 },
+            save_dir: { type: "string", description: "可选的保存目录绝对路径" }
+          },
+          required: ["query"]
         }
       }
     ]
