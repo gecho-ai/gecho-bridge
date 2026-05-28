@@ -35,7 +35,8 @@ const SUPPORTED_TOOL_NAMES = new Set([
   "check_insight_status",
   "tiktok_influencer",
   "tiktok_shop_search",
-  "tiktok_product"
+  "tiktok_product",
+  "x_search"
 ]);
 
 const CLIENT_VERSION = packageJson.version;
@@ -215,6 +216,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             save_dir: { type: "string", description: "可选的保存目录绝对路径" }
           },
           required: ["product_url"]
+        }
+      },
+      {
+        name: "x_search",
+        description: "在 X (Twitter) 上搜索关键词，采集推文内容、互动数及作者信息。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: "搜索关键词 (例如: 'trump')" },
+            targetCount: { type: "number", description: "预期采集的推文数量，默认 200", default: 200 },
+            save_dir: { type: "string", description: "可选的保存目录绝对路径" }
+          },
+          required: ["query"]
         }
       }
     ]
