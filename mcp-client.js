@@ -34,7 +34,8 @@ const SUPPORTED_TOOL_NAMES = new Set([
   "tiktok_insight",
   "check_insight_status",
   "tiktok_influencer",
-  "tiktok_shop_search"
+  "tiktok_shop_search",
+  "tiktok_product"
 ]);
 
 const CLIENT_VERSION = packageJson.version;
@@ -202,6 +203,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             save_dir: { type: "string", description: "可选的保存目录绝对路径（请提供文件夹路径，不要带 .json 等文件后缀，例如: '/Users/xxx/data'）" }
           },
           required: ["query"]
+        }
+      },
+      {
+        name: "tiktok_product",
+        description: "获取 TikTok Shop 商品详情页的完整数据（标题、价格、SKU、描述、销量、评价等）。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            product_url: { type: "string", description: "商品详情页 URL 或 商品 ID (例如: '1731523855832879280' 或 'https://shop.tiktok.com/us/pdp/...') " },
+            save_dir: { type: "string", description: "可选的保存目录绝对路径" }
+          },
+          required: ["product_url"]
         }
       }
     ]
@@ -486,6 +499,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         ? `📂 数据已存: ${savePath}\n\n`
         : "";
       
+      if (toolName === "tiktok_product" && result.length > 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `✅ [${toolName}] 商品详情获取成功！\n` +
+                    saveLine +
+                    JSON.stringify(result[0], null, 2)
+            }
+          ]
+        };
+      }
+
       const top20 = result.slice(0, 20);
       return {
         content: [

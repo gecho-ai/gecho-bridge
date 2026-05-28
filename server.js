@@ -75,22 +75,6 @@ function logToFile(level, message, context = {}) {
   }
 }
 
-function ensureJobsDirReady() {
-  if (!fs.existsSync(JOBS_DIR)) {
-    fs.mkdirSync(JOBS_DIR, { recursive: true });
-  }
-}
-
-function ensureJobDetailsDirReady() {
-  ensureJobsDirReady();
-  if (!fs.existsSync(JOB_DETAILS_DIR)) {
-    fs.mkdirSync(JOB_DETAILS_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(LOGS_DIR)) {
-    fs.mkdirSync(LOGS_DIR, { recursive: true });
-  }
-}
-
 function getJobDetailPath(jobId) {
   return path.join(JOB_DETAILS_DIR, `${jobId}.json`);
 }
