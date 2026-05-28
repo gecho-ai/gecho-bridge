@@ -38,7 +38,8 @@ const SUPPORTED_TOOL_NAMES = new Set([
   "tiktok_product",
   "x_search",
   "x_post_detail",
-  "amazon_search"
+  "amazon_search",
+  "amazon_product"
 ]);
 
 const CLIENT_VERSION = packageJson.version;
@@ -257,6 +258,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             save_dir: { type: "string", description: "可选的保存目录绝对路径" }
           },
           required: ["query"]
+        }
+      },
+      {
+        name: "amazon_product",
+        description: "获取 Amazon 商品详情页的完整数据（标题、价格、描述、变体、规格等）。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            product_url: { type: "string", description: "商品详情页 URL 或 ASIN (例如: 'B0CXJJHY8B' 或 'https://www.amazon.com/dp/...') " },
+            save_dir: { type: "string", description: "可选的保存目录绝对路径" }
+          },
+          required: ["product_url"]
         }
       }
     ]
