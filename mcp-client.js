@@ -36,7 +36,8 @@ const SUPPORTED_TOOL_NAMES = new Set([
   "tiktok_influencer",
   "tiktok_shop_search",
   "tiktok_product",
-  "x_search"
+  "x_search",
+  "x_post_detail"
 ]);
 
 const CLIENT_VERSION = packageJson.version;
@@ -229,6 +230,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             save_dir: { type: "string", description: "可选的保存目录绝对路径" }
           },
           required: ["query"]
+        }
+      },
+      {
+        name: "x_post_detail",
+        description: "获取 X (Twitter) 某条推文的详情，包括主推文内容及大量评论。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            url: { type: "string", description: "推文详情页 URL (例如: 'https://x.com/user/status/123...')" },
+            targetCount: { type: "number", description: "预期采集的评论数量，默认 100", default: 100 },
+            save_dir: { type: "string", description: "可选的保存目录绝对路径" }
+          },
+          required: ["url"]
         }
       }
     ]
