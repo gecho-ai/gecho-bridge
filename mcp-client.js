@@ -39,7 +39,8 @@ const SUPPORTED_TOOL_NAMES = new Set([
   "x_search",
   "x_post_detail",
   "amazon_search",
-  "amazon_product"
+  "amazon_product",
+  "amazon_reviews"
 ]);
 
 const CLIENT_VERSION = packageJson.version;
@@ -267,6 +268,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: "object",
           properties: {
             product_url: { type: "string", description: "商品详情页 URL 或 ASIN (例如: 'B0CXJJHY8B' 或 'https://www.amazon.com/dp/...') " },
+            save_dir: { type: "string", description: "可选的保存目录绝对路径" }
+          },
+          required: ["product_url"]
+        }
+      },
+      {
+        name: "amazon_reviews",
+        description: "在 Amazon 专用评论页采集评论，支持多页自动翻页。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            product_url: { type: "string", description: "商品详情页 URL 或 ASIN (例如: 'B0CXJJHY8B' 或 'https://www.amazon.com/product-reviews/...') " },
+            targetPages: { type: "number", description: "预期采集的页数，默认 5", default: 5 },
             save_dir: { type: "string", description: "可选的保存目录绝对路径" }
           },
           required: ["product_url"]
