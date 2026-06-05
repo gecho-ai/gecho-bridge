@@ -12,10 +12,14 @@ const { WebSocketServer } = require("ws");
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const packageJson = require("./package.json");
 
 const WS_PORT = 18792;
 const HTTP_PORT = 18793;
-const JOBS_DIR = path.join(__dirname, "data");
+const SERVICE_PROTOCOL_VERSION = 2;
+const SERVICE_STARTED_AT = Date.now();
+const DEFAULT_DATA_DIR = path.join(__dirname, "data");
+const JOBS_DIR = process["env"].GECHO_DATA_DIR || DEFAULT_DATA_DIR;
 const JOBS_STORE_PATH = path.join(JOBS_DIR, ".async_jobs.json");
 const JOB_DETAILS_DIR = path.join(JOBS_DIR, "jobs");
 const REQUEST_INDEX_PATH = path.join(JOBS_DIR, ".async_request_index.json");
@@ -27,6 +31,7 @@ let extensionSocket = null;
 const pendingRequests = new Map();
 let requestIdCounter = 1;
 let shuttingDown = false;
+let lastDispatchedRequestId = "";
 
 // --- 异步任务管理 ---
 const asyncJobs = new Map();
@@ -505,6 +510,80 @@ function resolveJobRefByRequestId(requestId) {
   return parseJobIdAndAttemptFromRequestId(requestId);
 }
 
+function getServiceSourceMtimeMs() {
+  try {
+    return Math.floor(fs.statSync(__filename).mtimeMs);
+  } catch (_e) {
+    return 0;
+  }
+}
+
+function resolveMissingActionResultRequestId(parsed) {
+  const embeddedRequestId = String(
+    parsed?.data?.requestId ||
+    parsed?.data?.jobId ||
+    parsed?.data?.activeRequestId ||
+    ""
+  );
+  if (embeddedRequestId && (pendingRequests.has(embeddedRequestId) || resolveJobRefByRequestId(embeddedRequestId).jobId)) {
+    return embeddedRequestId;
+  }
+
+  if (lastDispatchedRequestId && pendingRequests.has(lastDispatchedRequestId)) {
+    return lastDispatchedRequestId;
+  }
+
+  const pendingEntries = Array.from(pendingRequests.entries());
+  if (pendingEntries.length === 1) {
+    return pendingEntries[0][0];
+  }
+
+  const asyncEntries = pendingEntries.filter(([, pending]) => pending?.jobId);
+  if (asyncEntries.length === 1) {
+    return asyncEntries[0][0];
+  }
+
+  const insightEntries = pendingEntries.filter(([, pending]) => pending?.action === "tiktok_insight");
+  if (insightEntries.length === 1) {
+    return insightEntries[0][0];
+  }
+
+  const newestPending = pendingEntries
+    .filter(([, pending]) => Number(pending?.startedAt || 0) > 0)
+    .sort((a, b) => Number(b[1]?.startedAt || 0) - Number(a[1]?.startedAt || 0))[0];
+  if (newestPending) {
+    return newestPending[0];
+  }
+
+  if (lastDispatchedRequestId) {
+    const lastRef = resolveJobRefByRequestId(lastDispatchedRequestId);
+    if (lastRef.jobId) {
+      return lastDispatchedRequestId;
+    }
+  }
+
+  return "";
+}
+
+function resolveActionResultByRequestId(requestId, data, sourceLabel) {
+  const pending = pendingRequests.get(requestId);
+  if (pending) {
+    clearTimeout(pending.timeoutId);
+    pending.resolve(data);
+    pendingRequests.delete(requestId);
+    return true;
+  }
+
+  const parsedRef = resolveJobRefByRequestId(requestId);
+  if (parsedRef.jobId) {
+    console.warn(`WARN action_result ${sourceLabel} recovered by request ref: requestId=${requestId}, jobId=${parsedRef.jobId}`);
+    finalizeAsyncJobResult(parsedRef.jobId, data, parsedRef.attempt);
+    return true;
+  }
+
+  return false;
+}
+
 function hydrateJobWithDataFromFile(job) {
   if (!job || typeof job !== "object") return job;
   if (Array.isArray(job.data)) return job;
@@ -531,6 +610,7 @@ function runAsyncAttempt({ jobId, action, params, payload, attempt }) {
   }
 
   const requestId = `${jobId}:a${attempt}`;
+  lastDispatchedRequestId = requestId;
   requestIndex.set(requestId, { jobId, attempt, updatedAt: Date.now() });
   schedulePersistRequestIndex();
   appendJobEvent(jobId, "attempt_started", { attempt, requestId });
@@ -543,7 +623,8 @@ function runAsyncAttempt({ jobId, action, params, payload, attempt }) {
 
   const timeoutId = setTimeout(() => {
     pendingRequests.delete(requestId);
-    requestIndex.delete(requestId);
+    // Keep requestIndex for a while so a late extension result can still be
+    // associated with its async job after the attempt timeout fires.
     schedulePersistRequestIndex();
     const job = asyncJobs.get(jobId);
     if (!job || job.status !== "running") return;
@@ -561,6 +642,8 @@ function runAsyncAttempt({ jobId, action, params, payload, attempt }) {
   pendingRequests.set(requestId, {
     timeoutId,
     jobId,
+    action,
+    startedAt: Date.now(),
     resolve: (result) => {
       clearTimeout(timeoutId);
       requestIndex.delete(requestId);
@@ -653,37 +736,25 @@ wss.on("connection", (ws) => {
         console.log(`📩 Received result from extension (ID: ${parsed.requestId})`);
         const pending = pendingRequests.get(parsed.requestId);
         if (pending) {
-          clearTimeout(pending.timeoutId);
-          pending.resolve(parsed.data);
-          pendingRequests.delete(parsed.requestId);
+          resolveActionResultByRequestId(parsed.requestId, parsed.data, "with explicit requestId");
         } else {
-          const parsedRef = resolveJobRefByRequestId(parsed.requestId);
-          if (parsedRef.jobId) {
-            console.warn(`WARN action_result missed pending but recovered by requestId parsing: jobId=${parsedRef.jobId}`);
-            requestIndex.delete(parsed.requestId);
-            schedulePersistRequestIndex();
-            finalizeAsyncJobResult(parsedRef.jobId, parsed.data, parsedRef.attempt);
-            return;
-          }
+          const recovered = resolveActionResultByRequestId(parsed.requestId, parsed.data, "missed pending");
+          if (recovered) return;
           const keys = Array.from(pendingRequests.keys());
           console.warn(`WARN action_result requestId not found in pendingRequests: ${parsed.requestId}`);
           console.warn(`WARN pendingRequests.size=${pendingRequests.size}, sampleKeys=${JSON.stringify(keys.slice(0, 10))}`);
         }
       }
       if (parsed.method === "action_result" && !parsed.requestId) {
-        const keys = Array.from(pendingRequests.keys());
-        if (keys.length === 1) {
-          const recoveredRequestId = keys[0];
-          const pending = pendingRequests.get(recoveredRequestId);
-          console.warn(
-            `WARN action_result missing requestId; recovered using single pending request: ${recoveredRequestId}`
-          );
-          if (pending) {
-            clearTimeout(pending.timeoutId);
-            pending.resolve(parsed.data);
-            pendingRequests.delete(recoveredRequestId);
+        const recoveredRequestId = resolveMissingActionResultRequestId(parsed);
+        if (recoveredRequestId) {
+          console.warn(`WARN action_result missing requestId; recovered as: ${recoveredRequestId}`);
+          const recovered = resolveActionResultByRequestId(recoveredRequestId, parsed.data, "missing requestId");
+          if (!recovered) {
+            console.warn(`WARN action_result missing requestId recovery target was stale: ${recoveredRequestId}`);
           }
         } else {
+          const keys = Array.from(pendingRequests.keys());
           console.warn(
             `WARN action_result missing requestId and cannot recover (pendingRequests.size=${keys.length})`
           );
@@ -721,7 +792,17 @@ const server = http.createServer(async (req, res) => {
 
   // 健康检查接口
   if (req.method === "GET" && req.url === "/ping") {
-    return res.end(JSON.stringify({ status: "ok" }));
+    return res.end(JSON.stringify({
+      status: "ok",
+      serviceProtocolVersion: SERVICE_PROTOCOL_VERSION,
+      packageVersion: packageJson.version,
+      pid: process.pid,
+      cwd: process.cwd(),
+      servicePath: __filename,
+      startedAt: SERVICE_STARTED_AT,
+      sourceMtimeMs: getServiceSourceMtimeMs(),
+      dataDir: JOBS_DIR
+    }));
   }
 
   if (req.method === "POST" && req.url === "/shutdown") {
@@ -902,6 +983,7 @@ const server = http.createServer(async (req, res) => {
 
         console.log(`🚀 Dispatching action: [${action}]`);
         const requestId = `svc-${Date.now()}-${requestIdCounter++}`;
+        lastDispatchedRequestId = requestId;
         // 通用透传逻辑：将 payload 中的所有参数（除去 action）作为 params 传给插件
         const { action: _a, ...params } = payload;
         const result = await new Promise((resolve) => {
@@ -910,7 +992,12 @@ const server = http.createServer(async (req, res) => {
             resolve({ error: `Scraping timeout (600s) for action: ${action}` });
           }, 600000);
 
-          pendingRequests.set(requestId, { resolve, timeoutId });
+          pendingRequests.set(requestId, {
+            resolve,
+            timeoutId,
+            action,
+            startedAt: Date.now()
+          });
 
 
           
