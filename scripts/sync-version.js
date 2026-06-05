@@ -26,6 +26,18 @@ const targets = [
     apply(data) {
       data.version = version;
     }
+  },
+  {
+    relativePath: "distribution-skills/tiktok-video-search/_meta.json",
+    apply(data) {
+      data.version = version;
+    }
+  },
+  {
+    relativePath: "distribution-skills/tiktok-insight/_meta.json",
+    apply(data) {
+      data.version = version;
+    }
   }
 ];
 
