@@ -1,6 +1,6 @@
 {
   "name": "@gecho-ai/gecho-bridge",
-  "version": "1.1.23",
+  "version": "1.1.24",
   "description": "TikTok Search and Insight tools for OpenClaw, connecting LLMs to TikTok via Chrome Extension.",
   "main": "mcp-client.js",
   "bin": {
