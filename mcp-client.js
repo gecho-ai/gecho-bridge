@@ -29,6 +29,7 @@ const SHUTDOWN_URL = `${SERVICE_BASE_URL}/shutdown`;
 const DIST_SERVICE_PATH = path.join(__dirname, "server.cjs");
 const SOURCE_SERVICE_PATH = path.join(__dirname, "server.js");
 const SERVICE_PATH = fs.existsSync(DIST_SERVICE_PATH) ? DIST_SERVICE_PATH : SOURCE_SERVICE_PATH;
+const SERVICE_PROTOCOL_VERSION = 2;
 const SUPPORTED_TOOL_NAMES = new Set([
   "tiktok_search",
   "tiktok_insight",
@@ -45,14 +46,68 @@ const server = new Server(
 /**
  * 检查服务是否在线
  */
-function checkServiceAlive() {
+function requestJson(url, options = {}) {
   return new Promise((resolve) => {
-    const req = http.get(PING_URL, (res) => {
-      resolve(res.statusCode === 200);
+    const req = http.request(url, options, (res) => {
+      let body = "";
+      res.on("data", (chunk) => body += chunk);
+      res.on("end", () => {
+        let parsed = {};
+        try { parsed = JSON.parse(body || "{}"); } catch (_e) {}
+        resolve({ ok: res.statusCode >= 200 && res.statusCode < 300, statusCode: res.statusCode, body: parsed });
+      });
     });
-    req.on("error", () => resolve(false));
+    req.on("error", () => resolve({ ok: false, statusCode: 0, body: {} }));
+    req.setTimeout(1000, () => {
+      req.destroy();
+      resolve({ ok: false, statusCode: 0, body: {} });
+    });
     req.end();
   });
+}
+
+/**
+ * 检查服务是否在线
+ */
+async function getServiceInfo() {
+  const response = await requestJson(PING_URL, { method: "GET" });
+  if (!response.ok) return null;
+  return response.body || null;
+}
+
+async function checkServiceAlive() {
+  return !!(await getServiceInfo());
+}
+
+function getExpectedDataDir() {
+  return process["env"].GECHO_DATA_DIR || path.join(__dirname, "data");
+}
+
+function getServiceSourceMtimeMs() {
+  try {
+    return Math.floor(fs.statSync(SERVICE_PATH).mtimeMs);
+  } catch (_e) {
+    return 0;
+  }
+}
+
+function isCurrentServiceCompatible(info) {
+  if (!info || info.status !== "ok") return false;
+  if (info.serviceProtocolVersion !== SERVICE_PROTOCOL_VERSION) return false;
+  if (info.packageVersion && info.packageVersion !== CLIENT_VERSION) return false;
+
+  const expectedDataDir = path.resolve(getExpectedDataDir());
+  if (info.dataDir && path.resolve(String(info.dataDir)) !== expectedDataDir) {
+    return false;
+  }
+
+  const serviceMtimeMs = getServiceSourceMtimeMs();
+  const startedAt = Number(info.startedAt || 0);
+  if (serviceMtimeMs && startedAt && serviceMtimeMs > startedAt + 1000) {
+    return false;
+  }
+
+  return true;
 }
 
 /**
@@ -96,7 +151,7 @@ async function waitForServiceUp() {
   let retries = 8;
   while (retries > 0) {
     await new Promise((r) => setTimeout(r, 800));
-    if (await checkServiceAlive()) {
+    if (isCurrentServiceCompatible(await getServiceInfo())) {
       return true;
     }
     retries--;
@@ -105,8 +160,13 @@ async function waitForServiceUp() {
 }
 
 async function ensureServiceRunning() {
-  if (await checkServiceAlive()) {
+  const info = await getServiceInfo();
+  if (isCurrentServiceCompatible(info)) {
     return;
+  }
+  if (info) {
+    await requestShutdown();
+    await waitForServiceDown();
   }
   startServiceDetached();
   const ready = await waitForServiceUp();
