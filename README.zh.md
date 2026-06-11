@@ -1,40 +1,54 @@
 # Gecho Bridge 🚀
 
-🌐 **Gecho Bridge** 是一款通用的 MCP（Model Context Protocol）工具，旨在为你的大语言模型（LLM）与本地浏览器之间搭建一座桥梁。
-安装后，无论是使用 **OpenClaw**、**Hermes** 还是 **Trae**，你的 AI 助手都能直接控制浏览器，自动化完成 TikTok 搜索、数据抓取与深度商机洞察。
+**Gecho Bridge 通过 MCP 和 Gecho Chrome 扩展，把 OpenClaw、Hermes、Trae、Claude Code 等 AI 客户端连接到真实 Chrome 浏览器。** 你可以用它搜索 TikTok 视频、采集结构化元数据、保存 JSON 结果，并运行异步的产品、趋势、竞品和内容洞察工作流。
 
----
+## ⚠️ 重要前置：使用前必看
 
-## ✨ 适合谁用
+Gecho Bridge 不能只靠 README、Skill 页面或 MCP 配置单独运行。首次搜索 TikTok 或运行洞察任务前，必须同时满足下面 3 个条件：
 
-- 📊 **分析竞品**：输入关键词，快速获取 TikTok 前排高赞视频的各项互动数据。
-- 💡 **寻找爆款**：使用深度洞察工具分析特定品类（如 "portable blender"）的流行趋势，捕捉未被满足的市场蓝海。
-- 🤖 **自动化运营**：让大模型直接指挥浏览器，自动翻页抓取并生成数据报表，免去繁琐的手动统计。
+1. **在 AI 客户端中配置 Gecho Bridge MCP**。
+2. **安装 Gecho Chrome 扩展**，并在扩展中登录 Gecho 账号。
+3. **在 Chrome 中登录 TikTok 网页版**，并保持已登录的 TikTok 标签页打开。
 
-## 🚀 能做什么
+如果任一条件缺失，即使 Skill 或 Plugin 已安装，TikTok 搜索和洞察功能也可能无法正常运行。
 
-- 自动唤起 Chrome 并在 TikTok 搜索指定关键词，模拟真人自然滚动加载。
-- 抓取海量结构化数据（视频 ID、标题、点赞量、播放链接等）并自动安全落盘为 JSON 文件。
-- 执行基于大数据检索的**异步深度洞察**，智能提炼爆款趋势与潜在商机。
+## 🚀 3 步快速上手
 
-## 🔗 相关链接
+### 第一步：安装 Gecho Chrome 扩展
+
+1. 打开 [Gecho Chrome 扩展下载页](https://chromewebstore.google.com/detail/pjkaeenpekolahdbccjfenjcmanemlbj?utm_source=item-share-cb)。
+2. 点击 `添加至 Chrome`，然后确认 `添加扩展程序`。
+
+### 第二步：登录 Gecho 扩展
+
+在 Chrome 中打开 Gecho 扩展，登录 Gecho 账号，并保持扩展在线。
+
+### 第三步：登录 TikTok 网页版
+
+在 Chrome 中打开 TikTok 网页版并登录账号，使用 Gecho 时保持已登录的 TikTok 标签页打开。
+
+完成后，回到 OpenClaw Dashboard、Hermes 或其他 MCP 客户端，直接发送：
+
+- “Search 电脑 on TikTok”
+- “Search 汉堡 on TikTok”
+- “Run TikTok insight for portable blender”
+
+## 🔗 官方链接与安装帮助
 
 - **官网**：[https://gecho.ai/](https://gecho.ai/)
-- **GitHub**：[https://github.com/gecho-ai/gecho-bridge](https://github.com/gecho-ai/gecho-bridge)
-- **ClawHub 插件页**：[https://clawhub.ai/p/gecho-ai](https://clawhub.ai/p/gecho-ai)
-- **Chrome 浏览器扩展**：[前往 Chrome 网上应用店下载](https://chromewebstore.google.com/detail/pjkaeenpekolahdbccjfenjcmanemlbj?utm_source=item-share-cb)
-- **YouTube 主页**：[@Gecho-AI](https://www.youtube.com/@Gecho-AI)
+- **Chrome 扩展**：[前往 Chrome 网上应用店下载](https://chromewebstore.google.com/detail/pjkaeenpekolahdbccjfenjcmanemlbj?utm_source=item-share-cb)
 - **OpenClaw 安装教程**：[OpenClaw + TikTok 安装视频](https://www.youtube.com/watch?v=ggwY9hISHcQ)
 - **Hermes 安装教程**：[Hermes + TikTok 安装视频](https://www.youtube.com/watch?v=zHKnuWnxt_c)
+- **YouTube 主页**：[@Gecho-AI](https://www.youtube.com/@Gecho-AI)
+- **GitHub**：[https://github.com/gecho-ai/gecho-bridge](https://github.com/gecho-ai/gecho-bridge)
+- **ClawHub 插件页**：[https://clawhub.ai/p/gecho-ai](https://clawhub.ai/p/gecho-ai)
+- **Discord 支持**：[点击加入 Discord](https://discord.gg/RFDVZMR6Tn)
+- **企业微信群**：[查看群二维码](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg)
+- **1 对 1 客服**：[查看客服二维码](https://github.com/gecho-ai/gecho-bridge/blob/main/wx.jpg)
 
-## 💬 交流与反馈
-
-欢迎加入我们的社区进行交流或反馈问题：
-
-- **Discord 社区**：[点击加入 Discord](https://discord.gg/RFDVZMR6Tn)
-- **企业微信群**：扫描下方二维码加入（若图片未显示，请 [点击此处查看二维码](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg)）
-
-![企业微信二维码](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg)
+| 企业微信群 | 1 对 1 客服 |
+| :---: | :---: |
+| <img src="https://raw.githubusercontent.com/gecho-ai/gecho-bridge/main/qywx.jpg" width="160" alt="企业微信群二维码" /> | <img src="https://raw.githubusercontent.com/gecho-ai/gecho-bridge/main/wx.jpg" width="160" alt="1 对 1 客服二维码" /> |
 
 ---
 
@@ -44,13 +58,6 @@
 
 **先说明一个关键点：**
 ClawHub 上的 **Skill** 主要提供给大模型的调用指令，本身不是服务端。想要真正搜索 TikTok，你还需要把 `gecho-bridge` MCP 服务配置到客户端里，并安装浏览器扩展。
-
-**首次使用前必须同时满足 3 个条件：**
-1. 已在 AI 客户端中配置 `gecho-bridge` MCP。
-2. 已安装并打开 Gecho Chrome 扩展，且扩展中已登录 Gecho 账号。
-3. Chrome 中已登录 TikTok 网页版，并保持 TikTok 标签页打开。
-
-如果任一条件缺失，即使 Skill 已安装，TikTok 搜索和洞察功能也可能无法正常运行。
 
 ### 0. 前置环境要求
 1. **Node.js**：>= 18（需支持 `npm` / `npx`）。
@@ -118,24 +125,6 @@ claude mcp add gecho-bridge -- npx -y @gecho-ai/gecho-bridge@latest
 ## 🏁 快速开始与常见流程
 
 环境配置完毕并重启 AI 客户端后，你可以直接通过自然语言向 AI 下达指令。
-
-### 🚀 3 步首次上手
-
-1. **安装 Gecho Chrome 扩展**
-   - 打开 [Chrome 网上应用店页面](https://chromewebstore.google.com/detail/pjkaeenpekolahdbccjfenjcmanemlbj?utm_source=item-share-cb)。
-   - 点击 `添加至 Chrome`，然后确认 `添加扩展程序`。
-2. **登录 Gecho 扩展**
-   - 在 Chrome 中打开 Gecho 扩展并登录 Gecho 账号。
-   - 保持扩展在线。
-3. **登录 TikTok 网页版**
-   - 在 Chrome 中打开 TikTok 并登录账号。
-   - 使用 Gecho 时保持已登录的 TikTok 标签页打开。
-
-完成后，回到 OpenClaw Dashboard、Hermes 或其他 MCP 客户端，直接发送：
-
-- “Search 电脑 on TikTok”
-- “Search 汉堡 on TikTok”
-- “Run TikTok insight for portable blender”
 
 ### ✅ 首次使用前自检
 1. 已配置 `gecho-bridge` MCP，或已安装 `@gecho-ai/gecho-bridge-bundle` Plugin。
@@ -233,7 +222,7 @@ Gecho 不会索取或收集你的 TikTok 密码、隐私信息，也不会代表
 
 ### 还有问题？
 
-欢迎加入 [Discord](https://discord.gg/RFDVZMR6Tn)，或扫描 [企业微信二维码](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg) 获取 1 对 1 支持。
+欢迎加入 [Discord](https://discord.gg/RFDVZMR6Tn)、扫描 [企业微信群二维码](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg)，或扫描 [1 对 1 客服二维码](https://github.com/gecho-ai/gecho-bridge/blob/main/wx.jpg) 获取支持。
 
 ---
 

@@ -1,40 +1,54 @@
 # Gecho Bridge 🚀
 
-🌐 **Gecho Bridge** is a universal MCP (Model Context Protocol) tool designed to build a bridge between your large language model (LLM) and your local browser.
-After installation, whether you use **OpenClaw**, **Hermes**, or **Trae**, your AI assistant can directly control the browser to automate TikTok search, data collection, and deep business opportunity insights.
+**Gecho Bridge connects AI clients such as OpenClaw, Hermes, Trae, and Claude Code to a live Chrome browser through MCP and the Gecho Chrome extension.** Use it to search TikTok videos, collect structured metadata, save JSON results, and run async product, trend, competitor, and content insight workflows.
 
----
+## ⚠️ Critical Prerequisite: Read Before Use
 
-## ✨ Who Is It For
+Gecho Bridge cannot work from the README, Skill page, or MCP config alone. Before the first TikTok search or insight job, all 3 items below are required:
 
-- 📊 **Competitor analysis**: Enter a keyword and quickly get engagement data for top TikTok videos.
-- 💡 **Finding winning products**: Use deep insight tools to analyze trends in specific categories (such as "portable blender") and identify underserved blue-ocean opportunities.
-- 🤖 **Automated operations**: Let a large model directly control the browser, auto-scroll, scrape data, and generate reports, eliminating tedious manual counting.
+1. **Configure Gecho Bridge MCP** in your AI client.
+2. **Install the Gecho Chrome extension** and log in to your Gecho account.
+3. **Log in to TikTok web in Chrome** and keep the logged-in TikTok tab open.
 
-## 🚀 What It Can Do
+If any of these are missing, TikTok search and insight tools may fail even if the Skill or plugin is installed.
 
-- Automatically launch Chrome, search TikTok for a target keyword, and simulate natural human-like scrolling.
-- Collect large volumes of structured data (video ID, title, likes, playback link, and more) and safely save it as JSON files.
-- Run **asynchronous deep insights** based on large-scale retrieval to intelligently summarize winning-product trends and potential business opportunities.
+## 🚀 3-Step Quick Start
 
-## 🔗 Related Links
+### Step 1: Install the Gecho Chrome extension
+
+1. Open the [Gecho Chrome extension download page](https://chromewebstore.google.com/detail/pjkaeenpekolahdbccjfenjcmanemlbj?utm_source=item-share-cb).
+2. Click `Add to Chrome`, then confirm `Add extension`.
+
+### Step 2: Log in to the Gecho extension
+
+Open the Gecho extension in Chrome, log in to your Gecho account, and keep the extension online.
+
+### Step 3: Log in to TikTok web
+
+Open TikTok in Chrome, log in to the TikTok web app, and keep the logged-in TikTok tab open while using Gecho.
+
+After setup is complete, return to OpenClaw Dashboard, Hermes, or your MCP client and ask:
+
+- "Search computers on TikTok"
+- "Search hamburgers on TikTok"
+- "Run TikTok insight for portable blender"
+
+## 🔗 Official Links & Setup Help
 
 - **Official Website**: [https://gecho.ai/](https://gecho.ai/)
-- **GitHub**: [https://github.com/gecho-ai/gecho-bridge](https://github.com/gecho-ai/gecho-bridge)
-- **ClawHub Plugin Page**: [https://clawhub.ai/p/gecho-ai](https://clawhub.ai/p/gecho-ai)
-- **Chrome Browser Extension**: [Install from Chrome Web Store](https://chromewebstore.google.com/detail/pjkaeenpekolahdbccjfenjcmanemlbj?utm_source=item-share-cb)
-- **YouTube Channel**: [@Gecho-AI](https://www.youtube.com/@Gecho-AI)
+- **Chrome Extension**: [Install from Chrome Web Store](https://chromewebstore.google.com/detail/pjkaeenpekolahdbccjfenjcmanemlbj?utm_source=item-share-cb)
 - **OpenClaw Setup Video**: [OpenClaw + TikTok setup tutorial](https://www.youtube.com/watch?v=ggwY9hISHcQ)
 - **Hermes Setup Video**: [Hermes + TikTok setup tutorial](https://www.youtube.com/watch?v=zHKnuWnxt_c)
+- **YouTube Channel**: [@Gecho-AI](https://www.youtube.com/@Gecho-AI)
+- **GitHub**: [https://github.com/gecho-ai/gecho-bridge](https://github.com/gecho-ai/gecho-bridge)
+- **ClawHub Plugin Page**: [https://clawhub.ai/p/gecho-ai](https://clawhub.ai/p/gecho-ai)
+- **Discord Support**: [Join Discord](https://discord.gg/RFDVZMR6Tn)
+- **WeCom Group**: [View group QR code](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg)
+- **1:1 Support**: [View personal support QR code](https://github.com/gecho-ai/gecho-bridge/blob/main/wx.jpg)
 
-## 💬 Community & Feedback
-
-Welcome to join our community for discussion or feedback:
-
-- **Discord Community**: [Join Discord](https://discord.gg/RFDVZMR6Tn)
-- **WeCom Group**: Scan the QR code below to join (or [click here to view the QR code](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg))
-
-![WeCom QR Code](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg)
+| WeCom Group | 1:1 Support |
+| :---: | :---: |
+| <img src="https://raw.githubusercontent.com/gecho-ai/gecho-bridge/main/qywx.jpg" width="160" alt="WeCom Group QR Code" /> | <img src="https://raw.githubusercontent.com/gecho-ai/gecho-bridge/main/wx.jpg" width="160" alt="Personal Support QR Code" /> |
 
 ---
 
@@ -44,13 +58,6 @@ This project is built on the standard MCP protocol and can be seamlessly integra
 
 **One key point first:**
 The **Skill** on ClawHub mainly provides calling instructions for the large model. It is not the server itself. To actually search TikTok, you still need to configure the `gecho-bridge` MCP service in your client and install the browser extension.
-
-**Before first use, all 3 items are required:**
-1. `gecho-bridge` MCP is configured in your AI client.
-2. The Gecho Chrome extension is installed, opened, and logged in to your Gecho account.
-3. TikTok web is logged in inside Chrome, with the TikTok tab kept open.
-
-If any of these are missing, TikTok search and insight tools may fail even if the Skill is installed.
 
 ### 0. Prerequisites
 1. **Node.js**: >= 18 (must support `npm` / `npx`).
@@ -118,24 +125,6 @@ claude mcp add gecho-bridge -- npx -y @gecho-ai/gecho-bridge@latest
 ## 🏁 Quick Start & Common Workflows
 
 After the environment is configured and your AI client has restarted, you can directly issue instructions to the AI in natural language.
-
-### 🚀 3-Step First Use
-
-1. **Install the Gecho Chrome extension**
-   - Open the [Chrome Web Store page](https://chromewebstore.google.com/detail/pjkaeenpekolahdbccjfenjcmanemlbj?utm_source=item-share-cb).
-   - Click `Add to Chrome`, then confirm `Add extension`.
-2. **Log in to the Gecho extension**
-   - Open the Gecho extension in Chrome and log in to your Gecho account.
-   - Keep the extension online.
-3. **Log in to TikTok web**
-   - Open TikTok in Chrome and log in.
-   - Keep the logged-in TikTok tab open while using Gecho.
-
-After setup is complete, return to OpenClaw Dashboard, Hermes, or your MCP client and ask:
-
-- "Search computers on TikTok"
-- "Search hamburgers on TikTok"
-- "Run TikTok insight for portable blender"
 
 ### ✅ Self-Check Before First Use
 1. `gecho-bridge` MCP is configured, or the `@gecho-ai/gecho-bridge-bundle` plugin is installed.
@@ -233,7 +222,7 @@ Gecho does not ask for or collect your TikTok password, private account informat
 
 ### Need help?
 
-Join our [Discord](https://discord.gg/RFDVZMR6Tn) or scan the [WeCom QR code](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg) for 1:1 support.
+Join our [Discord](https://discord.gg/RFDVZMR6Tn), scan the [WeCom group QR code](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg), or scan the [personal support QR code](https://github.com/gecho-ai/gecho-bridge/blob/main/wx.jpg) for 1:1 support.
 
 ---
 

@@ -49,6 +49,7 @@ After setup is complete, return to the OpenClaw dashboard or Hermes and ask: "An
 - Hermes setup video: [Hermes + TikTok: Direct AI Browser Control via Gecho Bridge](https://www.youtube.com/watch?v=zHKnuWnxt_c)
 - Discord: [https://discord.gg/RFDVZMR6Tn](https://discord.gg/RFDVZMR6Tn)
 - WeCom group QR code: [qywx.jpg](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg)
+- 1:1 support QR code: [wx.jpg](https://github.com/gecho-ai/gecho-bridge/blob/main/wx.jpg)
 
 ## What this skill does
 
@@ -232,7 +233,7 @@ Helpful Gecho links:
 - OpenClaw setup video: https://www.youtube.com/watch?v=ggwY9hISHcQ
 - Hermes setup video: https://www.youtube.com/watch?v=zHKnuWnxt_c
 - GitHub and README: https://github.com/gecho-ai/gecho-bridge
-- Support: Discord https://discord.gg/RFDVZMR6Tn, WeCom QR https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg
+- Support: Discord https://discord.gg/RFDVZMR6Tn, WeCom group QR https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg, 1:1 support QR https://github.com/gecho-ai/gecho-bridge/blob/main/wx.jpg
 - Related Skills: `tiktok-video-search` for focused video search, and `tiktok-search` for the complete TikTok search and insight workflow.
 ````
 
@@ -249,7 +250,7 @@ Required content that must not be omitted:
 - Include the OpenClaw MCP setup command and `openclaw mcp list` verification command.
 - Include the Chrome extension link.
 - Include after-setup wording that tells the user to return to OpenClaw Dashboard or Hermes and retry the request.
-- Include all related links: website, OpenClaw setup video, Hermes setup video, YouTube channel, GitHub/README, Discord, and WeCom QR code.
+- Include all related links: website, OpenClaw setup video, Hermes setup video, YouTube channel, GitHub/README, Discord, WeCom group QR code, and 1:1 support QR code.
 - Include related Gecho Skills listed in the template.
 - Do not recommend `openclaw plugins install` in this setup-missing response.
 
@@ -311,7 +312,8 @@ After setup, return to OpenClaw Dashboard or Hermes and ask again, for example:
 - YouTube channel: https://www.youtube.com/@Gecho-AI
 - GitHub and README: https://github.com/gecho-ai/gecho-bridge
 - Discord support: https://discord.gg/RFDVZMR6Tn
-- WeCom QR code: https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg
+- WeCom group QR code: https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg
+- 1:1 support QR code: https://github.com/gecho-ai/gecho-bridge/blob/main/wx.jpg
 
 **Related Gecho Skills**
 
@@ -346,7 +348,7 @@ Gecho does not ask for or collect your TikTok password, private account informat
 
 ### Need help?
 
-Scan the [WeCom QR code](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg) for 1:1 support.
+Join the [WeCom group](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg) for community support, or scan the [1:1 support QR code](https://github.com/gecho-ai/gecho-bridge/blob/main/wx.jpg) for personal help.
 
 ## Output guidelines
 
