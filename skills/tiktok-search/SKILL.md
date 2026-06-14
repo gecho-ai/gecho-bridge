@@ -72,6 +72,7 @@ When using the plugin/MCP route, Gecho Bridge may auto-start a local service pro
 
 - `"Search TikTok for 'portable blender' and show me the top liked videos."`
 - `"Search 'cat toy' and save the full results to an absolute path."`
+- `"Get this TikTok video's details and comments: https://www.tiktok.com/@user/video/123..."`
 - `"Run tiktok_insight for 'outdoor picnic mat'."`
 
 ### Workflow quick map
@@ -79,6 +80,7 @@ When using the plugin/MCP route, Gecho Bridge may auto-start a local service pro
 | Goal | Best Tool | Result |
 |------|-----------|--------|
 | Fast search, top videos, metadata export | `tiktok_search` | Returns a result set immediately |
+| Fetch one video's details and comments | `tiktok_video` | Returns one video detail object with a `comments` array |
 | Deeper market research or trend analysis | `tiktok_insight` | Starts an async job and returns a `jobId` |
 | Fetch the final insight report | `check_insight_status` | Reads async status or returns final results |
 
@@ -104,6 +106,7 @@ You are the execution guide for Gecho Bridge. Your job is to help the user succe
 | User Intent | Tool | Example |
 |-------------|------|---------|
 | Search TikTok, find top videos, export data | `tiktok_search` | "Search TikTok for cat toys" |
+| Fetch one TikTok video's details and comments | `tiktok_video` | "Get details and comments for this TikTok video URL" |
 | Analyze a niche, trend, or product opportunity | `tiktok_insight` | "Analyze trends for outdoor picnic mat" |
 | Check progress of a previous insight job | `check_insight_status` | "Check the status of my last insight job" |
 
@@ -139,6 +142,20 @@ Executes a keyword search, auto-scrolls to load results, and returns metadata.
 
 A JSON array containing video IDs, titles, like counts, play URLs, and author info.
 
+#### `tiktok_video`
+
+Fetches one TikTok video's full details and scrolls the comment panel to collect comments and replies.
+
+**Parameters:**
+
+- `url` (string, required): A TikTok video detail URL in the form `https://www.tiktok.com/@user/video/123...`.
+- `targetCount` (number, optional): Maximum number of comments and replies to collect. Defaults to `200` and is capped at `200`.
+- `save_dir` (string, optional): Absolute directory path for saving the result JSON.
+
+**Returns:**
+
+A JSON array containing one video detail object. Its `comments` field contains collected comments and replies.
+
 #### `tiktok_insight`
 
 Starts an asynchronous business insight and trend-analysis job based on TikTok search results.
@@ -166,7 +183,7 @@ Either a running status or the final insight result payload.
 
 ### Execution Rules & Constraints (CRITICAL)
 
-1. **One Gecho tool call per turn**: You MUST NOT execute more than ONE tool call among `tiktok_search`, `tiktok_insight`, and `check_insight_status` in a single conversational turn.
+1. **One Gecho tool call per turn**: You MUST NOT execute more than ONE tool call among `tiktok_search`, `tiktok_video`, `tiktok_insight`, and `check_insight_status` in a single conversational turn.
 2. **Strict tool binding**: Use ONLY the official Gecho tools listed in this file for TikTok work. Do not replace them with WebSearch, browser automation, or ad-hoc scrapers.
 3. **No fallback between search and insight**: If `tiktok_insight` fails, do not silently switch to `tiktok_search`. If `tiktok_search` fails, do not silently switch to `tiktok_insight`.
 4. **Fail fast**: If any tool fails, times out, or throws an error, STOP immediately and return the exact error or the exact failure reason. Do not invent recovery steps beyond the troubleshooting section below.

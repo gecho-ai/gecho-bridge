@@ -36,6 +36,7 @@ const SUPPORTED_TOOL_NAMES = new Set([
   "tiktok_influencer",
   "tiktok_shop_search",
   "tiktok_product",
+  "tiktok_video",
   "x_search",
   "x_post_detail",
   "amazon_search",
@@ -221,6 +222,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             save_dir: { type: "string", description: "可选的保存目录绝对路径" }
           },
           required: ["product_url"]
+        }
+      },
+      {
+        name: "tiktok_video",
+        description: "获取 TikTok 视频详情及评论。会打开视频详情页、展开评论并持续下滑采集。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            url: { type: "string", description: "TikTok 视频详情页 URL，例如 https://www.tiktok.com/@user/video/123..." },
+            targetCount: { type: "number", description: "最多采集的评论及回复数量，默认且上限为 200", default: 200, maximum: 200 },
+            save_dir: { type: "string", description: "可选的保存目录绝对路径" }
+          },
+          required: ["url"]
         }
       },
       {
@@ -569,6 +583,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         ? `📂 数据已存: ${savePath}\n\n`
         : "";
       
+      if (toolName === "tiktok_video" && result.length > 0) {
+        const video = result[0] || {};
+        const comments = Array.isArray(video.comments) ? video.comments : [];
+        const preview = {
+          ...video,
+          comments: comments.slice(0, 20),
+          commentsPreviewed: Math.min(comments.length, 20)
+        };
+        return {
+          content: [
+            {
+              type: "text",
+              text: `✅ [${toolName}] 视频详情与评论获取成功，共采集 ${comments.length} 条评论及回复。\n` +
+                    saveLine +
+                    `以下仅展示前 ${preview.commentsPreviewed} 条评论，完整数据请查看保存文件：\n` +
+                    JSON.stringify(preview, null, 2)
+            }
+          ]
+        };
+      }
+
       if (toolName === "tiktok_product" && result.length > 0) {
         return {
           content: [

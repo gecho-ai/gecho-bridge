@@ -981,9 +981,11 @@ const server = http.createServer(async (req, res) => {
             fixedPath = dataDir;
             dataDir = path.dirname(fixedPath);
           } else {
-            const fileNameSeed = params.uniqueId || params.query || action;
+            const fileNameSeed = params.uniqueId || params.query || (action === "tiktok_video" ? params.url : "") || action;
             const safeName = toSafeFileName(fileNameSeed);
-            const prefix = (params.uniqueId || params.query) ? `${toSafeFileName(action)}_` : "";
+            const prefix = (params.uniqueId || params.query || (action === "tiktok_video" && params.url))
+              ? `${toSafeFileName(action)}_`
+              : "";
             fixedPath = path.join(dataDir, `${prefix}${safeName}_results.json`);
           }
   
