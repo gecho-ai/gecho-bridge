@@ -33,7 +33,16 @@ const SERVICE_PROTOCOL_VERSION = 2;
 const SUPPORTED_TOOL_NAMES = new Set([
   "tiktok_search",
   "tiktok_insight",
-  "check_insight_status"
+  "check_insight_status",
+  "tiktok_influencer",
+  "tiktok_shop_search",
+  "tiktok_product",
+  "tiktok_video",
+  "x_search",
+  "x_post_detail",
+  "amazon_search",
+  "amazon_product",
+  "amazon_reviews"
 ]);
 
 const CLIENT_VERSION = packageJson.version;
@@ -187,7 +196,7 @@ async function restartServiceRunning() {
 
 function shouldRestartServiceForError(message, toolName) {
   const text = String(message || "");
-  if ((toolName === "tiktok_insight" || toolName === "check_insight_status") && (text.includes("Not found") || text.includes("HTTP 404"))) {
+  if ((toolName === "tiktok_insight" || toolName === "tiktok_influencer" || toolName === "check_insight_status") && (text.includes("Not found") || text.includes("HTTP 404"))) {
     return true;
   }
   return false;
@@ -209,6 +218,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: "object",
           properties: {
             query: { type: "string", description: "搜索关键词 (例如: '猫薄荷')" },
+            targetCount: { type: "number", description: "预期采集的数量，默认 100", default: 100 },
             save_dir: { type: "string", description: "可选的保存目录绝对路径（请提供文件夹路径，不要带 .json 等文件后缀，例如: '/Users/xxx/data'）" }
           },
           required: ["query"]
@@ -235,6 +245,121 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             jobId: { type: "string", description: "从 tiktok_insight 获得的 job_id" }
           },
           required: ["jobId"]
+        }
+      },
+      {
+        name: "tiktok_influencer",
+        description: "获取指定 TikTok 达人主页发布的所有视频 data。(同步工具：会自动滚动采集并直接返回结果，建议 targetCount 不超过 500)",
+        inputSchema: {
+          type: "object",
+          properties: {
+            uniqueId: { type: "string", description: "达人的 unique_id (例如: 'zachking')" },
+            targetCount: { type: "number", description: "预期采集的视频数量，默认 100", default: 100 },
+            save_dir: { type: "string", description: "可选的保存目录绝对路径" }
+          },
+          required: ["uniqueId"]
+        }
+      },
+      {
+        name: "tiktok_shop_search",
+        description: "在 TikTok Shop 中搜索关键词，获取返回的所有商品信息。支持自动下滑获取更多数据。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: "搜索关键词 (例如: 'lulu clothes')" },
+            targetCount: { type: "number", description: "预期获取的商品数量，默认 100，设为更高值以获取更多数据", default: 100 },
+            save_dir: { type: "string", description: "可选的保存目录绝对路径（请提供文件夹路径，不要带 .json 等文件后缀，例如: '/Users/xxx/data'）" }
+          },
+          required: ["query"]
+        }
+      },
+      {
+        name: "tiktok_product",
+        description: "获取 TikTok Shop 商品详情页的完整数据（标题、价格、SKU、描述、销量、评价等）。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            product_url: { type: "string", description: "商品详情页 URL 或 商品 ID (例如: '1731523855832879280' 或 'https://shop.tiktok.com/us/pdp/...') " },
+            save_dir: { type: "string", description: "可选的保存目录绝对路径" }
+          },
+          required: ["product_url"]
+        }
+      },
+      {
+        name: "tiktok_video",
+        description: "获取 TikTok 视频详情及评论。会打开视频详情页、展开评论并持续下滑采集。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            url: { type: "string", description: "TikTok 视频详情页 URL，例如 https://www.tiktok.com/@user/video/123..." },
+            targetCount: { type: "number", description: "最多采集的评论及回复数量，默认且上限为 200", default: 200, maximum: 200 },
+            save_dir: { type: "string", description: "可选的保存目录绝对路径" }
+          },
+          required: ["url"]
+        }
+      },
+      {
+        name: "x_search",
+        description: "在 X (Twitter) 上搜索关键词，采集推文内容、互动数及作者信息。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: "搜索关键词 (例如: 'trump')" },
+            targetCount: { type: "number", description: "预期采集的推文数量，默认 100", default: 100 },
+            save_dir: { type: "string", description: "可选的保存目录绝对路径" }
+          },
+          required: ["query"]
+        }
+      },
+      {
+        name: "x_post_detail",
+        description: "获取 X (Twitter) 某条推文的详情，包括主推文内容及大量评论。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            url: { type: "string", description: "推文详情页 URL (例如: 'https://x.com/user/status/123...')" },
+            targetCount: { type: "number", description: "预期采集的评论数量，默认 100", default: 100 },
+            save_dir: { type: "string", description: "可选的保存目录绝对路径" }
+          },
+          required: ["url"]
+        }
+      },
+      {
+        name: "amazon_search",
+        description: "在 Amazon 上搜索关键词，自动采集多页商品信息（支持自动翻页）。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: "搜索关键词 (例如: 'clothes')" },
+            targetPages: { type: "number", description: "预期采集的页数，默认 5 (约100条)", default: 5 },
+            save_dir: { type: "string", description: "可选的保存目录绝对路径" }
+          },
+          required: ["query"]
+        }
+      },
+      {
+        name: "amazon_product",
+        description: "获取 Amazon 商品详情页的完整数据（标题、价格、描述、变体、规格等）。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            product_url: { type: "string", description: "商品详情页 URL 或 ASIN (例如: 'B0CXJJHY8B' 或 'https://www.amazon.com/dp/...') " },
+            save_dir: { type: "string", description: "可选的保存目录绝对路径" }
+          },
+          required: ["product_url"]
+        }
+      },
+      {
+        name: "amazon_reviews",
+        description: "在 Amazon 专用评论页采集评论，支持多页自动翻页。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            product_url: { type: "string", description: "商品详情页 URL 或 ASIN (例如: 'B0CXJJHY8B' 或 'https://www.amazon.com/product-reviews/...') " },
+            targetCount: { type: "number", description: "预期采集的评论数量，默认 100", default: 100 },
+            save_dir: { type: "string", description: "可选的保存目录绝对路径" }
+          },
+          required: ["product_url"]
         }
       }
     ]
@@ -402,7 +527,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }, 10000); // 频率提高到 10 秒一次
 
     try {
-      const targetUrl = toolName === "tiktok_insight" ? `${SERVICE_BASE_URL}/async-action` : HTTP_SERVICE_URL;
+      const isAsyncTool = toolName === "tiktok_insight";
+      const targetUrl = isAsyncTool ? `${SERVICE_BASE_URL}/async-action` : HTTP_SERVICE_URL;
 
       const requestService = () => new Promise((resolve, reject) => {
         const req = http.request(targetUrl, {
@@ -467,28 +593,44 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: "text", text: `❌ 错误: ${serviceResponse.error}` }], isError: true };
       }
 
-      // 如果是异步任务启动返回
-      if (toolName === "tiktok_insight" && serviceResponse.jobId) {
+      // 鲁棒性修复：只要 serviceResponse 中包含 jobId，不论什么工具都按异步处理返回给 MCP
+      if (serviceResponse.jobId) {
         const anticipatedPath = serviceResponse.savePath || "";
-        const pathMsg = anticipatedPath ? `\n\n📂 预期保存路径: ${anticipatedPath}\n(请在洞察任务自动结束后前往该文件查看完整数据)` : "";
+        const actionDesc = toolName === "tiktok_insight" ? "深度洞察任务" :
+                           toolName === "tiktok_influencer" ? "达人采集任务" : "异步采集任务";
+        const pathMsg = anticipatedPath ? `\n\n📂 预期保存路径: ${anticipatedPath}\n(请在任务自动结束后前往该文件查看完整数据)` : "";
         
         return {
           content: [
             {
               type: "text",
-              text: `✅ 异步洞察任务已启动。\n\n任务 ID (job_id): ${serviceResponse.jobId}${pathMsg}\n\n请使用 \`check_insight_status\` 工具并传入上述 jobId 来查询执行结果。因为该任务需要几分钟，建议你先等待 60 秒再进行第一次查询。`
+              text: `✅ ${actionDesc}已启动。\n\n任务 ID (job_id): ${serviceResponse.jobId}${pathMsg}\n\n请使用 \`check_insight_status\` 工具并传入上述 jobId 来查询执行结果。建议你先等待 30-60 秒再进行第一次查询。`
             }
           ]
         };
       }
 
+      // 如果不是异步启动，且响应成功，则校验数据
       const result = serviceResponse.data;
+      if (serviceResponse.success && result === undefined) {
+         // 针对某些同步接口可能只返回 success: true 的情况 (虽然目前 search 接口通常返回 data)
+         return { content: [{ type: "text", text: "✅ 操作执行成功。" }] };
+      }
+
       if (typeof result === 'object' && result !== null && result.error) {
         return { content: [{ type: "text", text: `❌ 业务错误: ${result.error}` }], isError: true };
       }
 
       if (!Array.isArray(result)) {
-        return { content: [{ type: "text", text: `❌ 异常: 插件未返回数组格式的结果` }], isError: true };
+        // 如果不是数组也不是异步 jobId，记录更多上下文以便调试
+        const rawResponse = JSON.stringify(serviceResponse).slice(0, 200);
+        return {
+          content: [{
+            type: "text",
+            text: `❌ 异常: 插件未返回数组格式的结果。\n工具: ${toolName}\n响应摘要: ${rawResponse}`
+          }],
+          isError: true
+        };
       }
 
       const savePath = serviceResponse.savePath || "";
@@ -496,6 +638,40 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         ? `📂 数据已存: ${savePath}\n\n`
         : "";
       
+      if (toolName === "tiktok_video" && result.length > 0) {
+        const video = result[0] || {};
+        const comments = Array.isArray(video.comments) ? video.comments : [];
+        const preview = {
+          ...video,
+          comments: comments.slice(0, 20),
+          commentsPreviewed: Math.min(comments.length, 20)
+        };
+        return {
+          content: [
+            {
+              type: "text",
+              text: `✅ [${toolName}] 视频详情与评论获取成功，共采集 ${comments.length} 条评论及回复。\n` +
+                    saveLine +
+                    `以下仅展示前 ${preview.commentsPreviewed} 条评论，完整数据请查看保存文件：\n` +
+                    JSON.stringify(preview, null, 2)
+            }
+          ]
+        };
+      }
+
+      if (toolName === "tiktok_product" && result.length > 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `✅ [${toolName}] 商品详情获取成功！\n` +
+                    saveLine +
+                    JSON.stringify(result[0], null, 2)
+            }
+          ]
+        };
+      }
+
       const top20 = result.slice(0, 20);
       return {
         content: [

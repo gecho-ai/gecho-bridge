@@ -899,8 +899,11 @@ const server = http.createServer(async (req, res) => {
         // 预先计算保存路径，以便立刻返回给客户端
         let dataDir = payload.save_dir || process["env"].GECHO_DATA_DIR || path.join(__dirname, "data");
         let anticipatedSavePath = "";
-        const safeName = toSafeFileName(params.query || action);
-        const prefix = params.query ? `${toSafeFileName(action)}_` : "";
+        const fileNameSeed = params.uniqueId || params.query || params.product_url || params.url || action;
+        const safeName = toSafeFileName(fileNameSeed);
+        const prefix = (params.uniqueId || params.query || params.product_url || params.url)
+          ? `${toSafeFileName(action)}_`
+          : "";
         if (dataDir.toLowerCase().endsWith(".json") || dataDir.toLowerCase().endsWith(".csv")) {
           anticipatedSavePath = dataDir;
         } else {
@@ -1017,14 +1020,16 @@ const server = http.createServer(async (req, res) => {
         if (Array.isArray(result) && result.length > 0) {
           let dataDir = payload.save_dir || process["env"].GECHO_DATA_DIR || path.join(__dirname, "data");
           let fixedPath;
-          const safeName = toSafeFileName(params.query || action);
-          const prefix = params.query ? `${toSafeFileName(action)}_` : "";
-          
           if (dataDir.toLowerCase().endsWith(".json") || dataDir.toLowerCase().endsWith(".csv")) {
             // 如果传入的 save_dir 误填成了文件路径，则将其作为最终文件路径，并提取所在目录
             fixedPath = dataDir;
             dataDir = path.dirname(fixedPath);
           } else {
+            const fileNameSeed = params.uniqueId || params.query || params.product_url || params.url || action;
+            const safeName = toSafeFileName(fileNameSeed);
+            const prefix = (params.uniqueId || params.query || params.product_url || params.url)
+              ? `${toSafeFileName(action)}_`
+              : "";
             fixedPath = path.join(dataDir, `${prefix}${safeName}_results.json`);
           }
   
