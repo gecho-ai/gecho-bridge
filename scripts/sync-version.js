@@ -38,6 +38,12 @@ const targets = [
     apply(data) {
       data.version = version;
     }
+  },
+  {
+    relativePath: "distribution-skills/tiktok-influencer/_meta.json",
+    apply(data) {
+      data.version = version;
+    }
   }
 ];
 
