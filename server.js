@@ -12,10 +12,11 @@ const { WebSocketServer } = require("ws");
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const { spawn } = require("child_process");
 const packageJson = require("./package.json");
 
-const WS_PORT = 18792;
-const HTTP_PORT = 18793;
+const WS_PORT = Number(process["env"].GECHO_WS_PORT || 18792);
+const HTTP_PORT = Number(process["env"].GECHO_HTTP_PORT || 18793);
 const SERVICE_PROTOCOL_VERSION = 2;
 const SERVICE_STARTED_AT = Date.now();
 const DEFAULT_DATA_DIR = path.join(__dirname, "data");
@@ -23,11 +24,20 @@ const JOBS_DIR = process["env"].GECHO_DATA_DIR || DEFAULT_DATA_DIR;
 const JOBS_STORE_PATH = path.join(JOBS_DIR, ".async_jobs.json");
 const JOB_DETAILS_DIR = path.join(JOBS_DIR, "jobs");
 const REQUEST_INDEX_PATH = path.join(JOBS_DIR, ".async_request_index.json");
+const BROWSER_CONNECTION_PATH = path.join(JOBS_DIR, ".browser_connection.json");
 const JOB_TTL_MS = Number(process["env"].GECHO_JOB_TTL_MS || 3 * 24 * 60 * 60 * 1000); // 默认 3 天
 const MAX_PERSISTED_JOBS = Number(process["env"].GECHO_MAX_PERSISTED_JOBS || 2000);
 const CLEANUP_INTERVAL_MS = Number(process["env"].GECHO_CLEANUP_INTERVAL_MS || 10 * 60 * 1000);
+const EXTENSION_CONNECT_TIMEOUT_MS = Math.max(1000, Number(process["env"].GECHO_EXTENSION_CONNECT_TIMEOUT_MS || 30000));
+const EXTENSION_CONNECT_POLL_MS = 500;
+const AUTO_LAUNCH_BROWSER = process["env"].GECHO_AUTO_LAUNCH_BROWSER !== "0";
+const AUTO_LAUNCH_BROWSER_DRY_RUN = process["env"].GECHO_AUTO_LAUNCH_BROWSER_DRY_RUN === "1";
+const AUTO_LAUNCH_BROWSER_COOLDOWN_MS = Math.max(0, Number(process["env"].GECHO_AUTO_LAUNCH_BROWSER_COOLDOWN_MS || 10000));
 
 let extensionSocket = null;
+let lastBrowserConnection = null;
+let browserLaunchPromise = null;
+let lastBrowserLaunchAt = 0;
 const pendingRequests = new Map();
 let requestIdCounter = 1;
 let shuttingDown = false;
@@ -103,6 +113,192 @@ async function writeFileAtomicAsync(targetPath, content) {
     }
   }
 }
+
+function isExtensionConnected() {
+  return !!extensionSocket && extensionSocket.readyState === 1;
+}
+
+function normalizeBrowserName(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "edge" || normalized === "microsoft-edge" || normalized === "msedge") return "edge";
+  if (normalized === "chrome" || normalized === "google-chrome") return "chrome";
+  return "";
+}
+
+function detectBrowserFromUserAgent(userAgent) {
+  const value = String(userAgent || "");
+  if (/\bEdg\//i.test(value)) return "edge";
+  if (/\bChrome\//i.test(value) && !/\b(?:OPR|Edg)\//i.test(value)) return "chrome";
+  return "";
+}
+
+function loadLastBrowserConnection() {
+  try {
+    if (!fs.existsSync(BROWSER_CONNECTION_PATH)) return null;
+    const parsed = JSON.parse(fs.readFileSync(BROWSER_CONNECTION_PATH, "utf8") || "{}");
+    const browser = normalizeBrowserName(parsed?.browser);
+    if (!browser) return null;
+    return {
+      browser,
+      detectedAt: Number(parsed.detectedAt || 0) || 0
+    };
+  } catch (e) {
+    console.warn(`Failed to load last browser connection: ${e.message}`);
+    return null;
+  }
+}
+
+function persistLastBrowserConnection(browser) {
+  const normalized = normalizeBrowserName(browser);
+  if (!normalized) return;
+  lastBrowserConnection = { browser: normalized, detectedAt: Date.now() };
+  try {
+    ensureJobsDirReady();
+    writeFileAtomic(BROWSER_CONNECTION_PATH, JSON.stringify(lastBrowserConnection));
+  } catch (e) {
+    console.warn(`Failed to persist last browser connection: ${e.message}`);
+  }
+}
+
+function getBrowserToLaunch() {
+  return normalizeBrowserName(process["env"].GECHO_BROWSER) || lastBrowserConnection?.browser || "";
+}
+
+function getBrowserLaunchSpec(browser) {
+  const normalized = normalizeBrowserName(browser);
+  const appName = normalized === "edge" ? "Microsoft Edge" : "Google Chrome";
+
+  if (!normalized) return null;
+
+  if (process.platform === "darwin") {
+    return {
+      command: "open",
+      args: ["-a", appName, "--args", "--new-window", "about:blank"]
+    };
+  }
+
+  if (process.platform === "win32") {
+    const executable = normalized === "edge" ? "msedge" : "chrome";
+    return {
+      command: "cmd.exe",
+      args: ["/d", "/s", "/c", "start", "", executable, "--new-window", "about:blank"]
+    };
+  }
+
+  return {
+    command: normalized === "edge" ? "microsoft-edge" : "google-chrome",
+    args: ["--new-window", "about:blank"]
+  };
+}
+
+async function launchBrowserForExtension() {
+  if (!AUTO_LAUNCH_BROWSER) {
+    return { attempted: false, launched: false, reason: "disabled" };
+  }
+
+  const browser = getBrowserToLaunch();
+  const spec = getBrowserLaunchSpec(browser);
+  if (!spec) {
+    return { attempted: false, launched: false, reason: "browser_unknown" };
+  }
+
+  if (browserLaunchPromise) return browserLaunchPromise;
+  if (Date.now() - lastBrowserLaunchAt < AUTO_LAUNCH_BROWSER_COOLDOWN_MS) {
+    return { attempted: false, launched: false, browser, reason: "cooldown" };
+  }
+  lastBrowserLaunchAt = Date.now();
+
+  browserLaunchPromise = new Promise((resolve) => {
+    if (AUTO_LAUNCH_BROWSER_DRY_RUN) {
+      console.log(`🧪 Browser launch dry run: ${browser}`);
+      resolve({ attempted: true, launched: true, browser, dryRun: true });
+      return;
+    }
+
+    let child;
+    try {
+      child = spawn(spec.command, spec.args, {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true
+      });
+    } catch (e) {
+      resolve({ attempted: true, launched: false, browser, reason: e.message });
+      return;
+    }
+
+    child.once("error", (e) => {
+      resolve({ attempted: true, launched: false, browser, reason: e.message });
+    });
+    child.once("spawn", () => {
+      child.unref();
+      console.log(`🌐 Started ${browser} while waiting for the extension connection`);
+      resolve({ attempted: true, launched: true, browser });
+    });
+  });
+
+  try {
+    return await browserLaunchPromise;
+  } finally {
+    browserLaunchPromise = null;
+  }
+}
+
+function waitForExtensionConnection(timeoutMs = EXTENSION_CONNECT_TIMEOUT_MS) {
+  return new Promise((resolve) => {
+    if (isExtensionConnected()) return resolve(true);
+
+    let waited = 0;
+    const checkTimer = setInterval(() => {
+      waited += EXTENSION_CONNECT_POLL_MS;
+      if (isExtensionConnected()) {
+        clearInterval(checkTimer);
+        resolve(true);
+      } else if (waited >= timeoutMs) {
+        clearInterval(checkTimer);
+        resolve(false);
+      }
+    }, EXTENSION_CONNECT_POLL_MS);
+  });
+}
+
+async function ensureExtensionConnection(action) {
+  if (isExtensionConnected()) {
+    return { connected: true, launch: { attempted: false, launched: false, reason: "already_connected" } };
+  }
+
+  const launch = await launchBrowserForExtension();
+  console.log(
+    `⏳ Extension not connected yet. Waiting up to ${EXTENSION_CONNECT_TIMEOUT_MS / 1000}s ` +
+    `(action: ${action}, browser: ${launch.browser || "unknown"})`
+  );
+  const connected = await waitForExtensionConnection();
+  return { connected, launch };
+}
+
+function extensionConnectionError(connection) {
+  const launch = connection?.launch || {};
+  const details = [];
+  if (launch.reason === "browser_unknown") {
+    details.push("Bridge has not identified a browser yet. Open Edge or Chrome with the Gecho extension once, then retry.");
+  } else if (launch.reason === "disabled") {
+    details.push("Automatic browser launch is disabled (GECHO_AUTO_LAUNCH_BROWSER=0).");
+  } else if (launch.reason === "cooldown") {
+    details.push(`${launch.browser} was started recently; it did not reconnect in time.`);
+  } else if (launch.attempted && !launch.launched) {
+    details.push(`Failed to start ${launch.browser || "the saved browser"}: ${launch.reason || "unknown error"}`);
+  } else if (launch.attempted) {
+    details.push(`${launch.browser} was started, but its extension did not connect in time.`);
+  }
+
+  return [
+    "Extension not connected.",
+    ...details,
+    "Check that the Gecho extension is installed, enabled, and signed in for that browser profile."
+  ].join(" ");
+}
+
+lastBrowserConnection = loadLastBrowserConnection();
 
 function sanitizeJobForDisk(job = {}) {
   const copy = { ...job };
@@ -599,12 +795,13 @@ function hydrateJobWithDataFromFile(job) {
   }
 }
 
-function runAsyncAttempt({ jobId, action, params, payload, attempt }) {
-  if (!extensionSocket || extensionSocket.readyState !== 1) {
+async function runAsyncAttempt({ jobId, action, params, payload, attempt }) {
+  const connection = await ensureExtensionConnection(action);
+  if (!connection.connected) {
     updateJob(jobId, {
       status: "error",
       stage: "extension_disconnected",
-      error: "Extension not connected during async dispatch"
+      error: extensionConnectionError(connection)
     });
     return;
   }
@@ -706,8 +903,10 @@ function gracefulShutdown(reason) {
 // --- WebSocket Server (与插件通信) ---
 const wss = new WebSocketServer({ port: WS_PORT, host: "127.0.0.1" });
 
-wss.on("connection", (ws) => {
-  console.log("✅ Chrome Extension connected to Service Layer");
+wss.on("connection", (ws, request) => {
+  const browser = detectBrowserFromUserAgent(request?.headers?.["user-agent"]);
+  if (browser) persistLastBrowserConnection(browser);
+  console.log(`✅ Browser extension connected to Service Layer${browser ? ` (${browser})` : ""}`);
   extensionSocket = ws;
 
   ws.on("message", (message) => {
@@ -766,8 +965,12 @@ wss.on("connection", (ws) => {
   });
 
   ws.on("close", () => {
-    console.log("❌ Chrome Extension disconnected");
-    extensionSocket = null;
+    console.log("❌ Browser extension disconnected");
+    if (extensionSocket === ws) extensionSocket = null;
+  });
+
+  ws.on("error", (error) => {
+    console.warn(`Browser extension WebSocket error: ${error.message}`);
   });
 });
 
@@ -801,7 +1004,13 @@ const server = http.createServer(async (req, res) => {
       servicePath: __filename,
       startedAt: SERVICE_STARTED_AT,
       sourceMtimeMs: getServiceSourceMtimeMs(),
-      dataDir: JOBS_DIR
+      dataDir: JOBS_DIR,
+      extensionConnected: isExtensionConnected(),
+      lastConnectedBrowser: lastBrowserConnection?.browser || null,
+      autoBrowserLaunch: {
+        enabled: AUTO_LAUNCH_BROWSER,
+        browser: getBrowserToLaunch() || null
+      }
     }));
   }
 
@@ -863,33 +1072,10 @@ const server = http.createServer(async (req, res) => {
           return res.end(JSON.stringify({ error: "Missing action" }));
         }
 
-        if (!extensionSocket || extensionSocket.readyState !== 1) {
-          // 如果尚未连接，提供更友好的等待机制而不是直接报错
-          console.log(`⏳ Extension not connected yet. Waiting for connection... (action: ${action})`);
-          
-          const maxWaitMs = 15000; // 最多等待 15 秒
-          const checkIntervalMs = 500;
-          let waited = 0;
-          
-          await new Promise((resolve) => {
-            const checkTimer = setInterval(() => {
-              waited += checkIntervalMs;
-              if (extensionSocket && extensionSocket.readyState === 1) {
-                clearInterval(checkTimer);
-                resolve();
-              } else if (waited >= maxWaitMs) {
-                clearInterval(checkTimer);
-                resolve(); // 等待超时后继续往下走，下面依然会判断并抛出错误
-              }
-            }, checkIntervalMs);
-          });
-          
-          if (!extensionSocket || extensionSocket.readyState !== 1) {
-            res.statusCode = 503;
-            return res.end(JSON.stringify({ 
-              error: "Extension not connected. Chrome 插件未连接。\n请检查：\n1. Chrome 是否保持打开状态\n2. Gecho TikTok Bridge 插件是否仍在运行（扩展图标是否亮着）\n3. TikTok tab 是否活跃（最好在 tiktok.com 页面上）\n如果插件刚启动，请等待几秒后再试。" 
-            }));
-          }
+        const connection = await ensureExtensionConnection(action);
+        if (!connection.connected) {
+          res.statusCode = 503;
+          return res.end(JSON.stringify({ error: extensionConnectionError(connection) }));
         }
 
         const jobId = `job-${Date.now()}-${requestIdCounter++}`;
@@ -955,33 +1141,10 @@ const server = http.createServer(async (req, res) => {
           return res.end(JSON.stringify({ error: "Missing action" }));
         }
 
-        if (!extensionSocket || extensionSocket.readyState !== 1) {
-          // 如果尚未连接，提供更友好的等待机制而不是直接报错
-          console.log(`⏳ Extension not connected yet. Waiting for connection... (action: ${action})`);
-          
-          const maxWaitMs = 15000; // 最多等待 15 秒
-          const checkIntervalMs = 500;
-          let waited = 0;
-          
-          await new Promise((resolve) => {
-            const checkTimer = setInterval(() => {
-              waited += checkIntervalMs;
-              if (extensionSocket && extensionSocket.readyState === 1) {
-                clearInterval(checkTimer);
-                resolve();
-              } else if (waited >= maxWaitMs) {
-                clearInterval(checkTimer);
-                resolve(); 
-              }
-            }, checkIntervalMs);
-          });
-          
-          if (!extensionSocket || extensionSocket.readyState !== 1) {
-            res.statusCode = 503;
-            return res.end(JSON.stringify({ 
-              error: "Extension not connected. Chrome 插件未连接。\n请检查：\n1. Chrome 是否保持打开状态\n2. Gecho TikTok Bridge 插件是否仍在运行（扩展图标是否亮着）\n3. TikTok tab 是否活跃（最好在 tiktok.com 页面上）\n如果插件刚启动，请等待几秒后再试。" 
-            }));
-          }
+        const connection = await ensureExtensionConnection(action);
+        if (!connection.connected) {
+          res.statusCode = 503;
+          return res.end(JSON.stringify({ error: extensionConnectionError(connection) }));
         }
 
         console.log(`🚀 Dispatching action: [${action}]`);
