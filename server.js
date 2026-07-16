@@ -160,8 +160,78 @@ function persistLastBrowserConnection(browser) {
   }
 }
 
+function findFirstExistingPath(paths) {
+  return paths.find((candidate) => {
+    try {
+      return !!candidate && fs.existsSync(candidate);
+    } catch (_e) {
+      return false;
+    }
+  }) || "";
+}
+
+function findFirstCommand(commands) {
+  const pathEntries = String(process["env"].PATH || "").split(path.delimiter).filter(Boolean);
+  const extensions = process.platform === "win32"
+    ? String(process["env"].PATHEXT || ".EXE;.CMD;.BAT;.COM").split(";")
+    : [""];
+
+  for (const command of commands) {
+    for (const entry of pathEntries) {
+      for (const extension of extensions) {
+        const executable = path.join(entry, process.platform === "win32" ? `${command}${extension}` : command);
+        if (fs.existsSync(executable)) return executable;
+      }
+    }
+  }
+  return "";
+}
+
+function getWindowsBrowserExecutable(browser) {
+  const normalized = normalizeBrowserName(browser);
+  const executable = normalized === "edge" ? "msedge.exe" : "chrome.exe";
+  const vendorPath = normalized === "edge" ? ["Microsoft", "Edge", "Application"] : ["Google", "Chrome", "Application"];
+  const roots = [
+    process["env"].LOCALAPPDATA,
+    process["env"].PROGRAMFILES,
+    process["env"]["PROGRAMFILES(X86)"]
+  ].filter(Boolean);
+
+  return findFirstExistingPath(roots.map((root) => path.join(root, ...vendorPath, executable)));
+}
+
+function isBrowserInstalled(browser) {
+  const normalized = normalizeBrowserName(browser);
+  if (!normalized) return false;
+
+  if (process.platform === "darwin") {
+    const appName = normalized === "edge" ? "Microsoft Edge.app" : "Google Chrome.app";
+    return !!findFirstExistingPath([
+      path.join("/Applications", appName),
+      path.join("/System/Applications", appName)
+    ]);
+  }
+
+  if (process.platform === "win32") {
+    return !!getWindowsBrowserExecutable(normalized);
+  }
+
+  return !!findFirstCommand(
+    normalized === "edge"
+      ? ["microsoft-edge", "microsoft-edge-stable"]
+      : ["google-chrome", "google-chrome-stable"]
+  );
+}
+
 function getBrowserToLaunch() {
-  return normalizeBrowserName(process["env"].GECHO_BROWSER) || lastBrowserConnection?.browser || "";
+  const configured = normalizeBrowserName(process["env"].GECHO_BROWSER);
+  if (configured) return configured;
+  if (lastBrowserConnection?.browser) return lastBrowserConnection.browser;
+
+  // First use: prefer Chrome. If it is not installed, use Edge as a fallback.
+  if (isBrowserInstalled("chrome")) return "chrome";
+  if (isBrowserInstalled("edge")) return "edge";
+  return "";
 }
 
 function getBrowserLaunchSpec(browser) {
@@ -178,6 +248,14 @@ function getBrowserLaunchSpec(browser) {
   }
 
   if (process.platform === "win32") {
+    const browserPath = getWindowsBrowserExecutable(normalized);
+    if (browserPath) {
+      return {
+        command: browserPath,
+        args: ["--new-window", "about:blank"]
+      };
+    }
+
     const executable = normalized === "edge" ? "msedge" : "chrome";
     return {
       command: "cmd.exe",
@@ -185,8 +263,14 @@ function getBrowserLaunchSpec(browser) {
     };
   }
 
+  const executable = findFirstCommand(
+    normalized === "edge"
+      ? ["microsoft-edge", "microsoft-edge-stable"]
+      : ["google-chrome", "google-chrome-stable"]
+  ) || (normalized === "edge" ? "microsoft-edge" : "google-chrome");
+
   return {
-    command: normalized === "edge" ? "microsoft-edge" : "google-chrome",
+    command: executable,
     args: ["--new-window", "about:blank"]
   };
 }
