@@ -137,11 +137,21 @@ function requestShutdown() {
 }
 
 function startServiceDetached() {
-  const child = spawn("node", [SERVICE_PATH], {
-    detached: true,
-    stdio: "ignore" // 静默启动，不占用当前终端
+  // Desktop MCP hosts often provide a reduced PATH. Using the current Node
+  // executable keeps the client and service on the same runtime.
+  const isWindows = process.platform === "win32";
+  const child = spawn(process.execPath, [SERVICE_PATH], {
+    // On Windows, detached creates a separate process group. It is unnecessary
+    // after unref() and has proved unreliable for the browser launched by this
+    // service when the parent is a desktop MCP host. Keep the Unix behaviour.
+    detached: !isWindows,
+    stdio: "ignore",
+    windowsHide: true,
+    // Make this equivalent to running `node server.js` from the package.
+    cwd: __dirname
   });
-  child.unref(); // 让子进程独立运行，父进程退出时不影响它
+  child.unref();
+  return child;
 }
 
 async function waitForServiceDown() {

@@ -302,7 +302,11 @@ async function launchBrowserForExtension() {
     let child;
     try {
       child = spawn(spec.command, spec.args, {
-        detached: true,
+        // A detached Windows process starts in a separate process group. That
+        // extra isolation is not needed for a GUI browser after unref(), and
+        // can prevent an extension service worker from reconnecting when the
+        // bridge itself was started by a desktop MCP host.
+        detached: process.platform !== "win32",
         stdio: "ignore",
         windowsHide: true
       });
