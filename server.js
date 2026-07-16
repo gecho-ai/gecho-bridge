@@ -30,11 +30,14 @@ const MAX_PERSISTED_JOBS = Number(process["env"].GECHO_MAX_PERSISTED_JOBS || 200
 const CLEANUP_INTERVAL_MS = Number(process["env"].GECHO_CLEANUP_INTERVAL_MS || 10 * 60 * 1000);
 const EXTENSION_CONNECT_TIMEOUT_MS = Math.max(1000, Number(process["env"].GECHO_EXTENSION_CONNECT_TIMEOUT_MS || 30000));
 const EXTENSION_CONNECT_POLL_MS = 500;
+const EXTENSION_READY_GRACE_MS = Math.max(0, Number(process["env"].GECHO_EXTENSION_READY_GRACE_MS || 1500));
 const AUTO_LAUNCH_BROWSER = process["env"].GECHO_AUTO_LAUNCH_BROWSER !== "0";
 const AUTO_LAUNCH_BROWSER_DRY_RUN = process["env"].GECHO_AUTO_LAUNCH_BROWSER_DRY_RUN === "1";
 const AUTO_LAUNCH_BROWSER_COOLDOWN_MS = Math.max(0, Number(process["env"].GECHO_AUTO_LAUNCH_BROWSER_COOLDOWN_MS || 10000));
 
 let extensionSocket = null;
+let wss = null;
+let lastExtensionConnectedAt = 0;
 let lastBrowserConnection = null;
 let browserLaunchPromise = null;
 let lastBrowserLaunchAt = 0;
@@ -42,6 +45,13 @@ const pendingRequests = new Map();
 let requestIdCounter = 1;
 let shuttingDown = false;
 let lastDispatchedRequestId = "";
+const BRIDGE_TRACE_LIMIT = 100;
+const bridgeTrace = [];
+
+function traceBridgeEvent(event, details = {}) {
+  bridgeTrace.push({ at: Date.now(), event, ...details });
+  if (bridgeTrace.length > BRIDGE_TRACE_LIMIT) bridgeTrace.shift();
+}
 
 // --- 异步任务管理 ---
 const asyncJobs = new Map();
@@ -114,8 +124,29 @@ async function writeFileAtomicAsync(targetPath, content) {
   }
 }
 
+function getOpenExtensionSocket() {
+  if (extensionSocket && extensionSocket.readyState === 1) {
+    return extensionSocket;
+  }
+
+  // Chrome can briefly create overlapping WebSocket connections while an
+  // extension service worker is starting or reconnecting. Do not rely on a
+  // single mutable reference in that window: recover an open client directly
+  // from the WebSocket server before declaring the extension disconnected.
+  if (wss) {
+    for (const socket of wss.clients) {
+      if (socket.readyState === 1) {
+        extensionSocket = socket;
+        return socket;
+      }
+    }
+  }
+
+  return null;
+}
+
 function isExtensionConnected() {
-  return !!extensionSocket && extensionSocket.readyState === 1;
+  return !!getOpenExtensionSocket();
 }
 
 function normalizeBrowserName(value) {
@@ -350,18 +381,38 @@ function waitForExtensionConnection(timeoutMs = EXTENSION_CONNECT_TIMEOUT_MS) {
   });
 }
 
+async function waitForExtensionReadyGracePeriod() {
+  const remainingMs = Math.max(0, EXTENSION_READY_GRACE_MS - (Date.now() - lastExtensionConnectedAt));
+  if (remainingMs === 0) return isExtensionConnected();
+
+  traceBridgeEvent("extension_ready_grace_wait_started", { remainingMs });
+  await new Promise(resolve => setTimeout(resolve, remainingMs));
+  const connected = isExtensionConnected();
+  traceBridgeEvent("extension_ready_grace_wait_finished", { connected });
+  return connected;
+}
+
 async function ensureExtensionConnection(action) {
   if (isExtensionConnected()) {
+    traceBridgeEvent("extension_already_connected", { action });
     return { connected: true, launch: { attempted: false, launched: false, reason: "already_connected" } };
   }
 
+  traceBridgeEvent("extension_connection_wait_started", { action });
   const launch = await launchBrowserForExtension();
   console.log(
     `⏳ Extension not connected yet. Waiting up to ${EXTENSION_CONNECT_TIMEOUT_MS / 1000}s ` +
     `(action: ${action}, browser: ${launch.browser || "unknown"})`
   );
   const connected = await waitForExtensionConnection();
-  return { connected, launch };
+  const ready = connected && await waitForExtensionReadyGracePeriod();
+  traceBridgeEvent("extension_connection_wait_finished", {
+    action,
+    connected: ready,
+    browser: launch.browser || "",
+    launchReason: launch.reason || ""
+  });
+  return { connected: ready, launch };
 }
 
 function extensionConnectionError(connection) {
@@ -896,6 +947,7 @@ async function runAsyncAttempt({ jobId, action, params, payload, attempt }) {
 
   const requestId = `${jobId}:a${attempt}`;
   lastDispatchedRequestId = requestId;
+  traceBridgeEvent("action_dispatched", { action, requestId, async: true });
   requestIndex.set(requestId, { jobId, attempt, updatedAt: Date.now() });
   schedulePersistRequestIndex();
   appendJobEvent(jobId, "attempt_started", { attempt, requestId });
@@ -989,18 +1041,21 @@ function gracefulShutdown(reason) {
 }
 
 // --- WebSocket Server (与插件通信) ---
-const wss = new WebSocketServer({ port: WS_PORT, host: "127.0.0.1" });
+wss = new WebSocketServer({ port: WS_PORT, host: "127.0.0.1" });
 
 wss.on("connection", (ws, request) => {
   const browser = detectBrowserFromUserAgent(request?.headers?.["user-agent"]);
   if (browser) persistLastBrowserConnection(browser);
   console.log(`✅ Browser extension connected to Service Layer${browser ? ` (${browser})` : ""}`);
   extensionSocket = ws;
+  lastExtensionConnectedAt = Date.now();
+  traceBridgeEvent("extension_connected", { browser, clientCount: wss.clients.size });
 
   ws.on("message", (message) => {
     try {
       const parsed = JSON.parse(message);
       if (parsed.method === "action_progress" && parsed.requestId) {
+        traceBridgeEvent("extension_progress", { requestId: parsed.requestId });
         const pending = pendingRequests.get(parsed.requestId);
         if (!pending) {
           console.warn(`WARN action_progress requestId not found: ${parsed.requestId}`);
@@ -1020,6 +1075,7 @@ wss.on("connection", (ws, request) => {
         }
       }
       if (parsed.method === "action_result" && parsed.requestId) {
+        traceBridgeEvent("extension_result", { requestId: parsed.requestId });
         console.log(`📩 Received result from extension (ID: ${parsed.requestId})`);
         const pending = pendingRequests.get(parsed.requestId);
         if (pending) {
@@ -1054,10 +1110,12 @@ wss.on("connection", (ws, request) => {
 
   ws.on("close", () => {
     console.log("❌ Browser extension disconnected");
+    traceBridgeEvent("extension_disconnected", { clientCount: wss.clients.size });
     if (extensionSocket === ws) extensionSocket = null;
   });
 
   ws.on("error", (error) => {
+    traceBridgeEvent("extension_socket_error", { message: error.message });
     console.warn(`Browser extension WebSocket error: ${error.message}`);
   });
 });
@@ -1098,7 +1156,8 @@ const server = http.createServer(async (req, res) => {
       autoBrowserLaunch: {
         enabled: AUTO_LAUNCH_BROWSER,
         browser: getBrowserToLaunch() || null
-      }
+      },
+      bridgeTrace: bridgeTrace.slice(-30)
     }));
   }
 
@@ -1238,6 +1297,7 @@ const server = http.createServer(async (req, res) => {
         console.log(`🚀 Dispatching action: [${action}]`);
         const requestId = `svc-${Date.now()}-${requestIdCounter++}`;
         lastDispatchedRequestId = requestId;
+        traceBridgeEvent("action_dispatched", { action, requestId, async: false });
         // 通用透传逻辑：将 payload 中的所有参数（除去 action）作为 params 传给插件
         const { action: _a, ...params } = payload;
         const result = await new Promise((resolve) => {
