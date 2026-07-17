@@ -25,6 +25,7 @@ const JOBS_STORE_PATH = path.join(JOBS_DIR, ".async_jobs.json");
 const JOB_DETAILS_DIR = path.join(JOBS_DIR, "jobs");
 const REQUEST_INDEX_PATH = path.join(JOBS_DIR, ".async_request_index.json");
 const BROWSER_CONNECTION_PATH = path.join(JOBS_DIR, ".browser_connection.json");
+const SCHEDULED_JOBS_STORE_PATH = path.join(JOBS_DIR, ".scheduled_jobs.json");
 const JOB_TTL_MS = Number(process["env"].GECHO_JOB_TTL_MS || 3 * 24 * 60 * 60 * 1000); // 默认 3 天
 const MAX_PERSISTED_JOBS = Number(process["env"].GECHO_MAX_PERSISTED_JOBS || 2000);
 const CLEANUP_INTERVAL_MS = Number(process["env"].GECHO_CLEANUP_INTERVAL_MS || 10 * 60 * 1000);
@@ -34,6 +35,8 @@ const EXTENSION_READY_GRACE_MS = Math.max(0, Number(process["env"].GECHO_EXTENSI
 const AUTO_LAUNCH_BROWSER = process["env"].GECHO_AUTO_LAUNCH_BROWSER !== "0";
 const AUTO_LAUNCH_BROWSER_DRY_RUN = process["env"].GECHO_AUTO_LAUNCH_BROWSER_DRY_RUN === "1";
 const AUTO_LAUNCH_BROWSER_COOLDOWN_MS = Math.max(0, Number(process["env"].GECHO_AUTO_LAUNCH_BROWSER_COOLDOWN_MS || 10000));
+const MAX_SCHEDULED_RUNS_PER_JOB = Math.max(10, Number(process["env"].GECHO_MAX_SCHEDULED_RUNS_PER_JOB || 100));
+const SCHEDULE_MISFIRE_GRACE_MS = Math.max(0, Number(process["env"].GECHO_SCHEDULE_MISFIRE_GRACE_MS || 30000));
 
 let extensionSocket = null;
 let wss = null;
@@ -61,6 +64,12 @@ let persistJobsTimer = null;
 let persistRequestIndexTimer = null;
 let cleanupTimer = null;
 let writeQueue = Promise.resolve();
+
+// 本地定时任务（第一期验证版）：先支持可持久化的单次执行。
+// cron、重复规则和补跑策略会建立在同一份任务存储之上。
+const scheduledJobs = new Map();
+let scheduledJobsTimer = null;
+let persistScheduledJobsTimer = null;
 
 function ensureJobsDirReady() {
   if (!fs.existsSync(JOBS_DIR)) {
@@ -743,6 +752,9 @@ function updateJob(jobId, patch) {
   asyncJobs.set(jobId, next);
   saveJobDetailToDisk(jobId, next);
   schedulePersistAsyncJobs();
+  if ((next.status === "completed" || next.status === "error") && next.scheduledJobId) {
+    completeScheduledRunFromAsyncJob(next);
+  }
   return next;
 }
 
@@ -754,6 +766,453 @@ function appendJobEvent(jobId, message, extra = {}) {
   asyncJobs.set(jobId, next);
   saveJobDetailToDisk(jobId, next);
   schedulePersistAsyncJobs();
+}
+
+function saveScheduledJobsToDiskNow() {
+  try {
+    ensureJobsDirReady();
+    const payload = {
+      savedAt: Date.now(),
+      jobs: Object.fromEntries(scheduledJobs)
+    };
+    enqueueWrite(
+      async () => {
+        await writeFileAtomicAsync(SCHEDULED_JOBS_STORE_PATH, JSON.stringify(payload));
+      },
+      "persist_scheduled_jobs"
+    );
+  } catch (e) {
+    console.error("Failed to persist scheduled jobs:", e.message);
+  }
+}
+
+function schedulePersistScheduledJobs() {
+  if (persistScheduledJobsTimer) return;
+  persistScheduledJobsTimer = setTimeout(() => {
+    persistScheduledJobsTimer = null;
+    saveScheduledJobsToDiskNow();
+  }, 100);
+}
+
+function writeScheduledJob(jobId, patch) {
+  const previous = scheduledJobs.get(jobId);
+  if (!previous) return null;
+  const next = { ...previous, ...patch, updatedAt: Date.now() };
+  scheduledJobs.set(jobId, next);
+  schedulePersistScheduledJobs();
+  return next;
+}
+
+function parseScheduleTime(value) {
+  const match = String(value || "").match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour > 23 || minute > 59) return null;
+  return { hour, minute, text: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}` };
+}
+
+function getDefaultTimeZone() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+}
+
+function assertTimeZone(timeZone) {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone }).format();
+  } catch (e) {
+    throw new Error(`Invalid timezone: ${timeZone}`);
+  }
+}
+
+function normalizeMisfirePolicy(payload = {}, fallback = {}) {
+  const policy = String(payload.misfirePolicy ?? fallback.misfirePolicy ?? "run_once").trim().toLowerCase();
+  if (!["run_once", "skip", "window"].includes(policy)) {
+    throw new Error("misfirePolicy must be one of: run_once, skip, window");
+  }
+  const rawWindow = payload.misfireWindowMs ?? fallback.misfireWindowMs ?? 60 * 60 * 1000;
+  const misfireWindowMs = Number(rawWindow);
+  if (policy === "window" && (!Number.isFinite(misfireWindowMs) || misfireWindowMs < 0)) {
+    throw new Error("misfireWindowMs must be a non-negative number for misfirePolicy=window");
+  }
+  return policy === "window" ? { misfirePolicy: policy, misfireWindowMs } : { misfirePolicy: policy };
+}
+
+function normalizeSchedule(schedule = {}) {
+  const type = String(schedule.type || "").trim().toLowerCase();
+  if (type === "once") {
+    const runAtMs = Date.parse(String(schedule.runAt || ""));
+    if (!Number.isFinite(runAtMs)) throw new Error("schedule.runAt must be a valid ISO-8601 timestamp");
+    return { type: "once", runAt: new Date(runAtMs).toISOString() };
+  }
+
+  if (type !== "daily" && type !== "weekly") {
+    throw new Error("schedule.type must be one of: once, daily, weekly");
+  }
+
+  const time = parseScheduleTime(schedule.time);
+  if (!time) throw new Error("schedule.time must use HH:mm (24-hour) format");
+  const timezone = String(schedule.timezone || getDefaultTimeZone());
+  assertTimeZone(timezone);
+
+  if (type === "daily") return { type, time: time.text, timezone };
+
+  const days = Array.isArray(schedule.days) ? Array.from(new Set(schedule.days.map(Number))).sort((a, b) => a - b) : [];
+  if (!days.length || days.some((day) => !Number.isInteger(day) || day < 0 || day > 6)) {
+    throw new Error("schedule.days must contain weekday numbers 0 (Sunday) through 6 (Saturday)");
+  }
+  return { type, time: time.text, timezone, days };
+}
+
+function getZonedMinuteParts(timestamp, timezone, formatter) {
+  const parts = formatter.formatToParts(new Date(timestamp));
+  const values = Object.fromEntries(parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
+  const weekdayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return {
+    hour: Number(values.hour),
+    minute: Number(values.minute),
+    weekday: weekdayMap[values.weekday]
+  };
+}
+
+function calculateNextRunAtMs(schedule, afterMs = Date.now()) {
+  if (schedule?.type === "once") {
+    const runAtMs = Date.parse(String(schedule.runAt || ""));
+    return Number.isFinite(runAtMs) && runAtMs > afterMs ? runAtMs : 0;
+  }
+
+  if (schedule?.type !== "daily" && schedule?.type !== "weekly") return 0;
+  const time = parseScheduleTime(schedule.time);
+  if (!time) return 0;
+  const timezone = String(schedule.timezone || getDefaultTimeZone());
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: timezone
+  });
+  const acceptedDays = schedule.type === "weekly" ? new Set(schedule.days || []) : null;
+  const start = Math.floor(afterMs / 60000) * 60000 + 60000;
+  const horizon = start + 9 * 24 * 60 * 60000;
+  for (let candidate = start; candidate <= horizon; candidate += 60000) {
+    const parts = getZonedMinuteParts(candidate, timezone, formatter);
+    if (parts.hour !== time.hour || parts.minute !== time.minute) continue;
+    if (!acceptedDays || acceptedDays.has(parts.weekday)) return candidate;
+  }
+  return 0;
+}
+
+function getScheduledRunAtMs(job) {
+  const nextRunAtMs = Date.parse(String(job?.nextRunAt || ""));
+  if (Number.isFinite(nextRunAtMs)) return nextRunAtMs;
+  const legacyRunAtMs = Date.parse(String(job?.schedule?.runAt || ""));
+  return Number.isFinite(legacyRunAtMs) ? legacyRunAtMs : 0;
+}
+
+function getPublicScheduledJob(job) {
+  if (!job || typeof job !== "object") return job;
+  const { runs = [], ...summary } = job;
+  return {
+    ...summary,
+    nextRunAt: job.enabled && job.status === "scheduled" ? job.nextRunAt || null : null,
+    runCount: runs.length,
+    latestRun: runs.length ? runs[runs.length - 1] : null
+  };
+}
+
+function getScheduledRuns(job) {
+  return Array.isArray(job?.runs) ? job.runs.slice().reverse() : [];
+}
+
+function addScheduledRun(job, run) {
+  const runs = [...(Array.isArray(job.runs) ? job.runs : []), run].slice(-MAX_SCHEDULED_RUNS_PER_JOB);
+  return runs;
+}
+
+function updateScheduledRun(job, runId, patch) {
+  const runs = Array.isArray(job.runs) ? job.runs : [];
+  return runs.map((run) => run.id === runId ? { ...run, ...patch, updatedAt: Date.now() } : run);
+}
+
+function completeScheduledRunFromAsyncJob(asyncJob) {
+  const scheduleId = String(asyncJob?.scheduledJobId || "");
+  const runId = String(asyncJob?.scheduledRunId || "");
+  if (!scheduleId || !runId) return;
+  const scheduled = scheduledJobs.get(scheduleId);
+  if (!scheduled) return;
+  const terminal = asyncJob.status === "completed" ? "completed" : asyncJob.status === "error" ? "error" : "";
+  if (!terminal) return;
+
+  const completedAt = Number(asyncJob.completedAt || asyncJob.lastUpdateAt || Date.now());
+  const runs = updateScheduledRun(scheduled, runId, {
+    status: terminal,
+    completedAt,
+    resultCount: Array.isArray(asyncJob.data) ? asyncJob.data.length : undefined,
+    savePath: asyncJob.savePath || "",
+    error: terminal === "error" ? asyncJob.error || "Scheduled action failed" : ""
+  });
+  const nextStatus = scheduled.schedule?.type === "once"
+    ? terminal
+    : (scheduled.enabled ? "scheduled" : "paused");
+  writeScheduledJob(scheduleId, {
+    status: nextStatus,
+    runs,
+    lastRun: runs.find((run) => run.id === runId) || null,
+    lastError: terminal === "error" ? asyncJob.error || "Scheduled action failed" : ""
+  });
+}
+
+function recordSkippedScheduledRun(job, scheduledFor, reason) {
+  const run = {
+    id: `run-${Date.now()}-${requestIdCounter++}`,
+    scheduledFor: new Date(scheduledFor).toISOString(),
+    status: "skipped",
+    startedAt: Date.now(),
+    completedAt: Date.now(),
+    error: reason
+  };
+  const nextRunAtMs = calculateNextRunAtMs(job.schedule, Date.now());
+  const isOneTime = job.schedule?.type === "once";
+  writeScheduledJob(job.id, {
+    status: isOneTime ? "skipped" : "scheduled",
+    enabled: isOneTime ? false : job.enabled,
+    nextRunAt: nextRunAtMs ? new Date(nextRunAtMs).toISOString() : null,
+    runs: addScheduledRun(job, run),
+    lastRun: run,
+    lastError: reason
+  });
+}
+
+function shouldDispatchMissedJob(job, scheduledFor, now) {
+  const lateBy = Math.max(0, now - scheduledFor);
+  if (lateBy <= SCHEDULE_MISFIRE_GRACE_MS) return { dispatch: true };
+  if (job.misfirePolicy === "skip") return { dispatch: false, reason: `Missed by ${lateBy}ms; policy=skip` };
+  if (job.misfirePolicy === "window" && lateBy > Number(job.misfireWindowMs || 0)) {
+    return { dispatch: false, reason: `Missed by ${lateBy}ms; exceeded window ${job.misfireWindowMs}ms` };
+  }
+  return { dispatch: true };
+}
+
+function loadScheduledJobsFromDisk() {
+  try {
+    if (!fs.existsSync(SCHEDULED_JOBS_STORE_PATH)) return;
+    const raw = fs.readFileSync(SCHEDULED_JOBS_STORE_PATH, "utf8");
+    const parsed = JSON.parse(raw || "{}");
+    const jobs = parsed.jobs && typeof parsed.jobs === "object" ? parsed.jobs : {};
+    for (const [jobId, saved] of Object.entries(jobs)) {
+      if (!saved || typeof saved !== "object" || !jobId || !saved.schedule) continue;
+      try {
+        const schedule = normalizeSchedule(saved.schedule);
+        const enabled = saved.enabled !== false;
+        const status = String(saved.status || (enabled ? "scheduled" : "paused"));
+        const nextRunAtMs = getScheduledRunAtMs(saved) || calculateNextRunAtMs(schedule, Date.now());
+        scheduledJobs.set(jobId, {
+          ...saved,
+          id: String(saved.id || jobId),
+          schedule,
+          enabled,
+          status,
+          nextRunAt: enabled && status === "scheduled" && nextRunAtMs ? new Date(nextRunAtMs).toISOString() : null,
+          runs: Array.isArray(saved.runs) ? saved.runs.slice(-MAX_SCHEDULED_RUNS_PER_JOB) : []
+        });
+      } catch (e) {
+        console.error(`Ignoring invalid scheduled job [${jobId}]:`, e.message);
+      }
+    }
+    console.log(`♻️ Restored scheduled jobs from disk: ${scheduledJobs.size}`);
+  } catch (e) {
+    console.error("Failed to load scheduled jobs from disk:", e.message);
+  }
+}
+
+async function startAsyncAction(payload, scheduleRef = {}) {
+  const action = String(payload?.action || "").trim();
+  if (!action) {
+    const error = new Error("Missing action");
+    error.code = "MISSING_ACTION";
+    throw error;
+  }
+
+  const connection = await ensureExtensionConnection(action);
+  if (!connection.connected) {
+    const error = new Error(extensionConnectionError(connection));
+    error.code = "EXTENSION_DISCONNECTED";
+    throw error;
+  }
+
+  const jobId = `job-${Date.now()}-${requestIdCounter++}`;
+  const { action: _action, ...params } = payload;
+  const dataDir = payload.save_dir || process["env"].GECHO_DATA_DIR || path.join(__dirname, "data");
+  const fileNameSeed = params.uniqueId || params.query || params.product_url || params.url || action;
+  const safeName = toSafeFileName(fileNameSeed);
+  const prefix = (params.uniqueId || params.query || params.product_url || params.url)
+    ? `${toSafeFileName(action)}_`
+    : "";
+  const anticipatedSavePath = dataDir.toLowerCase().endsWith(".json") || dataDir.toLowerCase().endsWith(".csv")
+    ? dataDir
+    : path.join(dataDir, `${prefix}${safeName}_results.json`);
+
+  asyncJobs.set(jobId, {
+    status: "running",
+    stage: "queued",
+    action,
+    query: params.query || "",
+    startTime: Date.now(),
+    createdAt: Date.now(),
+    retryCount: 0,
+    attempt: 0,
+    lastUpdateAt: Date.now(),
+    anticipatedSavePath,
+    scheduledJobId: scheduleRef.scheduleId || "",
+    scheduledRunId: scheduleRef.runId || "",
+    events: []
+  });
+  schedulePersistAsyncJobs();
+  appendJobEvent(jobId, "job_created", { action });
+  console.log(`🚀 Dispatching ASYNC action: [${action}], jobId: ${jobId}`);
+  runAsyncAttempt({ jobId, action, params, payload, attempt: 1 });
+  return { jobId, savePath: anticipatedSavePath };
+}
+
+async function dispatchScheduledJob(scheduleId, scheduledFor = Date.now()) {
+  const scheduled = scheduledJobs.get(scheduleId);
+  if (!scheduled || scheduled.status !== "scheduled" || !scheduled.enabled) return;
+
+  const runId = `run-${Date.now()}-${requestIdCounter++}`;
+  const run = {
+    id: runId,
+    scheduledFor: new Date(scheduledFor).toISOString(),
+    status: "dispatching",
+    startedAt: Date.now()
+  };
+  const nextRunAtMs = calculateNextRunAtMs(scheduled.schedule, scheduledFor);
+  const isOneTime = scheduled.schedule?.type === "once";
+
+  writeScheduledJob(scheduleId, {
+    status: isOneTime ? "dispatching" : "scheduled",
+    nextRunAt: nextRunAtMs ? new Date(nextRunAtMs).toISOString() : null,
+    dispatchedAt: Date.now(),
+    runs: addScheduledRun(scheduled, run),
+    lastRun: run
+  });
+  console.log(`⏰ Running scheduled job: ${scheduleId} (${scheduled.action})`);
+
+  try {
+    const result = await startAsyncAction({ action: scheduled.action, ...scheduled.params }, { scheduleId, runId });
+    const latest = scheduledJobs.get(scheduleId);
+    const runs = updateScheduledRun(latest, runId, {
+      status: "dispatched",
+      asyncJobId: result.jobId,
+      savePath: result.savePath,
+      dispatchedAt: Date.now()
+    });
+    writeScheduledJob(scheduleId, {
+      status: isOneTime ? "dispatched" : "scheduled",
+      asyncJobId: result.jobId,
+      savePath: result.savePath,
+      runs,
+      lastRun: runs.find((item) => item.id === runId) || null
+    });
+  } catch (e) {
+    const latest = scheduledJobs.get(scheduleId);
+    const runs = updateScheduledRun(latest, runId, {
+      status: "error",
+      error: e.message || "Failed to dispatch scheduled job",
+      completedAt: Date.now()
+    });
+    writeScheduledJob(scheduleId, {
+      status: isOneTime ? "error" : "scheduled",
+      runs,
+      lastRun: runs.find((item) => item.id === runId) || null,
+      lastError: e.message || "Failed to dispatch scheduled job"
+    });
+    console.error(`Scheduled job failed [${scheduleId}]:`, e.message);
+  }
+}
+
+function armScheduledJobsTimer() {
+  if (scheduledJobsTimer) {
+    clearTimeout(scheduledJobsTimer);
+    scheduledJobsTimer = null;
+  }
+
+  const now = Date.now();
+  const dueJobs = Array.from(scheduledJobs.values())
+    .filter((job) => job.enabled && job.status === "scheduled" && getScheduledRunAtMs(job) > 0)
+    .sort((a, b) => getScheduledRunAtMs(a) - getScheduledRunAtMs(b));
+  if (!dueJobs.length) return;
+
+  const delay = Math.max(0, Math.min(getScheduledRunAtMs(dueJobs[0]) - now, 2 ** 31 - 1));
+  scheduledJobsTimer = setTimeout(async () => {
+    scheduledJobsTimer = null;
+    const dueAt = Date.now();
+    const jobs = Array.from(scheduledJobs.values())
+      .filter((job) => job.enabled && job.status === "scheduled" && getScheduledRunAtMs(job) <= dueAt);
+    for (const job of jobs) {
+      const scheduledFor = getScheduledRunAtMs(job);
+      const missed = shouldDispatchMissedJob(job, scheduledFor, dueAt);
+      if (missed.dispatch) {
+        await dispatchScheduledJob(job.id, scheduledFor);
+      } else {
+        recordSkippedScheduledRun(job, scheduledFor, missed.reason);
+      }
+    }
+    armScheduledJobsTimer();
+  }, delay);
+}
+
+function createScheduledJob(payload) {
+  const action = String(payload?.action || "").trim();
+  if (!action) throw new Error("Missing action");
+  const schedule = normalizeSchedule(payload?.schedule);
+  const nextRunAtMs = calculateNextRunAtMs(schedule, Date.now());
+  if (!nextRunAtMs) throw new Error("The schedule does not have a future execution time");
+
+  const id = `schedule-${Date.now()}-${requestIdCounter++}`;
+  const job = {
+    id,
+    action,
+    params: payload?.params && typeof payload.params === "object" ? payload.params : {},
+    schedule,
+    ...normalizeMisfirePolicy(payload),
+    enabled: payload?.enabled !== false,
+    status: "scheduled",
+    nextRunAt: new Date(nextRunAtMs).toISOString(),
+    runs: [],
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+  scheduledJobs.set(id, job);
+  schedulePersistScheduledJobs();
+  armScheduledJobsTimer();
+  return getPublicScheduledJob(job);
+}
+
+function updateScheduledJobDefinition(jobId, payload) {
+  const previous = scheduledJobs.get(jobId);
+  if (!previous) return null;
+  const action = payload.action === undefined ? previous.action : String(payload.action || "").trim();
+  if (!action) throw new Error("Missing action");
+  const schedule = payload.schedule === undefined ? previous.schedule : normalizeSchedule(payload.schedule);
+  const enabled = payload.enabled === undefined ? previous.enabled : payload.enabled !== false;
+  const params = payload.params === undefined
+    ? previous.params
+    : (payload.params && typeof payload.params === "object" ? payload.params : {});
+  const misfire = normalizeMisfirePolicy(payload, previous);
+  const nextRunAtMs = enabled ? calculateNextRunAtMs(schedule, Date.now()) : 0;
+  if (enabled && !nextRunAtMs) throw new Error("The schedule does not have a future execution time");
+  const next = writeScheduledJob(jobId, {
+    action,
+    params,
+    schedule,
+    ...misfire,
+    enabled,
+    status: enabled ? "scheduled" : "paused",
+    nextRunAt: nextRunAtMs ? new Date(nextRunAtMs).toISOString() : null,
+    lastError: ""
+  });
+  armScheduledJobsTimer();
+  return getPublicScheduledJob(next);
 }
 
 function parseJobIdAndAttemptFromRequestId(requestId) {
@@ -1008,6 +1467,7 @@ function gracefulShutdown(reason) {
   pendingRequests.clear();
   saveAsyncJobsToDiskNow();
   saveRequestIndexToDiskNow();
+  saveScheduledJobsToDiskNow();
   if (persistJobsTimer) {
     clearTimeout(persistJobsTimer);
     persistJobsTimer = null;
@@ -1020,6 +1480,14 @@ function gracefulShutdown(reason) {
     clearInterval(cleanupTimer);
     cleanupTimer = null;
   }
+  if (scheduledJobsTimer) {
+    clearTimeout(scheduledJobsTimer);
+    scheduledJobsTimer = null;
+  }
+  if (persistScheduledJobsTimer) {
+    clearTimeout(persistScheduledJobsTimer);
+    persistScheduledJobsTimer = null;
+  }
 
   try {
     if (extensionSocket && extensionSocket.readyState === 1) {
@@ -1027,15 +1495,19 @@ function gracefulShutdown(reason) {
     }
   } catch (_e) {}
 
+  const exitAfterPendingWrites = () => {
+    writeQueue.finally(() => process.exit(0));
+  };
+
   try {
     wss.close(() => {
-      server.close(() => process.exit(0));
+      server.close(exitAfterPendingWrites);
     });
   } catch (_e) {
     try {
-      server.close(() => process.exit(0));
+      server.close(exitAfterPendingWrites);
     } catch (__e) {
-      process.exit(0);
+      exitAfterPendingWrites();
     }
   }
 }
@@ -1122,9 +1594,11 @@ wss.on("connection", (ws, request) => {
 
 loadAsyncJobsFromDisk();
 loadRequestIndexFromDisk();
+loadScheduledJobsFromDisk();
 checkJobsStoreWritable();
 runJobCleanup();
 cleanupTimer = setInterval(runJobCleanup, CLEANUP_INTERVAL_MS);
+armScheduledJobsTimer();
 
 wss.on("error", (err) => {
   if (err.code === "EADDRINUSE") {
@@ -1156,6 +1630,13 @@ const server = http.createServer(async (req, res) => {
       autoBrowserLaunch: {
         enabled: AUTO_LAUNCH_BROWSER,
         browser: getBrowserToLaunch() || null
+      },
+      scheduler: {
+        total: scheduledJobs.size,
+        enabled: Array.from(scheduledJobs.values()).filter((job) => job.enabled).length,
+        nextRunAt: Array.from(scheduledJobs.values())
+          .filter((job) => job.enabled && job.status === "scheduled" && job.nextRunAt)
+          .sort((a, b) => getScheduledRunAtMs(a) - getScheduledRunAtMs(b))[0]?.nextRunAt || null
       },
       bridgeTrace: bridgeTrace.slice(-30)
     }));
@@ -1200,7 +1681,82 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // --- 新增异步任务启动接口 ---
+  if (req.method === "GET" && req.url === "/scheduled-jobs") {
+    const jobs = Array.from(scheduledJobs.values())
+      .sort((a, b) => getScheduledRunAtMs(a) - getScheduledRunAtMs(b))
+      .map(getPublicScheduledJob);
+    return res.end(JSON.stringify({ jobs }));
+  }
+
+  const scheduledRunsPath = req.url.match(/^\/scheduled-jobs\/([^/?]+)\/runs$/);
+  if (req.method === "GET" && scheduledRunsPath) {
+    const job = scheduledJobs.get(decodeURIComponent(scheduledRunsPath[1]));
+    if (!job) {
+      res.statusCode = 404;
+      return res.end(JSON.stringify({ error: "Scheduled job not found" }));
+    }
+    return res.end(JSON.stringify({ runs: getScheduledRuns(job) }));
+  }
+
+  const scheduledJobPath = req.url.match(/^\/scheduled-jobs\/([^/?]+)$/);
+  if (req.method === "GET" && scheduledJobPath) {
+    const job = scheduledJobs.get(decodeURIComponent(scheduledJobPath[1]));
+    if (!job) {
+      res.statusCode = 404;
+      return res.end(JSON.stringify({ error: "Scheduled job not found" }));
+    }
+    return res.end(JSON.stringify(getPublicScheduledJob(job)));
+  }
+
+  if (req.method === "DELETE" && scheduledJobPath) {
+    const jobId = decodeURIComponent(scheduledJobPath[1]);
+    if (!scheduledJobs.has(jobId)) {
+      res.statusCode = 404;
+      return res.end(JSON.stringify({ error: "Scheduled job not found" }));
+    }
+    scheduledJobs.delete(jobId);
+    schedulePersistScheduledJobs();
+    armScheduledJobsTimer();
+    return res.end(JSON.stringify({ success: true, id: jobId }));
+  }
+
+  if (req.method === "PATCH" && scheduledJobPath) {
+    const jobId = decodeURIComponent(scheduledJobPath[1]);
+    let body = "";
+    req.on("data", chunk => { body += chunk; });
+    req.on("end", () => {
+      try {
+        const job = updateScheduledJobDefinition(jobId, JSON.parse(body));
+        if (!job) {
+          res.statusCode = 404;
+          return res.end(JSON.stringify({ error: "Scheduled job not found" }));
+        }
+        return res.end(JSON.stringify({ success: true, job }));
+      } catch (e) {
+        res.statusCode = 400;
+        return res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/scheduled-jobs") {
+    let body = "";
+    req.on("data", chunk => { body += chunk; });
+    req.on("end", () => {
+      try {
+        const job = createScheduledJob(JSON.parse(body));
+        res.statusCode = 201;
+        res.end(JSON.stringify({ success: true, job }));
+      } catch (e) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+
+  // --- 异步任务启动接口 ---
   if (req.method === "POST" && req.url === "/async-action") {
     if (shuttingDown) {
       res.statusCode = 503;
@@ -1211,59 +1767,10 @@ const server = http.createServer(async (req, res) => {
     req.on("data", chunk => { body += chunk; });
     req.on("end", async () => {
       try {
-        const payload = JSON.parse(body);
-        const action = payload.action;
-        
-        if (!action) {
-          res.statusCode = 400;
-          return res.end(JSON.stringify({ error: "Missing action" }));
-        }
-
-        const connection = await ensureExtensionConnection(action);
-        if (!connection.connected) {
-          res.statusCode = 503;
-          return res.end(JSON.stringify({ error: extensionConnectionError(connection) }));
-        }
-
-        const jobId = `job-${Date.now()}-${requestIdCounter++}`;
-        console.log(`🚀 Dispatching ASYNC action: [${action}], jobId: ${jobId}`);
-        const { action: _a, ...params } = payload;
-
-        // 预先计算保存路径，以便立刻返回给客户端
-        let dataDir = payload.save_dir || process["env"].GECHO_DATA_DIR || path.join(__dirname, "data");
-        let anticipatedSavePath = "";
-        const fileNameSeed = params.uniqueId || params.query || params.product_url || params.url || action;
-        const safeName = toSafeFileName(fileNameSeed);
-        const prefix = (params.uniqueId || params.query || params.product_url || params.url)
-          ? `${toSafeFileName(action)}_`
-          : "";
-        if (dataDir.toLowerCase().endsWith(".json") || dataDir.toLowerCase().endsWith(".csv")) {
-          anticipatedSavePath = dataDir;
-        } else {
-          anticipatedSavePath = path.join(dataDir, `${prefix}${safeName}_results.json`);
-        }
-
-        asyncJobs.set(jobId, {
-          status: "running",
-          stage: "queued",
-          action,
-          query: params.query || "",
-          startTime: Date.now(),
-          createdAt: Date.now(),
-          retryCount: 0,
-          attempt: 0,
-          lastUpdateAt: Date.now(),
-          anticipatedSavePath,
-          events: []
-        });
-        schedulePersistAsyncJobs();
-        appendJobEvent(jobId, "job_created", { action });
-
-        runAsyncAttempt({ jobId, action, params, payload, attempt: 1 });
-
-        return res.end(JSON.stringify({ success: true, jobId, savePath: anticipatedSavePath }));
+        const result = await startAsyncAction(JSON.parse(body));
+        return res.end(JSON.stringify({ success: true, ...result }));
       } catch (e) {
-        res.statusCode = 500;
+        res.statusCode = e.code === "EXTENSION_DISCONNECTED" ? 503 : 400;
         return res.end(JSON.stringify({ error: e.message }));
       }
     });
