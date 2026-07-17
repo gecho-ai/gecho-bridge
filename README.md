@@ -120,6 +120,26 @@ claude mcp add gecho-bridge -- npx -y @gecho-ai/gecho-bridge@latest
 - After adding, use `claude mcp list` to verify the server is registered.
 - Restart Claude Code if the MCP tools don't appear immediately.
 
+### Optional: Wake macOS for Scheduled Jobs
+
+Scheduled jobs do not wake the computer by default. To allow a logged-in Mac to wake from normal sleep before a scheduled job, first start the configured MCP client so Bridge is running, then run:
+
+```bash
+gecho-bridge wake enable
+```
+
+If `gecho-bridge` is not globally installed, run the command through the same package version instead: `npx -y @gecho-ai/gecho-bridge@<version> wake enable`.
+
+This requests one macOS administrator authorization to install a restricted Helper. The Helper can only schedule, cancel, or inspect Gecho's own one-time wake events; it cannot execute arbitrary commands or modify other apps' power plans.
+
+```bash
+gecho-bridge wake status
+gecho-bridge wake disable
+gecho-bridge wake uninstall
+```
+
+This does not bypass the lock-screen password and does not support shutdown, FileVault login, or ordinary lid-closed use.
+
 ---
 
 ## 🏁 Quick Start & Common Workflows

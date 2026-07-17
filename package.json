@@ -4,11 +4,12 @@
   "description": "TikTok Search and Insight tools for OpenClaw, connecting LLMs to TikTok via Chrome Extension.",
   "main": "mcp-client.js",
   "bin": {
-    "gecho-bridge": "mcp-client.js"
+    "gecho-bridge": "cli.js"
   },
   "files": [
     "*.js",
     "dist",
+    "libexec",
     "package.json",
     ".claude-plugin",
     ".mcp.json",

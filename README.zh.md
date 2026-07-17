@@ -120,6 +120,26 @@ claude mcp add gecho-bridge -- npx -y @gecho-ai/gecho-bridge@latest
 - 添加完成后，使用 `claude mcp list` 验证服务是否注册成功。
 - 如果 MCP 工具没有立即出现，请重启 Claude Code。
 
+### 可选：macOS 定时任务自动唤醒
+
+本地定时任务默认不会唤醒电脑。若希望 Mac 在**普通睡眠**时于任务前自动唤醒，先启动一次已配置的 MCP 客户端以确保 Bridge 正在运行，再执行：
+
+```bash
+gecho-bridge wake enable
+```
+
+如果没有全局安装 `gecho-bridge` 命令，请用已配置的同一版本执行：`npx -y @gecho-ai/gecho-bridge@<版本号> wake enable`。
+
+首次执行会要求一次 macOS 管理员授权，仅安装一个功能受限的 Helper：它只能登记、取消或查看 Gecho 自己的一次性唤醒事件，不能运行任意命令，也不会影响其他应用的电源计划。常用管理命令：
+
+```bash
+gecho-bridge wake status
+gecho-bridge wake disable
+gecho-bridge wake uninstall
+```
+
+该功能要求用户已登录 macOS；不会绕过锁屏密码，也不支持完全关机、FileVault 登录界面或普通合盖场景。
+
 ---
 
 ## 🏁 快速开始与常见流程

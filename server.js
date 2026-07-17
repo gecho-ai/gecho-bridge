@@ -26,6 +26,8 @@ const JOB_DETAILS_DIR = path.join(JOBS_DIR, "jobs");
 const REQUEST_INDEX_PATH = path.join(JOBS_DIR, ".async_request_index.json");
 const BROWSER_CONNECTION_PATH = path.join(JOBS_DIR, ".browser_connection.json");
 const SCHEDULED_JOBS_STORE_PATH = path.join(JOBS_DIR, ".scheduled_jobs.json");
+const WAKE_SCHEDULER_STATE_PATH = path.join(JOBS_DIR, ".wake_scheduler_state.json");
+const WAKE_SCHEDULER_SETTINGS_PATH = path.join(JOBS_DIR, ".wake_scheduler_settings.json");
 const JOB_TTL_MS = Number(process["env"].GECHO_JOB_TTL_MS || 3 * 24 * 60 * 60 * 1000); // 默认 3 天
 const MAX_PERSISTED_JOBS = Number(process["env"].GECHO_MAX_PERSISTED_JOBS || 2000);
 const CLEANUP_INTERVAL_MS = Number(process["env"].GECHO_CLEANUP_INTERVAL_MS || 10 * 60 * 1000);
@@ -37,6 +39,17 @@ const AUTO_LAUNCH_BROWSER_DRY_RUN = process["env"].GECHO_AUTO_LAUNCH_BROWSER_DRY
 const AUTO_LAUNCH_BROWSER_COOLDOWN_MS = Math.max(0, Number(process["env"].GECHO_AUTO_LAUNCH_BROWSER_COOLDOWN_MS || 10000));
 const MAX_SCHEDULED_RUNS_PER_JOB = Math.max(10, Number(process["env"].GECHO_MAX_SCHEDULED_RUNS_PER_JOB || 100));
 const SCHEDULE_MISFIRE_GRACE_MS = Math.max(0, Number(process["env"].GECHO_SCHEDULE_MISFIRE_GRACE_MS || 30000));
+// GECHO_WAKE_SCHEDULER_* remains available for internal development and CI.
+// User-facing enablement is persisted below and always runs via the restricted
+// root-owned helper installed by `gecho-bridge wake enable`.
+const WAKE_SCHEDULER_ENV_ENABLED = process["env"].GECHO_WAKE_SCHEDULER_ENABLED === "1";
+const WAKE_SCHEDULER_DRY_RUN = process["env"].GECHO_WAKE_SCHEDULER_DRY_RUN === "1";
+const WAKE_SCHEDULER_LEAD_MS = Math.max(10000, Number(process["env"].GECHO_WAKE_SCHEDULER_LEAD_MS || 10000));
+const WAKE_HELPER_OWNER = "com.gecho-ai.gecho-bridge";
+const WAKE_SCHEDULER_OWNER = String(process["env"].GECHO_WAKE_SCHEDULER_OWNER || WAKE_HELPER_OWNER);
+const WAKE_SCHEDULER_USE_SUDO = process["env"].GECHO_WAKE_SCHEDULER_USE_SUDO === "1";
+const PMSET_PATH = process["env"].GECHO_PMSET_PATH || "/usr/bin/pmset";
+const WAKE_HELPER_PATH = "/usr/local/libexec/gecho-bridge-wake";
 
 let extensionSocket = null;
 let wss = null;
@@ -60,6 +73,10 @@ function traceBridgeEvent(event, details = {}) {
 const asyncJobs = new Map();
 const requestIndex = new Map();
 const ASYNC_ATTEMPT_TIMEOUT_MS = 360000; // 单次尝试 6 分钟
+const WAKE_EXECUTION_GUARD_MS = Math.max(
+  60000,
+  Number(process["env"].GECHO_WAKE_EXECUTION_GUARD_MS || ASYNC_ATTEMPT_TIMEOUT_MS + EXTENSION_CONNECT_TIMEOUT_MS + 60000)
+);
 let persistJobsTimer = null;
 let persistRequestIndexTimer = null;
 let cleanupTimer = null;
@@ -70,6 +87,21 @@ let writeQueue = Promise.resolve();
 const scheduledJobs = new Map();
 let scheduledJobsTimer = null;
 let persistScheduledJobsTimer = null;
+let wakeSchedulerSyncTimer = null;
+let wakeSchedulerSyncPromise = null;
+let wakeSchedulerState = {
+  registeredWakeAt: null,
+  registeredForJobId: null,
+  lastSyncAt: null,
+  lastError: "",
+  lastAction: "not_initialized"
+};
+let wakeSchedulerSettings = {
+  enabled: false,
+  executionMode: "helper",
+  updatedAt: null
+};
+const wakeExecutionGuards = new Map();
 
 function ensureJobsDirReady() {
   if (!fs.existsSync(JOBS_DIR)) {
@@ -924,6 +956,310 @@ function getScheduledRuns(job) {
   return Array.isArray(job?.runs) ? job.runs.slice().reverse() : [];
 }
 
+function getNextScheduledJobForWake() {
+  return Array.from(scheduledJobs.values())
+    .filter((job) => job.enabled && job.status === "scheduled" && getScheduledRunAtMs(job) > Date.now())
+    .sort((a, b) => getScheduledRunAtMs(a) - getScheduledRunAtMs(b))[0] || null;
+}
+
+function formatPmsetDate(timestamp) {
+  const date = new Date(timestamp);
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${pad(date.getMonth() + 1)}/${pad(date.getDate())}/${pad(date.getFullYear() % 100)} ` +
+    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function isWakeSchedulerEnabled() {
+  return WAKE_SCHEDULER_ENV_ENABLED || wakeSchedulerSettings.enabled === true;
+}
+
+function usesWakeHelper() {
+  return !WAKE_SCHEDULER_ENV_ENABLED && wakeSchedulerSettings.enabled === true && WAKE_SCHEDULER_OWNER === WAKE_HELPER_OWNER;
+}
+
+function saveWakeSchedulerSettings() {
+  try {
+    ensureJobsDirReady();
+    writeFileAtomic(WAKE_SCHEDULER_SETTINGS_PATH, JSON.stringify(wakeSchedulerSettings));
+  } catch (e) {
+    console.error("Failed to persist wake scheduler settings:", e.message);
+  }
+}
+
+function updateWakeSchedulerSettings(patch) {
+  wakeSchedulerSettings = {
+    ...wakeSchedulerSettings,
+    ...patch,
+    updatedAt: new Date().toISOString()
+  };
+  saveWakeSchedulerSettings();
+  return wakeSchedulerSettings;
+}
+
+function loadWakeSchedulerSettings() {
+  try {
+    if (!fs.existsSync(WAKE_SCHEDULER_SETTINGS_PATH)) return;
+    const parsed = JSON.parse(fs.readFileSync(WAKE_SCHEDULER_SETTINGS_PATH, "utf8") || "{}");
+    wakeSchedulerSettings = {
+      ...wakeSchedulerSettings,
+      enabled: parsed.enabled === true,
+      executionMode: "helper",
+      updatedAt: parsed.updatedAt || null
+    };
+  } catch (e) {
+    console.error("Failed to load wake scheduler settings:", e.message);
+  }
+}
+
+function saveWakeSchedulerState() {
+  try {
+    ensureJobsDirReady();
+    enqueueWrite(
+      async () => {
+        await writeFileAtomicAsync(WAKE_SCHEDULER_STATE_PATH, JSON.stringify(wakeSchedulerState));
+      },
+      "persist_wake_scheduler_state"
+    );
+  } catch (e) {
+    console.error("Failed to persist wake scheduler state:", e.message);
+  }
+}
+
+function updateWakeSchedulerState(patch) {
+  wakeSchedulerState = { ...wakeSchedulerState, ...patch, updatedAt: Date.now() };
+  saveWakeSchedulerState();
+  return wakeSchedulerState;
+}
+
+function loadWakeSchedulerState() {
+  try {
+    if (!fs.existsSync(WAKE_SCHEDULER_STATE_PATH)) return;
+    const parsed = JSON.parse(fs.readFileSync(WAKE_SCHEDULER_STATE_PATH, "utf8") || "{}");
+    wakeSchedulerState = {
+      ...wakeSchedulerState,
+      registeredWakeAt: parsed.registeredWakeAt || null,
+      registeredForJobId: parsed.registeredForJobId || null,
+      lastSyncAt: parsed.lastSyncAt || null,
+      lastError: parsed.lastError || "",
+      lastAction: parsed.lastAction || "restored"
+    };
+  } catch (e) {
+    console.error("Failed to load wake scheduler state:", e.message);
+  }
+}
+
+function getWakeSchedulerPlan() {
+  const nextJob = getNextScheduledJobForWake();
+  if (!nextJob) return { nextJob: null, wakeAt: null, reason: "no_pending_scheduled_job" };
+  const scheduledFor = getScheduledRunAtMs(nextJob);
+  const wakeAt = scheduledFor - WAKE_SCHEDULER_LEAD_MS;
+  if (wakeAt <= Date.now()) {
+    return {
+      nextJob,
+      wakeAt: null,
+      reason: "next_job_is_too_soon_to_register_a_wake_event",
+      scheduledFor
+    };
+  }
+  return { nextJob, wakeAt, scheduledFor, reason: "ready" };
+}
+
+function getWakeSchedulerStatus() {
+  const plan = getWakeSchedulerPlan();
+  const supported = process.platform === "darwin";
+  const ownerValid = /^[A-Za-z0-9._-]+$/.test(WAKE_SCHEDULER_OWNER);
+  return {
+    supported,
+    enabled: isWakeSchedulerEnabled(),
+    configuredByUser: wakeSchedulerSettings.enabled === true,
+    executionMode: WAKE_SCHEDULER_ENV_ENABLED
+      ? "development_environment"
+      : (wakeSchedulerSettings.enabled ? (usesWakeHelper() ? "restricted_helper" : "configuration_error") : "disabled"),
+    dryRun: WAKE_SCHEDULER_DRY_RUN,
+    useSudoNonInteractive: usesWakeHelper() || WAKE_SCHEDULER_USE_SUDO,
+    owner: WAKE_SCHEDULER_OWNER,
+    leadMs: WAKE_SCHEDULER_LEAD_MS,
+    pmsetPath: PMSET_PATH,
+    helperPath: WAKE_HELPER_PATH,
+    helperOwnerCompatible: WAKE_SCHEDULER_OWNER === WAKE_HELPER_OWNER,
+    ownerValid,
+    executionGuardMs: WAKE_EXECUTION_GUARD_MS,
+    activeExecutionGuards: wakeExecutionGuards.size,
+    nextJob: plan.nextJob ? { id: plan.nextJob.id, action: plan.nextJob.action, nextRunAt: plan.nextJob.nextRunAt } : null,
+    plannedWakeAt: plan.wakeAt ? new Date(plan.wakeAt).toISOString() : null,
+    planReason: plan.reason,
+    registeredWakeAt: wakeSchedulerState.registeredWakeAt,
+    registeredForJobId: wakeSchedulerState.registeredForJobId,
+    lastSyncAt: wakeSchedulerState.lastSyncAt,
+    lastAction: wakeSchedulerState.lastAction,
+    lastError: wakeSchedulerState.lastError
+  };
+}
+
+function startWakeExecutionGuard(runId) {
+  if (process.platform !== "darwin" || !isWakeSchedulerEnabled() || wakeExecutionGuards.has(runId)) return null;
+  const seconds = Math.ceil(WAKE_EXECUTION_GUARD_MS / 1000);
+  try {
+    const child = spawn("/usr/bin/caffeinate", ["-i", "-t", String(seconds)], {
+      stdio: "ignore",
+      windowsHide: true
+    });
+    wakeExecutionGuards.set(runId, child);
+    traceBridgeEvent("wake_execution_guard_started", { runId, seconds });
+    child.once("error", (error) => {
+      if (wakeExecutionGuards.get(runId) === child) wakeExecutionGuards.delete(runId);
+      traceBridgeEvent("wake_execution_guard_error", { runId, message: error.message });
+    });
+    child.once("exit", (code, signal) => {
+      if (wakeExecutionGuards.get(runId) === child) wakeExecutionGuards.delete(runId);
+      traceBridgeEvent("wake_execution_guard_finished", { runId, code, signal });
+    });
+    return child;
+  } catch (error) {
+    traceBridgeEvent("wake_execution_guard_error", { runId, message: error.message });
+    return null;
+  }
+}
+
+function stopWakeExecutionGuard(runId, reason) {
+  const child = wakeExecutionGuards.get(runId);
+  if (!child) return false;
+  wakeExecutionGuards.delete(runId);
+  try { child.kill("SIGTERM"); } catch (_e) {}
+  traceBridgeEvent("wake_execution_guard_stopped", { runId, reason });
+  return true;
+}
+
+function stopAllWakeExecutionGuards(reason) {
+  for (const runId of wakeExecutionGuards.keys()) stopWakeExecutionGuard(runId, reason);
+}
+
+function runPmset(args) {
+  if (WAKE_SCHEDULER_DRY_RUN) {
+    return Promise.resolve({ dryRun: true, command: usesWakeHelper() || WAKE_SCHEDULER_USE_SUDO ? "sudo" : PMSET_PATH, args });
+  }
+
+  const helperMode = usesWakeHelper();
+  let command = WAKE_SCHEDULER_USE_SUDO ? "sudo" : PMSET_PATH;
+  let commandArgs = WAKE_SCHEDULER_USE_SUDO ? ["-n", PMSET_PATH, ...args] : args;
+  if (helperMode) {
+    const isCancel = args[0] === "schedule" && args[1] === "cancel";
+    const isSchedule = args[0] === "schedule" && args[1] === "wake";
+    const date = isCancel ? args[3] : args[2];
+    const owner = isCancel ? args[4] : args[3];
+    if ((!isCancel && !isSchedule) || owner !== WAKE_SCHEDULER_OWNER || !date) {
+      return Promise.reject(new Error("Wake helper only accepts Gecho one-time wake schedule or cancel operations"));
+    }
+    command = "/usr/bin/sudo";
+    commandArgs = ["-n", WAKE_HELPER_PATH, isCancel ? "cancel" : "schedule", date];
+  }
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, commandArgs, { stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.once("error", reject);
+    child.once("close", (code) => {
+      if (code === 0) return resolve({ stdout: stdout.trim(), stderr: stderr.trim() });
+      const error = new Error((stderr || stdout || `pmset exited with code ${code}`).trim());
+      error.code = code;
+      reject(error);
+    });
+  });
+}
+
+async function cancelRegisteredWakeEvent() {
+  if (!wakeSchedulerState.registeredWakeAt) return { cancelled: false, reason: "nothing_registered" };
+  const registeredAt = Date.parse(wakeSchedulerState.registeredWakeAt);
+  if (!Number.isFinite(registeredAt) || registeredAt <= Date.now()) {
+    updateWakeSchedulerState({
+      registeredWakeAt: null,
+      registeredForJobId: null,
+      lastSyncAt: new Date().toISOString(),
+      lastAction: "expired_wake_event_cleared",
+      lastError: ""
+    });
+    return { cancelled: false, reason: "wake_event_already_elapsed" };
+  }
+  const date = formatPmsetDate(registeredAt);
+  await runPmset(["schedule", "cancel", "wake", date, WAKE_SCHEDULER_OWNER]);
+  updateWakeSchedulerState({
+    registeredWakeAt: null,
+    registeredForJobId: null,
+    lastSyncAt: new Date().toISOString(),
+    lastAction: "cancelled",
+    lastError: ""
+  });
+  return { cancelled: true };
+}
+
+async function syncWakeScheduler(reason = "scheduler_changed") {
+  if (wakeSchedulerSyncPromise) return wakeSchedulerSyncPromise;
+  wakeSchedulerSyncPromise = (async () => {
+    const status = getWakeSchedulerStatus();
+    if (!status.supported) {
+      updateWakeSchedulerState({ lastSyncAt: new Date().toISOString(), lastAction: "unsupported_platform", lastError: "" });
+      return getWakeSchedulerStatus();
+    }
+    if (!status.enabled) {
+      updateWakeSchedulerState({ lastSyncAt: new Date().toISOString(), lastAction: "disabled", lastError: "" });
+      return getWakeSchedulerStatus();
+    }
+    if (!status.ownerValid) {
+      const message = "GECHO_WAKE_SCHEDULER_OWNER may only contain letters, numbers, dots, underscores, and hyphens";
+      updateWakeSchedulerState({ lastSyncAt: new Date().toISOString(), lastAction: "invalid_owner", lastError: message });
+      return getWakeSchedulerStatus();
+    }
+    if (wakeSchedulerSettings.enabled && !status.helperOwnerCompatible && !WAKE_SCHEDULER_ENV_ENABLED) {
+      const message = `Wake Helper only supports owner ${WAKE_HELPER_OWNER}`;
+      updateWakeSchedulerState({ lastSyncAt: new Date().toISOString(), lastAction: "helper_owner_mismatch", lastError: message });
+      return getWakeSchedulerStatus();
+    }
+
+    const plan = getWakeSchedulerPlan();
+    if (!plan.wakeAt) {
+      if (wakeSchedulerState.registeredWakeAt) await cancelRegisteredWakeEvent();
+      updateWakeSchedulerState({ lastSyncAt: new Date().toISOString(), lastAction: plan.reason, lastError: "" });
+      return getWakeSchedulerStatus();
+    }
+
+    const desiredWakeAt = new Date(plan.wakeAt).toISOString();
+    if (wakeSchedulerState.registeredWakeAt === desiredWakeAt && wakeSchedulerState.registeredForJobId === plan.nextJob.id) {
+      updateWakeSchedulerState({ lastSyncAt: new Date().toISOString(), lastAction: "already_registered", lastError: "" });
+      return getWakeSchedulerStatus();
+    }
+
+    if (wakeSchedulerState.registeredWakeAt) await cancelRegisteredWakeEvent();
+    const pmsetDate = formatPmsetDate(plan.wakeAt);
+    await runPmset(["schedule", "wake", pmsetDate, WAKE_SCHEDULER_OWNER]);
+    updateWakeSchedulerState({
+      registeredWakeAt: desiredWakeAt,
+      registeredForJobId: plan.nextJob.id,
+      lastSyncAt: new Date().toISOString(),
+      lastAction: WAKE_SCHEDULER_DRY_RUN ? "registered_dry_run" : "registered",
+      lastError: "",
+      reason
+    });
+    return getWakeSchedulerStatus();
+  })().catch((e) => {
+    const message = e.message || "Failed to synchronize macOS wake schedule";
+    updateWakeSchedulerState({ lastSyncAt: new Date().toISOString(), lastAction: "error", lastError: message });
+    return getWakeSchedulerStatus();
+  }).finally(() => {
+    wakeSchedulerSyncPromise = null;
+  });
+  return wakeSchedulerSyncPromise;
+}
+
+function queueWakeSchedulerSync(reason) {
+  if (wakeSchedulerSyncTimer) clearTimeout(wakeSchedulerSyncTimer);
+  wakeSchedulerSyncTimer = setTimeout(() => {
+    wakeSchedulerSyncTimer = null;
+    syncWakeScheduler(reason).catch(() => {});
+  }, 50);
+}
+
 function addScheduledRun(job, run) {
   const runs = [...(Array.isArray(job.runs) ? job.runs : []), run].slice(-MAX_SCHEDULED_RUNS_PER_JOB);
   return runs;
@@ -960,6 +1296,7 @@ function completeScheduledRunFromAsyncJob(asyncJob) {
     lastRun: runs.find((run) => run.id === runId) || null,
     lastError: terminal === "error" ? asyncJob.error || "Scheduled action failed" : ""
   });
+  stopWakeExecutionGuard(runId, `async_job_${terminal}`);
 }
 
 function recordSkippedScheduledRun(job, scheduledFor, reason) {
@@ -1096,6 +1433,7 @@ async function dispatchScheduledJob(scheduleId, scheduledFor = Date.now()) {
     lastRun: run
   });
   console.log(`⏰ Running scheduled job: ${scheduleId} (${scheduled.action})`);
+  startWakeExecutionGuard(runId);
 
   try {
     const result = await startAsyncAction({ action: scheduled.action, ...scheduled.params }, { scheduleId, runId });
@@ -1114,6 +1452,7 @@ async function dispatchScheduledJob(scheduleId, scheduledFor = Date.now()) {
       lastRun: runs.find((item) => item.id === runId) || null
     });
   } catch (e) {
+    stopWakeExecutionGuard(runId, "scheduled_dispatch_error");
     const latest = scheduledJobs.get(scheduleId);
     const runs = updateScheduledRun(latest, runId, {
       status: "error",
@@ -1140,7 +1479,10 @@ function armScheduledJobsTimer() {
   const dueJobs = Array.from(scheduledJobs.values())
     .filter((job) => job.enabled && job.status === "scheduled" && getScheduledRunAtMs(job) > 0)
     .sort((a, b) => getScheduledRunAtMs(a) - getScheduledRunAtMs(b));
-  if (!dueJobs.length) return;
+  if (!dueJobs.length) {
+    queueWakeSchedulerSync("no_pending_scheduled_jobs");
+    return;
+  }
 
   const delay = Math.max(0, Math.min(getScheduledRunAtMs(dueJobs[0]) - now, 2 ** 31 - 1));
   scheduledJobsTimer = setTimeout(async () => {
@@ -1159,6 +1501,7 @@ function armScheduledJobsTimer() {
     }
     armScheduledJobsTimer();
   }, delay);
+  queueWakeSchedulerSync("scheduler_armed");
 }
 
 function createScheduledJob(payload) {
@@ -1459,6 +1802,7 @@ function gracefulShutdown(reason) {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`🛑 Service shutting down: ${reason}`);
+  stopAllWakeExecutionGuards("bridge_shutdown");
 
   for (const [_requestId, pending] of pendingRequests) {
     clearTimeout(pending.timeoutId);
@@ -1487,6 +1831,10 @@ function gracefulShutdown(reason) {
   if (persistScheduledJobsTimer) {
     clearTimeout(persistScheduledJobsTimer);
     persistScheduledJobsTimer = null;
+  }
+  if (wakeSchedulerSyncTimer) {
+    clearTimeout(wakeSchedulerSyncTimer);
+    wakeSchedulerSyncTimer = null;
   }
 
   try {
@@ -1595,6 +1943,8 @@ wss.on("connection", (ws, request) => {
 loadAsyncJobsFromDisk();
 loadRequestIndexFromDisk();
 loadScheduledJobsFromDisk();
+loadWakeSchedulerSettings();
+loadWakeSchedulerState();
 checkJobsStoreWritable();
 runJobCleanup();
 cleanupTimer = setInterval(runJobCleanup, CLEANUP_INTERVAL_MS);
@@ -1638,6 +1988,7 @@ const server = http.createServer(async (req, res) => {
           .filter((job) => job.enabled && job.status === "scheduled" && job.nextRunAt)
           .sort((a, b) => getScheduledRunAtMs(a) - getScheduledRunAtMs(b))[0]?.nextRunAt || null
       },
+      wakeScheduler: getWakeSchedulerStatus(),
       bridgeTrace: bridgeTrace.slice(-30)
     }));
   }
@@ -1646,6 +1997,65 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify({ status: "ok", message: "shutdown accepted" }));
     setTimeout(() => gracefulShutdown("remote_shutdown"), 20).unref?.();
     return;
+  }
+
+  if (req.method === "GET" && req.url === "/wake-scheduler/status") {
+    return res.end(JSON.stringify(getWakeSchedulerStatus()));
+  }
+
+  if (req.method === "POST" && req.url === "/wake-scheduler/refresh") {
+    const status = await syncWakeScheduler("manual_refresh");
+    return res.end(JSON.stringify(status));
+  }
+
+  if (req.method === "POST" && req.url === "/wake-scheduler/enable") {
+    if (process.platform !== "darwin") {
+      res.statusCode = 400;
+      return res.end(JSON.stringify({ error: "macOS wake scheduling is only available on darwin" }));
+    }
+    updateWakeSchedulerSettings({ enabled: true, executionMode: "helper" });
+    const status = await syncWakeScheduler("user_enabled");
+    return res.end(JSON.stringify({ success: true, wakeScheduler: status }));
+  }
+
+  if (req.method === "POST" && req.url === "/wake-scheduler/disable") {
+    if (process.platform !== "darwin") {
+      res.statusCode = 400;
+      return res.end(JSON.stringify({ error: "macOS wake scheduling is only available on darwin" }));
+    }
+    let cancelResult = { cancelled: false, reason: "nothing_registered" };
+    try {
+      cancelResult = await cancelRegisteredWakeEvent();
+    } catch (e) {
+      updateWakeSchedulerState({ lastAction: "disable_cancel_error", lastError: e.message || "Failed to cancel wake event" });
+    }
+    updateWakeSchedulerSettings({ enabled: false, executionMode: "helper" });
+    updateWakeSchedulerState({ lastSyncAt: new Date().toISOString(), lastAction: "disabled_by_user" });
+    return res.end(JSON.stringify({ success: true, ...cancelResult, wakeScheduler: getWakeSchedulerStatus() }));
+  }
+
+  if (req.method === "POST" && req.url === "/wake-scheduler/reload") {
+    loadWakeSchedulerSettings();
+    const status = await syncWakeScheduler("settings_reloaded");
+    return res.end(JSON.stringify({ success: true, wakeScheduler: status }));
+  }
+
+  if (req.method === "POST" && req.url === "/wake-scheduler/cancel") {
+    if (process.platform !== "darwin") {
+      res.statusCode = 400;
+      return res.end(JSON.stringify({ error: "macOS wake scheduling is only available on darwin" }));
+    }
+    if (!isWakeSchedulerEnabled()) {
+      res.statusCode = 409;
+      return res.end(JSON.stringify({ error: "Wake scheduler is disabled. Run `gecho-bridge wake enable` first." }));
+    }
+    try {
+      const result = await cancelRegisteredWakeEvent();
+      return res.end(JSON.stringify({ success: true, ...result, wakeScheduler: getWakeSchedulerStatus() }));
+    } catch (e) {
+      res.statusCode = 500;
+      return res.end(JSON.stringify({ error: e.message, wakeScheduler: getWakeSchedulerStatus() }));
+    }
   }
 
   // --- 新增异步任务查询接口 ---
