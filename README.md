@@ -120,6 +120,20 @@ claude mcp add gecho-bridge -- npx -y @gecho-ai/gecho-bridge@latest
 - After adding, use `claude mcp list` to verify the server is registered.
 - Restart Claude Code if the MCP tools don't appear immediately.
 
+### Experimental: Windows Wake Scheduling
+
+Gecho Bridge includes an experimental Task Scheduler adapter that creates only Gecho's next one-time task with `WakeToRun`. It requires an already logged-in user and a device and power plan that permit wake timers. It does not support shutdown, the sign-in screen, or the pre-unlock BitLocker stage, and it is **not guaranteed to wake every Windows device**.
+
+On the tested S0 Modern Standby machine, both Task Scheduler `WakeToRun` and a native `SetWaitableTimer(fResume=true)` proof of concept were deferred until a manual mouse wake, even with AC wake timers enabled. Scheduled jobs still applied their configured misfire policy after the system resumed. Treat automatic Windows wake as device-dependent and experimental.
+
+To test the Task Scheduler adapter, first start the configured MCP client, then run:
+
+```bash
+gecho-bridge wake enable
+```
+
+Use `gecho-bridge wake status` to inspect the task and `gecho-bridge wake disable` to remove it and turn the feature off. The native waitable-timer proof of concept is disabled by default and is available only for development with `GECHO_WINDOWS_NATIVE_WAKE_TIMER=1`.
+
 ### Optional: Wake macOS for Scheduled Jobs
 
 Scheduled jobs do not wake the computer by default. To allow a logged-in Mac to wake from normal sleep before a scheduled job, first start the configured MCP client so Bridge is running, then run:

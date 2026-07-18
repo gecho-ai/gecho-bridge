@@ -120,6 +120,20 @@ claude mcp add gecho-bridge -- npx -y @gecho-ai/gecho-bridge@latest
 - 添加完成后，使用 `claude mcp list` 验证服务是否注册成功。
 - 如果 MCP 工具没有立即出现，请重启 Claude Code。
 
+### 实验性能力：Windows 定时任务自动唤醒
+
+Gecho Bridge 提供实验性的 Task Scheduler 适配，只创建 Gecho 自己的下一条一次性 `WakeToRun` 任务。它要求用户已经登录，并且设备与电源计划允许唤醒计时器；不支持关机、登录界面或未解锁的 BitLocker 启动阶段，也**不能保证唤醒所有 Windows 设备**。
+
+在本次测试的 S0 Modern Standby 设备上，即使已启用交流电唤醒计时器，Task Scheduler `WakeToRun` 和原生 `SetWaitableTimer(fResume=true)` POC 都只在鼠标人工唤醒后才继续。系统恢复后，定时任务仍会按所配置的错过任务策略处理。因此 Windows 自动唤醒目前只能按设备实验验证，不能作为通用能力承诺。
+
+如需测试 Task Scheduler 适配，先启动一次已配置的 MCP 客户端，再执行：
+
+```bash
+gecho-bridge wake enable
+```
+
+可用 `gecho-bridge wake status` 查看任务状态，使用 `gecho-bridge wake disable` 删除任务并停用功能。原生 Waitable Timer POC 默认关闭，仅供开发时通过 `GECHO_WINDOWS_NATIVE_WAKE_TIMER=1` 显式启用。
+
 ### 可选：macOS 定时任务自动唤醒
 
 本地定时任务默认不会唤醒电脑。若希望 Mac 在**普通睡眠**时于任务前自动唤醒，先启动一次已配置的 MCP 客户端以确保 Bridge 正在运行，再执行：

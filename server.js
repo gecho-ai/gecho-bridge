@@ -12,6 +12,7 @@ const { WebSocketServer } = require("ws");
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const { spawn } = require("child_process");
 const packageJson = require("./package.json");
 
@@ -50,6 +51,10 @@ const WAKE_SCHEDULER_OWNER = String(process["env"].GECHO_WAKE_SCHEDULER_OWNER ||
 const WAKE_SCHEDULER_USE_SUDO = process["env"].GECHO_WAKE_SCHEDULER_USE_SUDO === "1";
 const PMSET_PATH = process["env"].GECHO_PMSET_PATH || "/usr/bin/pmset";
 const WAKE_HELPER_PATH = "/usr/local/libexec/gecho-bridge-wake";
+const WINDOWS_WAKE_HELPER_PATH = path.join(__dirname, "windows-wake-helper.ps1");
+const WINDOWS_NATIVE_WAKE_TIMER_PATH = path.join(__dirname, "windows-native-wake-timer.ps1");
+const WINDOWS_NATIVE_WAKE_TIMER_ENABLED = process["env"].GECHO_WINDOWS_NATIVE_WAKE_TIMER === "1";
+const WINDOWS_WAKE_GUARD_SECONDS = Math.min(3600, Math.max(30, Number(process["env"].GECHO_WINDOWS_WAKE_GUARD_SECONDS || 450)));
 
 let extensionSocket = null;
 let wss = null;
@@ -89,6 +94,7 @@ let scheduledJobsTimer = null;
 let persistScheduledJobsTimer = null;
 let wakeSchedulerSyncTimer = null;
 let wakeSchedulerSyncPromise = null;
+let windowsNativeWakeTimer = null;
 let wakeSchedulerState = {
   registeredWakeAt: null,
   registeredForJobId: null,
@@ -974,7 +980,7 @@ function isWakeSchedulerEnabled() {
 }
 
 function usesWakeHelper() {
-  return !WAKE_SCHEDULER_ENV_ENABLED && wakeSchedulerSettings.enabled === true && WAKE_SCHEDULER_OWNER === WAKE_HELPER_OWNER;
+  return process.platform === "darwin" && !WAKE_SCHEDULER_ENV_ENABLED && wakeSchedulerSettings.enabled === true && WAKE_SCHEDULER_OWNER === WAKE_HELPER_OWNER;
 }
 
 function saveWakeSchedulerSettings() {
@@ -1003,7 +1009,7 @@ function loadWakeSchedulerSettings() {
     wakeSchedulerSettings = {
       ...wakeSchedulerSettings,
       enabled: parsed.enabled === true,
-      executionMode: "helper",
+      executionMode: process.platform === "win32" ? "task_scheduler" : "helper",
       updatedAt: parsed.updatedAt || null
     };
   } catch (e) {
@@ -1066,21 +1072,31 @@ function getWakeSchedulerPlan() {
 
 function getWakeSchedulerStatus() {
   const plan = getWakeSchedulerPlan();
-  const supported = process.platform === "darwin";
+  const supported = process.platform === "darwin" || process.platform === "win32";
   const ownerValid = /^[A-Za-z0-9._-]+$/.test(WAKE_SCHEDULER_OWNER);
+  const windowsTaskName = getWindowsWakeTaskName();
   return {
     supported,
     enabled: isWakeSchedulerEnabled(),
     configuredByUser: wakeSchedulerSettings.enabled === true,
-    executionMode: WAKE_SCHEDULER_ENV_ENABLED
+    executionMode: process.platform === "win32" && wakeSchedulerSettings.enabled
+      ? "task_scheduler"
+      : (WAKE_SCHEDULER_ENV_ENABLED
       ? "development_environment"
-      : (wakeSchedulerSettings.enabled ? (usesWakeHelper() ? "restricted_helper" : "configuration_error") : "disabled"),
+      : (wakeSchedulerSettings.enabled ? (usesWakeHelper() ? "restricted_helper" : "configuration_error") : "disabled")),
     dryRun: WAKE_SCHEDULER_DRY_RUN,
     useSudoNonInteractive: usesWakeHelper() || WAKE_SCHEDULER_USE_SUDO,
     owner: WAKE_SCHEDULER_OWNER,
     leadMs: WAKE_SCHEDULER_LEAD_MS,
     pmsetPath: PMSET_PATH,
     helperPath: WAKE_HELPER_PATH,
+    windowsTaskName: process.platform === "win32" ? windowsTaskName : null,
+    windowsWakeHelperPath: process.platform === "win32" ? WINDOWS_WAKE_HELPER_PATH : null,
+    windowsNativeWakeTimerPath: process.platform === "win32" ? WINDOWS_NATIVE_WAKE_TIMER_PATH : null,
+    nativeTimerEnabled: process.platform === "win32" ? WINDOWS_NATIVE_WAKE_TIMER_ENABLED : false,
+    nativeTimerActive: process.platform === "win32" ? !!windowsNativeWakeTimer : false,
+    nativeTimerWakeAt: process.platform === "win32" ? windowsNativeWakeTimer?.wakeAt || null : null,
+    windowsWakeGuardSeconds: process.platform === "win32" ? WINDOWS_WAKE_GUARD_SECONDS : null,
     helperOwnerCompatible: WAKE_SCHEDULER_OWNER === WAKE_HELPER_OWNER,
     ownerValid,
     executionGuardMs: WAKE_EXECUTION_GUARD_MS,
@@ -1169,10 +1185,108 @@ function runPmset(args) {
   });
 }
 
+function getWindowsWakeTaskName() {
+  const identity = crypto.createHash("sha256").update(path.resolve(JOBS_DIR)).digest("hex").slice(0, 12);
+  return `GechoBridge-WakeNext-${identity}`;
+}
+
+function getPowerShellExecutable() {
+  const systemRoot = process["env"].SystemRoot || process["env"].WINDIR || "C:\\Windows";
+  const candidate = path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+  return fs.existsSync(candidate) ? candidate : "powershell.exe";
+}
+
+function runWindowsWakeHelper(mode, extra = {}) {
+  if (!fs.existsSync(WINDOWS_WAKE_HELPER_PATH)) {
+    return Promise.reject(new Error(`Windows wake helper is missing: ${WINDOWS_WAKE_HELPER_PATH}`));
+  }
+  const args = [
+    "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+    "-File", WINDOWS_WAKE_HELPER_PATH,
+    "-Mode", mode,
+    "-TaskName", getWindowsWakeTaskName()
+  ];
+  if (extra.wakeAt) args.push("-WakeAt", extra.wakeAt);
+  if (extra.guardSeconds) args.push("-GuardSeconds", String(extra.guardSeconds));
+  return new Promise((resolve, reject) => {
+    const child = spawn(getPowerShellExecutable(), args, { stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", chunk => { stdout += chunk; });
+    child.stderr.on("data", chunk => { stderr += chunk; });
+    child.once("error", reject);
+    child.once("close", (code) => {
+      if (code !== 0) return reject(new Error((stderr || stdout || `Windows wake helper exited with code ${code}`).trim()));
+      try { resolve(JSON.parse(stdout.trim() || "{}")); } catch (_e) { resolve({ stdout: stdout.trim() }); }
+    });
+  });
+}
+
+async function registerWindowsWakeEvent(wakeAt) {
+  if (WAKE_SCHEDULER_DRY_RUN) return { dryRun: true, wakeAt };
+  return runWindowsWakeHelper("register", { wakeAt, guardSeconds: WINDOWS_WAKE_GUARD_SECONDS });
+}
+
+async function cancelWindowsWakeEvent() {
+  if (WAKE_SCHEDULER_DRY_RUN) return { dryRun: true };
+  return runWindowsWakeHelper("remove");
+}
+
+function stopWindowsNativeWakeTimer(reason = "cancelled") {
+  const timer = windowsNativeWakeTimer;
+  if (!timer) return false;
+  windowsNativeWakeTimer = null;
+  try { timer.child.kill(); } catch (_e) {}
+  traceBridgeEvent("windows_native_wake_timer_stopped", { reason, wakeAt: timer.wakeAt });
+  return true;
+}
+
+function startWindowsNativeWakeTimer(wakeAt) {
+  if (process.platform !== "win32") return Promise.resolve({ supported: false });
+  if (!fs.existsSync(WINDOWS_NATIVE_WAKE_TIMER_PATH)) {
+    return Promise.reject(new Error(`Windows native wake timer helper is missing: ${WINDOWS_NATIVE_WAKE_TIMER_PATH}`));
+  }
+  stopWindowsNativeWakeTimer("replaced");
+  if (WAKE_SCHEDULER_DRY_RUN) return Promise.resolve({ dryRun: true, wakeAt });
+
+  return new Promise((resolve, reject) => {
+    const child = spawn(getPowerShellExecutable(), [
+      "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+      "-File", WINDOWS_NATIVE_WAKE_TIMER_PATH,
+      "-WakeAt", wakeAt,
+      "-NotifyUrl", `http://127.0.0.1:${HTTP_PORT}/wake-scheduler/native-timer-fired`
+    ], { stdio: ["ignore", "ignore", "pipe"], windowsHide: true });
+    let stderr = "";
+    child.stderr.on("data", chunk => { stderr += chunk; });
+    child.once("error", reject);
+    child.once("spawn", () => {
+      const timer = { child, wakeAt };
+      windowsNativeWakeTimer = timer;
+      traceBridgeEvent("windows_native_wake_timer_armed", { wakeAt });
+      resolve({ armed: true, wakeAt });
+    });
+    child.once("exit", (code, signal) => {
+      if (windowsNativeWakeTimer?.child === child) windowsNativeWakeTimer = null;
+      traceBridgeEvent("windows_native_wake_timer_exited", {
+        wakeAt,
+        code,
+        signal,
+        message: stderr.trim()
+      });
+    });
+  });
+}
+
 async function cancelRegisteredWakeEvent() {
   if (!wakeSchedulerState.registeredWakeAt) return { cancelled: false, reason: "nothing_registered" };
   const registeredAt = Date.parse(wakeSchedulerState.registeredWakeAt);
   if (!Number.isFinite(registeredAt) || registeredAt <= Date.now()) {
+    // Windows one-time tasks remain registered after they fire. Remove this
+    // package-owned task even when its wake timestamp is already in the past.
+    if (process.platform === "win32") {
+      stopWindowsNativeWakeTimer("expired_wake_event");
+      try { await cancelWindowsWakeEvent(); } catch (_e) {}
+    }
     updateWakeSchedulerState({
       registeredWakeAt: null,
       registeredForJobId: null,
@@ -1182,8 +1296,13 @@ async function cancelRegisteredWakeEvent() {
     });
     return { cancelled: false, reason: "wake_event_already_elapsed" };
   }
-  const date = formatPmsetDate(registeredAt);
-  await runPmset(["schedule", "cancel", "wake", date, WAKE_SCHEDULER_OWNER]);
+  if (process.platform === "win32") {
+    stopWindowsNativeWakeTimer("wake_event_cancelled");
+    await cancelWindowsWakeEvent();
+  } else {
+    const date = formatPmsetDate(registeredAt);
+    await runPmset(["schedule", "cancel", "wake", date, WAKE_SCHEDULER_OWNER]);
+  }
   updateWakeSchedulerState({
     registeredWakeAt: null,
     registeredForJobId: null,
@@ -1211,7 +1330,7 @@ async function syncWakeScheduler(reason = "scheduler_changed") {
       updateWakeSchedulerState({ lastSyncAt: new Date().toISOString(), lastAction: "invalid_owner", lastError: message });
       return getWakeSchedulerStatus();
     }
-    if (wakeSchedulerSettings.enabled && !status.helperOwnerCompatible && !WAKE_SCHEDULER_ENV_ENABLED) {
+    if (process.platform === "darwin" && wakeSchedulerSettings.enabled && !status.helperOwnerCompatible && !WAKE_SCHEDULER_ENV_ENABLED) {
       const message = `Wake Helper only supports owner ${WAKE_HELPER_OWNER}`;
       updateWakeSchedulerState({ lastSyncAt: new Date().toISOString(), lastAction: "helper_owner_mismatch", lastError: message });
       return getWakeSchedulerStatus();
@@ -1231,8 +1350,13 @@ async function syncWakeScheduler(reason = "scheduler_changed") {
     }
 
     if (wakeSchedulerState.registeredWakeAt) await cancelRegisteredWakeEvent();
-    const pmsetDate = formatPmsetDate(plan.wakeAt);
-    await runPmset(["schedule", "wake", pmsetDate, WAKE_SCHEDULER_OWNER]);
+    if (process.platform === "win32") {
+      await registerWindowsWakeEvent(desiredWakeAt);
+      if (WINDOWS_NATIVE_WAKE_TIMER_ENABLED) await startWindowsNativeWakeTimer(desiredWakeAt);
+    } else {
+      const pmsetDate = formatPmsetDate(plan.wakeAt);
+      await runPmset(["schedule", "wake", pmsetDate, WAKE_SCHEDULER_OWNER]);
+    }
     updateWakeSchedulerState({
       registeredWakeAt: desiredWakeAt,
       registeredForJobId: plan.nextJob.id,
@@ -1803,6 +1927,7 @@ function gracefulShutdown(reason) {
   shuttingDown = true;
   console.log(`🛑 Service shutting down: ${reason}`);
   stopAllWakeExecutionGuards("bridge_shutdown");
+  stopWindowsNativeWakeTimer("bridge_shutdown");
 
   for (const [_requestId, pending] of pendingRequests) {
     clearTimeout(pending.timeoutId);
@@ -2003,25 +2128,35 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify(getWakeSchedulerStatus()));
   }
 
+  if (req.method === "POST" && req.url === "/wake-scheduler/native-timer-fired") {
+    traceBridgeEvent("windows_native_wake_timer_fired", { wakeAt: windowsNativeWakeTimer?.wakeAt || null });
+    updateWakeSchedulerState({
+      nativeTimerFiredAt: new Date().toISOString(),
+      lastAction: "native_timer_fired",
+      lastError: ""
+    });
+    return res.end(JSON.stringify({ success: true }));
+  }
+
   if (req.method === "POST" && req.url === "/wake-scheduler/refresh") {
     const status = await syncWakeScheduler("manual_refresh");
     return res.end(JSON.stringify(status));
   }
 
   if (req.method === "POST" && req.url === "/wake-scheduler/enable") {
-    if (process.platform !== "darwin") {
+    if (process.platform !== "darwin" && process.platform !== "win32") {
       res.statusCode = 400;
-      return res.end(JSON.stringify({ error: "macOS wake scheduling is only available on darwin" }));
+      return res.end(JSON.stringify({ error: "Wake scheduling is only available on macOS and Windows" }));
     }
-    updateWakeSchedulerSettings({ enabled: true, executionMode: "helper" });
+    updateWakeSchedulerSettings({ enabled: true, executionMode: process.platform === "win32" ? "task_scheduler" : "helper" });
     const status = await syncWakeScheduler("user_enabled");
     return res.end(JSON.stringify({ success: true, wakeScheduler: status }));
   }
 
   if (req.method === "POST" && req.url === "/wake-scheduler/disable") {
-    if (process.platform !== "darwin") {
+    if (process.platform !== "darwin" && process.platform !== "win32") {
       res.statusCode = 400;
-      return res.end(JSON.stringify({ error: "macOS wake scheduling is only available on darwin" }));
+      return res.end(JSON.stringify({ error: "Wake scheduling is only available on macOS and Windows" }));
     }
     let cancelResult = { cancelled: false, reason: "nothing_registered" };
     try {
@@ -2029,7 +2164,7 @@ const server = http.createServer(async (req, res) => {
     } catch (e) {
       updateWakeSchedulerState({ lastAction: "disable_cancel_error", lastError: e.message || "Failed to cancel wake event" });
     }
-    updateWakeSchedulerSettings({ enabled: false, executionMode: "helper" });
+    updateWakeSchedulerSettings({ enabled: false, executionMode: process.platform === "win32" ? "task_scheduler" : "helper" });
     updateWakeSchedulerState({ lastSyncAt: new Date().toISOString(), lastAction: "disabled_by_user" });
     return res.end(JSON.stringify({ success: true, ...cancelResult, wakeScheduler: getWakeSchedulerStatus() }));
   }
@@ -2041,9 +2176,9 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && req.url === "/wake-scheduler/cancel") {
-    if (process.platform !== "darwin") {
+    if (process.platform !== "darwin" && process.platform !== "win32") {
       res.statusCode = 400;
-      return res.end(JSON.stringify({ error: "macOS wake scheduling is only available on darwin" }));
+      return res.end(JSON.stringify({ error: "Wake scheduling is only available on macOS and Windows" }));
     }
     if (!isWakeSchedulerEnabled()) {
       res.statusCode = 409;

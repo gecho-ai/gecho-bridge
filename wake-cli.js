@@ -2,6 +2,7 @@ const fs = require("fs");
 const http = require("http");
 const os = require("os");
 const path = require("path");
+const crypto = require("crypto");
 const { spawn } = require("child_process");
 
 const SERVICE_BASE_URL = process.env.GECHO_SERVICE_URL || "http://127.0.0.1:18793";
@@ -9,6 +10,7 @@ const HELPER_SOURCE_PATH = path.join(__dirname, "libexec", "gecho-bridge-wake");
 const HELPER_PATH = "/usr/local/libexec/gecho-bridge-wake";
 const SUDOERS_PATH = "/etc/sudoers.d/gecho-bridge-wake";
 const DEFAULT_DATA_DIR = process.env.GECHO_DATA_DIR || path.join(__dirname, "data");
+const WINDOWS_WAKE_HELPER_PATH = path.join(__dirname, "windows-wake-helper.ps1");
 
 function printUsage() {
   process.stdout.write(`Usage:\n  gecho-bridge wake enable\n  gecho-bridge wake status\n  gecho-bridge wake disable\n  gecho-bridge wake uninstall\n\n`);
@@ -61,8 +63,30 @@ function runCapture(command, args) {
   });
 }
 
-function assertMacOS() {
-  if (process.platform !== "darwin") throw new Error("wake scheduling is currently supported on macOS only");
+function getWindowsWakeTaskName(dataDir) {
+  const identity = crypto.createHash("sha256").update(path.resolve(dataDir)).digest("hex").slice(0, 12);
+  return `GechoBridge-WakeNext-${identity}`;
+}
+
+function getPowerShellExecutable() {
+  const systemRoot = process.env.SystemRoot || process.env.WINDIR || "C:\\Windows";
+  return path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+}
+
+function runWindowsWakeHelper(mode, dataDir) {
+  if (!fs.existsSync(WINDOWS_WAKE_HELPER_PATH)) return Promise.reject(new Error(`bundled Windows wake helper is missing: ${WINDOWS_WAKE_HELPER_PATH}`));
+  return runCapture(getPowerShellExecutable(), [
+    "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+    "-File", WINDOWS_WAKE_HELPER_PATH,
+    "-Mode", mode,
+    "-TaskName", getWindowsWakeTaskName(dataDir)
+  ]);
+}
+
+function assertSupportedPlatform() {
+  if (process.platform !== "darwin" && process.platform !== "win32") {
+    throw new Error("wake scheduling is currently supported on macOS and Windows only");
+  }
 }
 
 function ensureSafeUserName() {
@@ -132,21 +156,21 @@ function writeEnabledSetting(dataDir, enabled) {
   writeJsonAtomic(settingsPath(dataDir), {
     ...previous,
     enabled,
-    executionMode: "helper",
+    executionMode: process.platform === "win32" ? "task_scheduler" : "helper",
     updatedAt: new Date().toISOString()
   });
 }
 
 async function enable() {
-  assertMacOS();
+  assertSupportedPlatform();
   const bridge = await getRunningBridge();
   if (!bridge) {
     throw new Error("Bridge is not running. Start the MCP client first, then run `gecho-bridge wake enable` so the setting is saved beside the scheduled jobs it manages.");
   }
-  if (!bridge.wakeScheduler || !bridge.wakeScheduler.helperPath) {
+  if (!bridge.wakeScheduler || (process.platform === "darwin" && !bridge.wakeScheduler.helperPath)) {
     throw new Error("The running Bridge version does not support wake scheduling. Restart or upgrade the MCP client before enabling it.");
   }
-  await installHelper();
+  if (process.platform === "darwin") await installHelper();
   const dataDir = bridge.dataDir;
   writeEnabledSetting(dataDir, true);
 
@@ -159,7 +183,7 @@ async function enable() {
 }
 
 async function disable({ uninstall = false } = {}) {
-  assertMacOS();
+  assertSupportedPlatform();
   const bridge = await getRunningBridge();
   const dataDir = bridge?.dataDir || DEFAULT_DATA_DIR;
   if (bridge) {
@@ -168,41 +192,58 @@ async function disable({ uninstall = false } = {}) {
       // The current Bridge cancels the event before persisting disabled state.
       writeEnabledSetting(dataDir, false);
     } else {
-      const state = readJson(statePath(dataDir), {});
-      const date = formatPmsetDate(state.registeredWakeAt);
-      if (date) {
-        try { await runCapture("/usr/bin/sudo", ["-n", HELPER_PATH, "cancel", date]); } catch (_e) {}
+      if (process.platform === "darwin") {
+        const state = readJson(statePath(dataDir), {});
+        const date = formatPmsetDate(state.registeredWakeAt);
+        if (date) {
+          try { await runCapture("/usr/bin/sudo", ["-n", HELPER_PATH, "cancel", date]); } catch (_e) {}
+        }
       }
       writeEnabledSetting(dataDir, false);
       process.stdout.write("The running Bridge does not support live reload; restart it to pick up the disabled setting.\n");
     }
   } else {
-    const state = readJson(statePath(dataDir), {});
-    const date = formatPmsetDate(state.registeredWakeAt);
-    if (date) {
-      try { await runCapture("/usr/bin/sudo", ["-n", HELPER_PATH, "cancel", date]); } catch (_e) {}
+    if (process.platform === "win32") {
+      try { await runWindowsWakeHelper("remove", dataDir); } catch (_e) {}
+    } else if (process.platform === "darwin") {
+      const state = readJson(statePath(dataDir), {});
+      const date = formatPmsetDate(state.registeredWakeAt);
+      if (date) {
+        try { await runCapture("/usr/bin/sudo", ["-n", HELPER_PATH, "cancel", date]); } catch (_e) {}
+      }
     }
     writeEnabledSetting(dataDir, false);
   }
 
-  if (uninstall) {
+  if (uninstall && process.platform === "darwin") {
     await run("/usr/bin/sudo", ["/bin/rm", "-f", SUDOERS_PATH, HELPER_PATH]);
     process.stdout.write("Wake scheduling disabled and the restricted Helper was removed.\n");
-  } else {
+  } else if (process.platform === "darwin") {
     process.stdout.write("Wake scheduling disabled. The Helper remains installed; run `gecho-bridge wake uninstall` to remove it and revoke passwordless access.\n");
+  } else {
+    process.stdout.write("Wake scheduling disabled and Gecho's Task Scheduler wake task was removed.\n");
   }
 }
 
 async function status() {
-  assertMacOS();
+  assertSupportedPlatform();
   const bridge = await getRunningBridge();
   let helperReady = false;
   let helperError = "";
-  try {
-    await runCapture("/usr/bin/sudo", ["-n", HELPER_PATH, "status"]);
-    helperReady = true;
-  } catch (error) {
-    helperError = error.message;
+  if (process.platform === "win32") {
+    try {
+      await runWindowsWakeHelper("status", bridge?.dataDir || DEFAULT_DATA_DIR);
+      helperReady = true;
+    } catch (error) {
+      helperError = error.message;
+    }
+  } else if (process.platform === "darwin") {
+    try {
+      await runCapture("/usr/bin/sudo", ["-n", HELPER_PATH, "status"]);
+      helperReady = true;
+    } catch (error) {
+      helperError = error.message;
+    }
   }
   const dataDir = bridge?.dataDir || DEFAULT_DATA_DIR;
   const settings = readJson(settingsPath(dataDir), { enabled: false });
@@ -210,7 +251,7 @@ async function status() {
     bridgeRunning: !!bridge,
     dataDir,
     enabled: settings.enabled === true,
-    helperPath: HELPER_PATH,
+    helperPath: process.platform === "darwin" ? HELPER_PATH : bridge?.wakeScheduler?.windowsWakeHelperPath || null,
     helperReady,
     helperError: helperReady ? "" : helperError,
     wakeScheduler: bridge?.wakeScheduler || null

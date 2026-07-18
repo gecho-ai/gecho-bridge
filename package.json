@@ -8,6 +8,7 @@
   },
   "files": [
     "*.js",
+    "*.ps1",
     "dist",
     "libexec",
     "package.json",
