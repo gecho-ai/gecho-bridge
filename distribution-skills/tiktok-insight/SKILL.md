@@ -1,6 +1,6 @@
 ---
 name: tiktok-insight
-description: Run async TikTok product, trend, competitor, and content insight jobs through Gecho Bridge MCP, and check existing insight job status. Use for TikTok winning-product research, market opportunity analysis, competitor research, trend discovery, content strategy, and checking insight job results. Requires the Gecho Chrome extension, an active TikTok session, and the shared Gecho Bridge MCP server.
+description: Run async TikTok product, trend, competitor, and content insight jobs with Gecho Bridge MCP, and check job status. Requires the Gecho Chrome extension, an active TikTok session, and the Gecho Bridge MCP server.
 metadata:
   openclaw:
     os: ["darwin", "linux", "win32"]

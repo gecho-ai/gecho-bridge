@@ -1,6 +1,6 @@
 ---
 name: tiktok-search
-description: Search TikTok videos and run product, trend, competitor, and content insights through Gecho Bridge MCP. Use for TikTok keyword research, trending video discovery, winning-product analysis, and checking async insight jobs. Requires the Gecho Chrome extension, an active TikTok session, and the shared Gecho Bridge MCP server.
+description: Search TikTok videos, collect creator videos, and run product, trend, competitor, and content insights through Gecho Bridge MCP. Requires the Gecho Chrome extension, an active TikTok session, and the Gecho Bridge MCP server.
 metadata:
   openclaw:
     os: ["darwin", "linux", "win32"]
