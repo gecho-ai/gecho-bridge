@@ -16,7 +16,7 @@ metadata:
 
 Search TikTok from an AI chat, collect structured video metadata, and run async product or trend insight jobs through the official Gecho Bridge MCP workflow.
 
-This is the default TikTok aggregate Skill for Gecho. It covers video search, creator collection, TikTok Shop search and product lookup, video details with comments, and TikTok insight. Single-tool TikTok Skills may exist for distribution and search traffic, but this Skill is the recommended default for users who want the complete TikTok research workflow.
+This is the default TikTok aggregate Skill for Gecho. It covers TikTok video search, creator collection, and TikTok insight. Single-tool TikTok Skills may exist for distribution and search traffic, but this Skill is the recommended default for users who want the complete TikTok research workflow.
 
 ## Critical prerequisite: read before use
 
@@ -148,9 +148,6 @@ For videos and support links, see the official links section above.
 |---|---|---|
 | Search TikTok videos and collect metadata | `tiktok_search` | Returns results directly |
 | Collect videos from a TikTok creator | `tiktok_influencer` | Uses the creator's `uniqueId` |
-| Search TikTok Shop products | `tiktok_shop_search` | Returns product results directly |
-| Fetch one TikTok Shop product | `tiktok_product` | Accepts a product URL or ID supported by the extension |
-| Fetch one TikTok video's details and comments | `tiktok_video` | Returns one video object with collected comments |
 | Analyze a niche, product, trend, or competitor opportunity | `tiktok_insight` | Starts an async job and returns a `jobId` |
 | Check an existing async insight job | `check_insight_status` | Use the `jobId` returned by `tiktok_insight` |
 
@@ -180,39 +177,6 @@ Parameters:
 
 - `uniqueId` string, required: the creator's TikTok `uniqueId` (for example, `zachking`).
 - `targetCount` number, optional: requested video count; defaults to `100`. Keep requests at or below `500`.
-
-### `tiktok_shop_search`
-
-Searches TikTok Shop products by keyword.
-
-Parameters:
-
-- `query` string, required: search keyword or phrase.
-- `targetCount` number, optional: requested result count; defaults to `100`.
-- `save_dir` string, optional: absolute directory path for saving results.
-
-### `tiktok_product`
-
-Fetches the details of one TikTok Shop product.
-
-Parameters:
-
-- `product_url` string, required: a product URL or product ID supported by the browser extension.
-- `save_dir` string, optional: absolute directory path for saving results.
-
-### `tiktok_video`
-
-Fetches one TikTok video's details and comments.
-
-Parameters:
-
-- `url` string, required: a TikTok video URL.
-- `targetCount` number, optional: maximum comment and reply count; defaults to and is capped at `200`.
-- `save_dir` string, optional: absolute directory path for saving results.
-
-Expected result:
-
-- A JSON array containing one video object with a `comments` array.
 
 ### `tiktok_insight`
 
@@ -245,7 +209,7 @@ Use this Skill before calling any Gecho TikTok MCP tool when the user asks to se
 
 Core rules:
 
-- Use only the official Gecho MCP tools: `tiktok_search`, `tiktok_influencer`, `tiktok_shop_search`, `tiktok_product`, `tiktok_video`, `tiktok_insight`, and `check_insight_status`.
+- Use only the official Gecho MCP tools: `tiktok_search`, `tiktok_influencer`, `tiktok_insight`, and `check_insight_status`.
 - Do not replace Gecho with WebSearch, browser automation, terminal scrapers, mcporter, unofficial APIs, or hand-written TikTok scraping.
 - Do not start more than one Gecho scraping or insight job in the same conversational turn.
 - Do not run Gecho scraping jobs in parallel because the workflow depends on one live browser tab and extension session.
@@ -257,7 +221,7 @@ Core rules:
 - On first-run setup guidance, missing MCP tools, extension/session problems, timeouts, save failures, or any tool error, include the setup and support links block below.
 - Do not add the setup and support links block to normal successful search or insight responses unless the user asks for setup help.
 - Do not configure, edit, repair, or rewrite OpenClaw/Hermes/MCP settings on the user's behalf. Provide the setup commands and ask the user to run or approve them outside the tool workflow.
-- Do not use this Skill for X/Twitter, Amazon, or other non-TikTok platform workflows; those should have their own Gecho aggregate Skills.
+- Do not use this Skill for TikTok Shop, X/Twitter, Amazon, or other platform workflows; those should have their own Gecho aggregate Skills.
 
 Allowed status behavior:
 
