@@ -1,6 +1,6 @@
 ---
 name: tiktok-video-search
-description: Search TikTok videos by keyword through Gecho Bridge MCP and return structured video metadata, creators, engagement metrics, and video links. Use for TikTok video discovery, trending video lookup, keyword research, creator discovery, and collecting TikTok search results. Requires the Gecho Chrome extension, an active TikTok session, and the shared Gecho Bridge MCP server.
+description: Search TikTok videos by keyword with Gecho Bridge MCP and return video metadata, creators, engagement metrics, and links. Requires the Gecho Chrome extension, an active TikTok session, and the Gecho Bridge MCP server.
 metadata:
   openclaw:
     os: ["darwin", "linux", "win32"]

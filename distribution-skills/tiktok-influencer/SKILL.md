@@ -1,6 +1,6 @@
 ---
 name: tiktok-influencer
-description: Collect videos published by a TikTok influencer or creator through Gecho Bridge MCP and return structured video metadata, captions, engagement metrics, publish times, and video links when available. Use for TikTok creator research, influencer due diligence, creator content analysis, and collecting videos from a specific TikTok profile. Requires the Gecho Chrome extension, an active TikTok session, and the shared Gecho Bridge MCP server.
+description: Collect public videos from a TikTok creator with Gecho Bridge MCP. Returns video metadata, captions, engagement metrics, publish times, and links. Requires the Gecho Chrome extension, an active TikTok session, and the Gecho Bridge MCP server.
 metadata:
   openclaw:
     os: ["darwin", "linux", "win32"]
