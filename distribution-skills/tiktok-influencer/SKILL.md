@@ -98,7 +98,7 @@ Already installed Gecho Bridge? If `@gecho-ai/gecho-bridge-bundle` is installed 
 If this Skill is already installed in OpenClaw, configure the Gecho Bridge MCP server once:
 
 ```bash
-openclaw mcp set gecho-bridge '{"command":"npx","args":["-y","@gecho-ai/gecho-bridge@influencer"]}'
+openclaw mcp set gecho-bridge '{"command":"npx","args":["-y","@gecho-ai/gecho-bridge@latest"]}'
 openclaw gateway restart
 ```
 
@@ -127,14 +127,14 @@ openclaw gateway restart
 ### Hermes setup
 
 ```bash
-hermes mcp add gecho-bridge --command npx --args="-y" --args="@gecho-ai/gecho-bridge@influencer"
+hermes mcp add gecho-bridge --command npx --args="-y" --args="@gecho-ai/gecho-bridge@latest"
 hermes restart
 ```
 
 If Hermes cannot find `npx` even though Node.js is installed, use the absolute `npx` path. On many macOS Homebrew installs this is:
 
 ```bash
-hermes mcp add gecho-bridge --command /opt/homebrew/bin/npx --args="-y" --args="@gecho-ai/gecho-bridge@influencer"
+hermes mcp add gecho-bridge --command /opt/homebrew/bin/npx --args="-y" --args="@gecho-ai/gecho-bridge@latest"
 hermes restart
 ```
 
@@ -254,7 +254,7 @@ After installing, open the extension and log in to your Gecho account.
 OpenClaw MCP setup:
 
 ```bash
-openclaw mcp set gecho-bridge '{"command":"npx","args":["-y","@gecho-ai/gecho-bridge@influencer"]}'
+openclaw mcp set gecho-bridge '{"command":"npx","args":["-y","@gecho-ai/gecho-bridge@latest"]}'
 openclaw gateway restart
 ```
 
@@ -267,7 +267,7 @@ openclaw mcp list
 For Hermes:
 
 ```bash
-hermes mcp add gecho-bridge --command npx --args="-y" --args="@gecho-ai/gecho-bridge@influencer"
+hermes mcp add gecho-bridge --command npx --args="-y" --args="@gecho-ai/gecho-bridge@latest"
 hermes restart
 ```
 
@@ -357,4 +357,3 @@ This Skill must never:
 
 - Pretend the Skill page alone is enough when MCP is missing.
 - Use unofficial TikTok scraping workflows, invent creator videos, solve CAPTCHA, log in to TikTok, or operate the user's browser outside the official Gecho MCP workflow.
-
