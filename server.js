@@ -1556,28 +1556,114 @@ function applyOnboardingLogo(html) {
   return html.replace('<span class="mark"><i></i><i></i></span><span>Gecho</span>', logo);
 }
 
+function getOnboardingLocale(acceptLanguage) {
+  return /^zh(?:[-_,;]|$)/i.test(String(acceptLanguage || "").trim()) ? "zh" : "en";
+}
+
+const ONBOARDING_STATUS_MESSAGES = {
+  zh: {
+    idle: "正在检测浏览器扩展…",
+    browser_starting: "正在启动浏览器…",
+    waiting_user_install_or_enable: "请在扩展商店确认安装 Gecho 扩展。",
+    ready: "扩展已连接，正在继续你的任务。",
+    extension_not_connected: "扩展暂未连接；请确认已安装、启用并登录。"
+  },
+  en: {
+    idle: "Detecting the browser extension…",
+    browser_starting: "Starting the browser…",
+    waiting_user_install_or_enable: "Confirm the Gecho extension installation in the extension store.",
+    ready: "Extension connected. Continuing your task.",
+    extension_not_connected: "The extension is not connected. Make sure it is installed, enabled, and signed in."
+  }
+};
+
+function applyOnboardingLocale(html, locale) {
+  if (locale !== "en") return html;
+  const replacements = {
+    'lang="zh-CN"': 'lang="en"',
+    "Gecho · 浏览器准备中心": "Gecho · Browser Setup",
+    "首次使用 · 浏览器连接": "First use · Browser connection",
+    "让 AI 在你的<em>真实浏览器</em>中完成任务": "Let AI work in your <em>real browser</em>",
+    "安装 Gecho 扩展后，AI 将在你已登录的浏览器环境中完成检索、采集与分析。当前任务会自动继续，无需回到 Trae 再次执行。": "Install the Gecho extension and AI can search, collect, and analyze data in your signed-in browser. Your current task will continue automatically.",
+    "安装 Gecho 扩展": "Install Gecho extension",
+    "重新检测连接": "Check connection again",
+    "浏览器准备中": "Preparing browser",
+    "当前正在准备": "Preparing now",
+    "浏览器自动化任务": "Browser automation task",
+    "正在检测 Gecho 扩展…": "Detecting the Gecho extension…",
+    "请在当前浏览器完成安装，连接成功后会自动继续。": "Finish the installation in this browser and the task will continue automatically.",
+    "请使用安装扩展的同一个浏览器 Profile；如需登录平台，请先在浏览器中完成。": "Use the same browser Profile where the extension is installed. Sign in to the platform in the browser if needed.",
+    "准备好后，任务将自动继续": "Your task will continue automatically",
+    "无需手动复制链接或重新发起请求，Bridge 会在扩展连接后完成后续步骤。": "No need to copy links or start over. Bridge will finish the remaining steps after the extension connects.",
+    "步骤 01": "STEP 01",
+    "步骤 02": "STEP 02",
+    "步骤 03": "STEP 03",
+    "启动正确的浏览器": "Start the right browser",
+    "正在识别 Chrome 或 Edge。": "Detecting Chrome or Edge.",
+    "安装并连接扩展": "Install and connect the extension",
+    "点击上方安装按钮，在官方商店确认“添加至 Chrome”。": "Click Install above, then confirm “Add to Chrome” in the official store.",
+    "继续当前任务": "Continue the current task",
+    "扩展就绪后自动打开任务页面并执行。": "The extension will open the task page and run it when ready.",
+    "Gecho 如何帮助你工作": "How Gecho helps you work",
+    "连接的是你的浏览器环境，因此可以在保留登录状态与人工控制的前提下执行任务。": "Gecho works in your browser environment, preserving your sign-in and keeping you in control.",
+    "01 / 浏览器上下文": "01 / BROWSER CONTEXT",
+    "保留登录状态": "Keep your sign-in",
+    "在你自己的 Chrome 或 Edge Profile 中执行，避免重复登录与环境丢失。": "Run in your own Chrome or Edge Profile without repeated sign-ins or lost context.",
+    "02 / 自动恢复": "02 / AUTOMATIC RECOVERY",
+    "任务不中断": "Keep tasks moving",
+    "首次安装完成后，等待中的任务会自动恢复，无需回到对话重新发起。": "After installation, waiting tasks resume automatically without starting over in the chat.",
+    "03 / 始终可控": "03 / ALWAYS IN CONTROL",
+    "需要时人工接管": "Take over when needed",
+    "登录、验证码或平台验证仍由你在浏览器中确认，过程清晰可见。": "You confirm sign-ins, CAPTCHAs, and platform checks in the browser, with every step visible.",
+    "需要进一步了解 Gecho？": "Want to learn more about Gecho?",
+    "可访问官网了解产品与支持信息；连接问题也可在此页重新检测。": "Visit the website for product and support information, or check the connection again here.",
+    "访问官网": "Visit website",
+    "使用教程": "User guide",
+    "TikTok 搜索任务": "TikTok search task",
+    "TikTok 视频搜索任务": "TikTok video search task",
+    "Amazon 搜索任务": "Amazon search task",
+    "X 搜索任务": "X search task",
+    "平台搜索任务": "Platform search task",
+    "浏览器已连接": "Browser connected",
+    "等待扩展": "Waiting for extension",
+    "浏览器已<em>准备就绪</em>": "Browser is <em>ready</em>",
+    "Gecho 扩展已连接。Bridge 正在打开任务页面并继续当前操作。": "Gecho extension connected. Bridge is opening the task page and continuing your task.",
+    "连接已确认，当前任务将自动继续。": "Connection confirmed. Your current task will continue automatically.",
+    "请在官方商店完成安装，并保持浏览器窗口打开。": "Finish the installation in the official store and keep this browser window open.",
+    "Bridge 正在启动浏览器并检测扩展。": "Bridge is starting the browser and checking the extension.",
+    "扩展已连接": "Extension connected",
+    "正在打开任务页面并继续执行。": "Opening the task page and continuing.",
+    "已选择 ": "Selected ",
+    "，请使用此浏览器完成安装。": ", use this browser to complete the installation.",
+    "已打开官方扩展商店，请确认安装。": "The official extension store is open. Confirm the installation.",
+    "检测成功：扩展已连接。": "Connection successful: extension connected.",
+    "暂未检测到扩展，请完成安装或确认扩展已启用。": "Extension not detected yet. Finish installation or make sure it is enabled.",
+    "暂时无法连接 Bridge，请保持此页面打开后重试。": "Bridge is temporarily unavailable. Keep this page open and try again."
+  };
+  return Object.entries(replacements)
+    .sort((a, b) => b[0].length - a[0].length)
+    .reduce((result, [source, target]) => result.split(source).join(target), html);
+}
+
 // --- HTTP Server (供 Client 层调用) ---
 const server = http.createServer(async (req, res) => {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
 
   if (req.method === "GET" && req.url === ONBOARDING_PATH) {
     res.setHeader("Content-Type", "text/html; charset=utf-8");
-    return res.end(applyOnboardingLogo(renderOnboardingPage()));
+    const locale = getOnboardingLocale(req.headers["accept-language"]);
+    return res.end(applyOnboardingLocale(applyOnboardingLogo(renderOnboardingPage()), locale));
   }
 
   if (req.method === "GET" && req.url === "/onboarding/status") {
+    const locale = getOnboardingLocale(req.headers["accept-language"]);
     const preferredBrowser = normalizeBrowserName(onboardingRuntime.browser) || getBrowserToLaunch();
     const connected = !!getOpenExtensionConnection(preferredBrowser);
     const stage = connected ? "ready" : onboardingRuntime.stage;
-    const messages = {
-      idle: "正在检测浏览器扩展…",
-      browser_starting: "正在启动浏览器…",
-      waiting_user_install_or_enable: "请在扩展商店确认安装 Gecho 扩展。",
-      ready: "扩展已连接，正在继续你的任务。",
-      extension_not_connected: "扩展暂未连接；请确认已安装、启用并登录。"
-    };
+    const messages = ONBOARDING_STATUS_MESSAGES[locale];
     return res.end(JSON.stringify({
       stage,
+      locale,
       browser: preferredBrowser || null,
       extensionConnected: connected,
       action: onboardingRuntime.action || null,
