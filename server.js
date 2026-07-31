@@ -49,12 +49,14 @@ const AUTO_LAUNCH_BROWSER_COOLDOWN_MS = Math.max(0, Number(process["env"].GECHO_
 
 let extensionSocket = null;
 let wss = null;
+const extensionConnections = new Map();
+let extensionConnectionCounter = 1;
 let lastExtensionConnectedAt = 0;
 let lastBrowserConnection = null;
 let browserLaunchPromise = null;
 let lastBrowserLaunchAt = 0;
 let lastStoreOpenAt = 0;
-let bridgeOwnedBrowserSession = null;
+const bridgeOwnedBrowserSessions = new Map();
 let bridgeBrowserSessionCounter = 1;
 const pendingRequests = new Map();
 let requestIdCounter = 1;
@@ -139,29 +141,23 @@ async function writeFileAtomicAsync(targetPath, content) {
   }
 }
 
-function getOpenExtensionSocket() {
-  if (extensionSocket && extensionSocket.readyState === 1) {
-    return extensionSocket;
-  }
-
-  // Chrome can briefly create overlapping WebSocket connections while an
-  // extension service worker is starting or reconnecting. Do not rely on a
-  // single mutable reference in that window: recover an open client directly
-  // from the WebSocket server before declaring the extension disconnected.
-  if (wss) {
-    for (const socket of wss.clients) {
-      if (socket.readyState === 1) {
-        extensionSocket = socket;
-        return socket;
-      }
-    }
-  }
-
-  return null;
+function getOpenExtensionConnection(preferredBrowser = "") {
+  const normalizedBrowser = normalizeBrowserName(preferredBrowser);
+  const candidates = Array.from(extensionConnections.values())
+    .filter((connection) => connection.socket.readyState === 1)
+    .filter((connection) => !normalizedBrowser || connection.browser === normalizedBrowser)
+    .sort((a, b) => b.connectedAt - a.connectedAt);
+  return candidates[0] || null;
 }
 
-function isExtensionConnected() {
-  return !!getOpenExtensionSocket();
+function getOpenExtensionSocket(preferredBrowser = "") {
+  const connection = getOpenExtensionConnection(preferredBrowser);
+  extensionSocket = connection?.socket || null;
+  return extensionSocket;
+}
+
+function isExtensionConnected(preferredBrowser = "") {
+  return !!getOpenExtensionSocket(preferredBrowser);
 }
 
 function normalizeBrowserName(value) {
@@ -414,10 +410,20 @@ function getBrowserWindowCount(browser) {
   }
 }
 
-function retainBridgeOwnedBrowser() {
-  if (!bridgeOwnedBrowserSession) return "";
-  bridgeOwnedBrowserSession.activeTaskCount += 1;
-  return bridgeOwnedBrowserSession.id;
+function retainBridgeOwnedBrowser(preferredSessionId = "", browser = "") {
+  let session = preferredSessionId ? bridgeOwnedBrowserSessions.get(preferredSessionId) : null;
+  if (!session && browser) {
+    session = Array.from(bridgeOwnedBrowserSessions.values())
+      .filter((candidate) => candidate.browser === browser)
+      .sort((a, b) => b.startedAt - a.startedAt)[0] || null;
+  }
+  if (!session) return "";
+  if (session.closeTimer) {
+    clearTimeout(session.closeTimer);
+    session.closeTimer = null;
+  }
+  session.activeTaskCount += 1;
+  return session.id;
 }
 
 function closeBrowserApplication(browser, closeMode = "application") {
@@ -445,14 +451,18 @@ function closeBrowserApplication(browser, closeMode = "application") {
 }
 
 function releaseBridgeOwnedBrowser(sessionId, reason) {
-  if (!sessionId || !bridgeOwnedBrowserSession || bridgeOwnedBrowserSession.id !== sessionId) return;
-  bridgeOwnedBrowserSession.activeTaskCount = Math.max(0, bridgeOwnedBrowserSession.activeTaskCount - 1);
-  if (!AUTO_CLOSE_LAUNCHED_BROWSER || bridgeOwnedBrowserSession.activeTaskCount > 0) return;
-
-  const session = bridgeOwnedBrowserSession;
-  bridgeOwnedBrowserSession = null;
+  const session = sessionId ? bridgeOwnedBrowserSessions.get(sessionId) : null;
+  if (!session) return;
+  session.activeTaskCount = Math.max(0, session.activeTaskCount - 1);
+  if (!AUTO_CLOSE_LAUNCHED_BROWSER || session.activeTaskCount > 0 || session.closeTimer) return;
   traceBridgeEvent("bridge_browser_closing", { browser: session.browser, reason });
-  setTimeout(() => closeBrowserApplication(session.browser, session.closeMode), 300).unref?.();
+  session.closeTimer = setTimeout(() => {
+    if (session.activeTaskCount === 0) {
+      closeBrowserApplication(session.browser, session.closeMode);
+      bridgeOwnedBrowserSessions.delete(session.id);
+    }
+  }, 300);
+  session.closeTimer.unref?.();
 }
 
 function getBrowserLaunchSpec(browser, targetUrls = ["about:blank"]) {
@@ -565,14 +575,16 @@ async function launchBrowserForExtension(action, targetUrlsOverride = null) {
         ? browserWindowCount === 0
         : !browserWasRunning;
       if (ownsLaunchedWindow) {
-        bridgeOwnedBrowserSession = {
+        const session = {
           id: `bridge-browser-${Date.now()}-${bridgeBrowserSessionCounter++}`,
           browser,
           activeTaskCount: 0,
           startedAt: Date.now(),
-          closeMode: process.platform === "darwin" ? "window" : "application"
+          closeMode: process.platform === "darwin" ? "window" : "application",
+          closeTimer: null
         };
-        bridgeBrowserSessionId = bridgeOwnedBrowserSession.id;
+        bridgeOwnedBrowserSessions.set(session.id, session);
+        bridgeBrowserSessionId = session.id;
       }
       resolve({ attempted: true, launched: true, browser, targetUrls, browserWasRunning, browserWindowCount, bridgeBrowserSessionId });
     });
@@ -585,14 +597,14 @@ async function launchBrowserForExtension(action, targetUrlsOverride = null) {
   }
 }
 
-function waitForExtensionConnection(timeoutMs = EXTENSION_CONNECT_TIMEOUT_MS) {
+function waitForExtensionConnection(timeoutMs = EXTENSION_CONNECT_TIMEOUT_MS, preferredBrowser = "") {
   return new Promise((resolve) => {
-    if (isExtensionConnected()) return resolve(true);
+    if (isExtensionConnected(preferredBrowser)) return resolve(true);
 
     let waited = 0;
     const checkTimer = setInterval(() => {
       waited += EXTENSION_CONNECT_POLL_MS;
-      if (isExtensionConnected()) {
+      if (isExtensionConnected(preferredBrowser)) {
         clearInterval(checkTimer);
         resolve(true);
       } else if (waited >= timeoutMs) {
@@ -603,25 +615,27 @@ function waitForExtensionConnection(timeoutMs = EXTENSION_CONNECT_TIMEOUT_MS) {
   });
 }
 
-async function waitForExtensionReadyGracePeriod() {
+async function waitForExtensionReadyGracePeriod(preferredBrowser = "") {
   const remainingMs = Math.max(0, EXTENSION_READY_GRACE_MS - (Date.now() - lastExtensionConnectedAt));
-  if (remainingMs === 0) return isExtensionConnected();
+  if (remainingMs === 0) return isExtensionConnected(preferredBrowser);
 
   traceBridgeEvent("extension_ready_grace_wait_started", { remainingMs });
   await new Promise(resolve => setTimeout(resolve, remainingMs));
-  const connected = isExtensionConnected();
+  const connected = isExtensionConnected(preferredBrowser);
   traceBridgeEvent("extension_ready_grace_wait_finished", { connected });
   return connected;
 }
 
 async function ensureExtensionConnection(action) {
-  if (isExtensionConnected()) {
+  const preferredBrowser = getBrowserToLaunch();
+  const existingConnection = getOpenExtensionConnection(preferredBrowser);
+  if (existingConnection) {
     traceBridgeEvent("extension_already_connected", { action });
-    return { connected: true, launch: { attempted: false, launched: false, reason: "already_connected" } };
+    return { connected: true, socket: existingConnection.socket, browser: existingConnection.browser, launch: { attempted: false, launched: false, reason: "already_connected" } };
   }
 
   traceBridgeEvent("extension_connection_wait_started", { action });
-  const browserToLaunch = getBrowserToLaunch();
+  const browserToLaunch = preferredBrowser;
   // 安装状态不能靠旧的本地记录判断：用户可能卸载、禁用，或换了 Profile。
   // 先只打开业务页并等待扩展握手；未握手时才打开商店页引导安装。
   const initialTargetUrls = [getBrowserTargetUrl(action)];
@@ -632,7 +646,7 @@ async function ensureExtensionConnection(action) {
     `⏳ Extension not connected yet. Waiting up to ${EXTENSION_RECONNECT_PROBE_TIMEOUT_MS / 1000}s ` +
     `(action: ${action}, browser: ${launch.browser || "unknown"})`
   );
-  let connected = await waitForExtensionConnection(Math.min(EXTENSION_CONNECT_TIMEOUT_MS, EXTENSION_RECONNECT_PROBE_TIMEOUT_MS));
+  let connected = await waitForExtensionConnection(Math.min(EXTENSION_CONNECT_TIMEOUT_MS, EXTENSION_RECONNECT_PROBE_TIMEOUT_MS), launch.browser);
 
   if (!connected && launch.browser) {
     phase = "waiting_user_install_or_enable";
@@ -648,11 +662,12 @@ async function ensureExtensionConnection(action) {
         storeUrl: onboarding.url,
         timeoutMs: EXTENSION_ONBOARDING_TIMEOUT_MS
       });
-      connected = await waitForExtensionConnection(EXTENSION_ONBOARDING_TIMEOUT_MS);
+      connected = await waitForExtensionConnection(EXTENSION_ONBOARDING_TIMEOUT_MS, launch.browser);
     }
   }
 
-  const ready = connected && await waitForExtensionReadyGracePeriod();
+  const ready = connected && await waitForExtensionReadyGracePeriod(launch.browser);
+  const selectedConnection = ready ? getOpenExtensionConnection(launch.browser) : null;
   if (ready) {
     persistOnboardingState({ completedAt: Date.now(), completedBrowser: lastBrowserConnection?.browser || launch.browser || "" });
     phase = "ready";
@@ -668,7 +683,7 @@ async function ensureExtensionConnection(action) {
     browser: launch.browser || "",
     launchReason: launch.reason || ""
   });
-  return { connected: ready, launch, onboarding, phase };
+  return { connected: ready && !!selectedConnection, socket: selectedConnection?.socket || null, browser: selectedConnection?.browser || launch.browser || "", launch, onboarding, phase };
 }
 
 function extensionConnectionError(connection) {
@@ -1208,7 +1223,7 @@ async function runAsyncAttempt({ jobId, action, params, payload, attempt }) {
     });
     return;
   }
-  const bridgeBrowserSessionId = retainBridgeOwnedBrowser();
+  const bridgeBrowserSessionId = retainBridgeOwnedBrowser(connection.launch?.bridgeBrowserSessionId, connection.browser);
 
   const requestId = `${jobId}:a${attempt}`;
   lastDispatchedRequestId = requestId;
@@ -1256,7 +1271,7 @@ async function runAsyncAttempt({ jobId, action, params, payload, attempt }) {
     }
   });
 
-  extensionSocket.send(JSON.stringify({
+  connection.socket.send(JSON.stringify({
     method: "execute_action",
     params: { action: action, params: params },
     requestId
@@ -1312,11 +1327,14 @@ wss = new WebSocketServer({ port: WS_PORT, host: "127.0.0.1" });
 
 wss.on("connection", (ws, request) => {
   const browser = detectBrowserFromUserAgent(request?.headers?.["user-agent"]);
+  const connectionId = `connection-${Date.now()}-${extensionConnectionCounter++}`;
+  const connection = { id: connectionId, socket: ws, browser, connectedAt: Date.now(), installationId: "" };
+  extensionConnections.set(connectionId, connection);
   if (browser) persistLastBrowserConnection(browser);
   console.log(`✅ Browser extension connected to Service Layer${browser ? ` (${browser})` : ""}`);
   extensionSocket = ws;
   lastExtensionConnectedAt = Date.now();
-  traceBridgeEvent("extension_connected", { browser, clientCount: wss.clients.size });
+  traceBridgeEvent("extension_connected", { browser, connectionId, clientCount: wss.clients.size });
 
   ws.on("message", (message) => {
     try {
@@ -1345,6 +1363,8 @@ wss.on("connection", (ws, request) => {
           profileId: normalizeProfileId(identity.profileId || identity.profileDirectory),
           installationId: String(identity.installationId || identity.profileInstallationId || "").slice(0, 160)
         };
+        connection.browser = handshakeBrowser;
+        connection.installationId = ws.extensionIdentity.installationId;
         traceBridgeEvent("extension_handshake", { browser: handshakeBrowser, profileId: ws.extensionIdentity.profileId });
         return;
       }
@@ -1404,7 +1424,8 @@ wss.on("connection", (ws, request) => {
 
   ws.on("close", () => {
     console.log("❌ Browser extension disconnected");
-    traceBridgeEvent("extension_disconnected", { clientCount: wss.clients.size });
+    extensionConnections.delete(connectionId);
+    traceBridgeEvent("extension_disconnected", { browser: connection.browser, connectionId, clientCount: wss.clients.size });
     if (extensionSocket === ws) extensionSocket = null;
   });
 
@@ -1590,7 +1611,7 @@ const server = http.createServer(async (req, res) => {
           res.statusCode = 503;
           return res.end(JSON.stringify({ error: extensionConnectionError(connection) }));
         }
-        bridgeBrowserSessionId = retainBridgeOwnedBrowser();
+        bridgeBrowserSessionId = retainBridgeOwnedBrowser(connection.launch?.bridgeBrowserSessionId, connection.browser);
 
         console.log(`🚀 Dispatching action: [${action}]`);
         const requestId = `svc-${Date.now()}-${requestIdCounter++}`;
@@ -1614,7 +1635,7 @@ const server = http.createServer(async (req, res) => {
 
 
           
-          extensionSocket.send(JSON.stringify({
+          connection.socket.send(JSON.stringify({
             method: "execute_action",
             params: { 
               action: action, 
