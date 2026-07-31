@@ -14,13 +14,14 @@ const fs = require("fs");
 const path = require("path");
 const { spawn, spawnSync } = require("child_process");
 const packageJson = require("./package.json");
+const { getDefaultDataDir } = require("./data-dir");
 
 const WS_PORT = Number(process["env"].GECHO_WS_PORT || 18792);
 const HTTP_PORT = Number(process["env"].GECHO_HTTP_PORT || 18793);
 const ONBOARDING_PATH = "/onboarding";
 const SERVICE_PROTOCOL_VERSION = 2;
 const SERVICE_STARTED_AT = Date.now();
-const DEFAULT_DATA_DIR = path.join(__dirname, "data");
+const DEFAULT_DATA_DIR = getDefaultDataDir();
 const JOBS_DIR = process["env"].GECHO_DATA_DIR || DEFAULT_DATA_DIR;
 const JOBS_STORE_PATH = path.join(JOBS_DIR, ".async_jobs.json");
 const JOB_DETAILS_DIR = path.join(JOBS_DIR, "jobs");
@@ -1926,7 +1927,7 @@ const server = http.createServer(async (req, res) => {
         const { action: _a, ...params } = payload;
 
         // 预先计算保存路径，以便立刻返回给客户端
-        let dataDir = payload.save_dir || process["env"].GECHO_DATA_DIR || path.join(__dirname, "data");
+        let dataDir = payload.save_dir || process["env"].GECHO_DATA_DIR || JOBS_DIR;
         let anticipatedSavePath = "";
         const fileNameSeed = params.uniqueId || params.query || params.product_url || params.url || action;
         const safeName = toSafeFileName(fileNameSeed);
@@ -2028,7 +2029,7 @@ const server = http.createServer(async (req, res) => {
         let savePath = "";
         let saveWarning = "";
         if (Array.isArray(result) && result.length > 0) {
-          let dataDir = payload.save_dir || process["env"].GECHO_DATA_DIR || path.join(__dirname, "data");
+          let dataDir = payload.save_dir || process["env"].GECHO_DATA_DIR || JOBS_DIR;
           let fixedPath;
           if (dataDir.toLowerCase().endsWith(".json") || dataDir.toLowerCase().endsWith(".csv")) {
             // 如果传入的 save_dir 误填成了文件路径，则将其作为最终文件路径，并提取所在目录

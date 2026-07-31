@@ -21,6 +21,7 @@ const cpModule = "child" + "_process";
 const { spawn } = require(cpModule);
 const path = require("path");
 const packageJson = require("./package.json");
+const { getDefaultDataDir } = require("./data-dir");
 
 const SERVICE_BASE_URL = "http://127.0.0.1:18793";
 const HTTP_SERVICE_URL = `${SERVICE_BASE_URL}/search`;
@@ -89,7 +90,7 @@ async function checkServiceAlive() {
 }
 
 function getExpectedDataDir() {
-  return process["env"].GECHO_DATA_DIR || path.join(__dirname, "data");
+  return process["env"].GECHO_DATA_DIR || getDefaultDataDir();
 }
 
 function getServiceSourceMtimeMs() {

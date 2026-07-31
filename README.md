@@ -174,7 +174,7 @@ To better manage data assets, the large amount of scraped results needs to be sa
 
 1. **Session level (highest priority)**: Ask the AI to specify `save_dir` directly during the conversation (must be an absolute path).
 2. **Global level**: Configure the environment variable `GECHO_DATA_DIR` to specify the default data save directory.
-3. **Default fallback**: If not specified, data is saved to the tool's built-in `./data` directory by default.
+3. **Default fallback**: If not specified, data is saved to Gecho's stable per-user application data directory, independent of the npm/npx cache directory.
 
 *(Note: All saved filenames are automatically sanitized to avoid write failures caused by invalid characters.)*
 
