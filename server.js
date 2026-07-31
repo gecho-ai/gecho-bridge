@@ -12,7 +12,7 @@ const { WebSocketServer } = require("ws");
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-const { spawn } = require("child_process");
+const { spawn, spawnSync } = require("child_process");
 const packageJson = require("./package.json");
 
 const WS_PORT = Number(process["env"].GECHO_WS_PORT || 18792);
@@ -25,13 +25,25 @@ const JOBS_STORE_PATH = path.join(JOBS_DIR, ".async_jobs.json");
 const JOB_DETAILS_DIR = path.join(JOBS_DIR, "jobs");
 const REQUEST_INDEX_PATH = path.join(JOBS_DIR, ".async_request_index.json");
 const BROWSER_CONNECTION_PATH = path.join(JOBS_DIR, ".browser_connection.json");
+const ONBOARDING_STATE_PATH = path.join(JOBS_DIR, ".extension_onboarding.json");
+const GECHO_EXTENSION_ID = "pjkaeenpekolahdbccjfenjcmanemlbj";
+const CHROME_EXTENSION_STORE_URL = `https://chromewebstore.google.com/detail/gecho/${GECHO_EXTENSION_ID}`;
+// Gecho is currently distributed through Chrome Web Store. Edge can install
+// this listing after the user confirms Edge's one-time "allow other stores"
+// prompt, so do not send users to an unrelated Edge Add-ons search page.
+const EDGE_EXTENSION_STORE_URL = CHROME_EXTENSION_STORE_URL;
 const JOB_TTL_MS = Number(process["env"].GECHO_JOB_TTL_MS || 3 * 24 * 60 * 60 * 1000); // 默认 3 天
 const MAX_PERSISTED_JOBS = Number(process["env"].GECHO_MAX_PERSISTED_JOBS || 2000);
 const CLEANUP_INTERVAL_MS = Number(process["env"].GECHO_CLEANUP_INTERVAL_MS || 10 * 60 * 1000);
 const EXTENSION_CONNECT_TIMEOUT_MS = Math.max(1000, Number(process["env"].GECHO_EXTENSION_CONNECT_TIMEOUT_MS || 30000));
+const EXTENSION_RECONNECT_PROBE_TIMEOUT_MS = Math.max(1000, Number(process["env"].GECHO_EXTENSION_RECONNECT_PROBE_TIMEOUT_MS || 10000));
+const EXTENSION_ONBOARDING_TIMEOUT_MS = Math.max(5000, Number(process["env"].GECHO_EXTENSION_ONBOARDING_TIMEOUT_MS || 120000));
 const EXTENSION_CONNECT_POLL_MS = 500;
 const EXTENSION_READY_GRACE_MS = Math.max(0, Number(process["env"].GECHO_EXTENSION_READY_GRACE_MS || 1500));
 const AUTO_LAUNCH_BROWSER = process["env"].GECHO_AUTO_LAUNCH_BROWSER !== "0";
+const AUTO_OPEN_EXTENSION_STORE = process["env"].GECHO_AUTO_OPEN_EXTENSION_STORE !== "0";
+const AUTO_CLOSE_LAUNCHED_BROWSER = process["env"].GECHO_AUTO_CLOSE_LAUNCHED_BROWSER !== "0";
+const EXTENSION_STORE_REOPEN_COOLDOWN_MS = Math.max(0, Number(process["env"].GECHO_EXTENSION_STORE_REOPEN_COOLDOWN_MS || 5 * 60 * 1000));
 const AUTO_LAUNCH_BROWSER_DRY_RUN = process["env"].GECHO_AUTO_LAUNCH_BROWSER_DRY_RUN === "1";
 const AUTO_LAUNCH_BROWSER_COOLDOWN_MS = Math.max(0, Number(process["env"].GECHO_AUTO_LAUNCH_BROWSER_COOLDOWN_MS || 10000));
 
@@ -41,6 +53,9 @@ let lastExtensionConnectedAt = 0;
 let lastBrowserConnection = null;
 let browserLaunchPromise = null;
 let lastBrowserLaunchAt = 0;
+let lastStoreOpenAt = 0;
+let bridgeOwnedBrowserSession = null;
+let bridgeBrowserSessionCounter = 1;
 const pendingRequests = new Map();
 let requestIdCounter = 1;
 let shuttingDown = false;
@@ -171,7 +186,11 @@ function loadLastBrowserConnection() {
     if (!browser) return null;
     return {
       browser,
-      detectedAt: Number(parsed.detectedAt || 0) || 0
+      detectedAt: Number(parsed.detectedAt || 0) || 0,
+      profileId: normalizeProfileId(parsed.profileId),
+      profileDisplayName: String(parsed.profileDisplayName || "").slice(0, 120),
+      installationId: String(parsed.installationId || "").slice(0, 160),
+      extensionVersion: String(parsed.extensionVersion || "").slice(0, 80)
     };
   } catch (e) {
     console.warn(`Failed to load last browser connection: ${e.message}`);
@@ -179,15 +198,95 @@ function loadLastBrowserConnection() {
   }
 }
 
-function persistLastBrowserConnection(browser) {
+function normalizeProfileId(value) {
+  const profileId = String(value || "").trim();
+  return /^(Default|Profile [0-9]+)$/.test(profileId) ? profileId : "";
+}
+
+function persistLastBrowserConnection(browser, details = {}) {
   const normalized = normalizeBrowserName(browser);
   if (!normalized) return;
-  lastBrowserConnection = { browser: normalized, detectedAt: Date.now() };
+  lastBrowserConnection = {
+    ...(lastBrowserConnection || {}),
+    browser: normalized,
+    detectedAt: Date.now(),
+    profileId: normalizeProfileId(details.profileId) || lastBrowserConnection?.profileId || "",
+    profileDisplayName: String(details.profileDisplayName || lastBrowserConnection?.profileDisplayName || "").slice(0, 120),
+    installationId: String(details.installationId || lastBrowserConnection?.installationId || "").slice(0, 160),
+    extensionVersion: String(details.extensionVersion || lastBrowserConnection?.extensionVersion || "").slice(0, 80)
+  };
   try {
     ensureJobsDirReady();
     writeFileAtomic(BROWSER_CONNECTION_PATH, JSON.stringify(lastBrowserConnection));
   } catch (e) {
     console.warn(`Failed to persist last browser connection: ${e.message}`);
+  }
+}
+
+function loadOnboardingState() {
+  try {
+    if (!fs.existsSync(ONBOARDING_STATE_PATH)) return {};
+    return JSON.parse(fs.readFileSync(ONBOARDING_STATE_PATH, "utf8") || "{}");
+  } catch (_e) {
+    return {};
+  }
+}
+
+function persistOnboardingState(update) {
+  try {
+    ensureJobsDirReady();
+    const state = { ...loadOnboardingState(), ...update };
+    writeFileAtomic(ONBOARDING_STATE_PATH, JSON.stringify(state));
+    return state;
+  } catch (e) {
+    console.warn(`Failed to persist onboarding state: ${e.message}`);
+    return null;
+  }
+}
+
+function getExtensionStoreUrl(browser) {
+  return normalizeBrowserName(browser) === "edge"
+    ? EDGE_EXTENSION_STORE_URL
+    : CHROME_EXTENSION_STORE_URL;
+}
+
+function openExternalUrl(url, browser = "") {
+  if (process.platform === "darwin") {
+    const appName = normalizeBrowserName(browser) === "edge" ? "Microsoft Edge" : "Google Chrome";
+    // 指定浏览器应用打开 URL，避免系统把商店页交给另一个默认浏览器或放到后台。
+    return spawn("open", ["-a", appName, url], { detached: true, stdio: "ignore" });
+  }
+  if (process.platform === "win32") {
+    const normalized = normalizeBrowserName(browser);
+    const executable = normalized === "edge" ? "msedge.exe" : "chrome.exe";
+    const browserPath = getWindowsBrowserExecutable(normalized);
+    if (browserPath) return spawn(browserPath, [url], { detached: true, windowsHide: true, stdio: "ignore" });
+    return spawn("cmd.exe", ["/d", "/s", "/c", "start", "", executable, url], { detached: true, windowsHide: true, stdio: "ignore" });
+  }
+  const normalized = normalizeBrowserName(browser);
+  const executable = normalized === "edge" ? "microsoft-edge" : "google-chrome";
+  return spawn(findFirstCommand([executable]) || "xdg-open", [url], { detached: true, stdio: "ignore" });
+}
+
+function openExtensionStorePage(browser) {
+  if (!AUTO_OPEN_EXTENSION_STORE) return { opened: false, reason: "disabled", url: getExtensionStoreUrl(browser) };
+  if (!normalizeBrowserName(browser)) return { opened: false, reason: "browser_unknown", url: "" };
+  const url = getExtensionStoreUrl(browser);
+  const state = loadOnboardingState();
+  const lastOpenedAt = Math.max(Number(state.storeOpenedAt || 0), lastStoreOpenAt);
+  const isSameStoreTarget = state.browser === browser && state.storeUrl === url;
+  if (isSameStoreTarget && Date.now() - lastOpenedAt < EXTENSION_STORE_REOPEN_COOLDOWN_MS) {
+    return { opened: false, reason: "cooldown", url };
+  }
+  try {
+    const child = openExternalUrl(url, browser);
+    child.unref();
+    lastStoreOpenAt = Date.now();
+    persistOnboardingState({ storeOpenedAt: lastStoreOpenAt, storeUrl: url, browser, storeOpenCount: Number(state.storeOpenCount || 0) + 1 });
+    traceBridgeEvent("extension_store_opened", { browser, url });
+    return { opened: true, url };
+  } catch (e) {
+    return { opened: false, reason: e.message, url };
   }
 }
 
@@ -265,16 +364,122 @@ function getBrowserToLaunch() {
   return "";
 }
 
-function getBrowserLaunchSpec(browser) {
+function getBrowserTargetUrl(action) {
+  const normalizedAction = String(action || "").trim().toLowerCase();
+  if (normalizedAction.includes("tiktok") || normalizedAction === "search") {
+    return "https://www.tiktok.com/";
+  }
+  if (normalizedAction.includes("amazon")) {
+    return "https://www.amazon.com/";
+  }
+  if (normalizedAction.includes("x_") || normalizedAction === "x_search") {
+    return "https://x.com/";
+  }
+  return "about:blank";
+}
+
+function isBrowserRunning(browser) {
+  const normalized = normalizeBrowserName(browser);
+  if (!normalized) return false;
+  try {
+    if (process.platform === "darwin") {
+      const executable = normalized === "edge"
+        ? "/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
+        : "/Google Chrome.app/Contents/MacOS/Google Chrome";
+      return spawnSync("pgrep", ["-f", executable], { stdio: "ignore" }).status === 0;
+    }
+    if (process.platform === "win32") {
+      const executable = normalized === "edge" ? "msedge.exe" : "chrome.exe";
+      const result = spawnSync("tasklist", ["/FI", `IMAGENAME eq ${executable}`, "/NH"], { encoding: "utf8", windowsHide: true });
+      return String(result.stdout || "").toLowerCase().includes(executable);
+    }
+    const executable = normalized === "edge" ? "microsoft-edge" : "google-chrome";
+    return spawnSync("pgrep", ["-f", executable], { stdio: "ignore" }).status === 0;
+  } catch (_e) {
+    return false;
+  }
+}
+
+function getBrowserWindowCount(browser) {
+  if (process.platform !== "darwin") return null;
+  if (!isBrowserRunning(browser)) return 0;
+  const appName = normalizeBrowserName(browser) === "edge" ? "Microsoft Edge" : "Google Chrome";
+  try {
+    const result = spawnSync("osascript", ["-e", `tell application \"${appName}\" to count windows`], { encoding: "utf8" });
+    if (result.status !== 0) return null;
+    const count = Number(String(result.stdout || "").trim());
+    return Number.isFinite(count) ? count : null;
+  } catch (_e) {
+    return null;
+  }
+}
+
+function retainBridgeOwnedBrowser() {
+  if (!bridgeOwnedBrowserSession) return "";
+  bridgeOwnedBrowserSession.activeTaskCount += 1;
+  return bridgeOwnedBrowserSession.id;
+}
+
+function closeBrowserApplication(browser, closeMode = "application") {
+  const normalized = normalizeBrowserName(browser);
+  if (!normalized) return;
+  if (process.platform === "darwin") {
+    if (closeMode === "window") {
+      const appName = normalized === "edge" ? "Microsoft Edge" : "Google Chrome";
+      spawn("osascript", ["-e", `tell application \"${appName}\" to close front window`], { detached: true, stdio: "ignore" }).unref();
+      return;
+    }
+    const executable = normalized === "edge"
+      ? "/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
+      : "/Google Chrome.app/Contents/MacOS/Google Chrome";
+    spawn("pkill", ["-TERM", "-f", executable], { detached: true, stdio: "ignore" }).unref();
+    return;
+  }
+  if (process.platform === "win32") {
+    const executable = normalized === "edge" ? "msedge.exe" : "chrome.exe";
+    spawn("taskkill", ["/IM", executable, "/T", "/F"], { detached: true, windowsHide: true, stdio: "ignore" }).unref();
+    return;
+  }
+  const executable = normalized === "edge" ? "microsoft-edge" : "google-chrome";
+  spawn("pkill", ["-TERM", "-f", executable], { detached: true, stdio: "ignore" }).unref();
+}
+
+function releaseBridgeOwnedBrowser(sessionId, reason) {
+  if (!sessionId || !bridgeOwnedBrowserSession || bridgeOwnedBrowserSession.id !== sessionId) return;
+  bridgeOwnedBrowserSession.activeTaskCount = Math.max(0, bridgeOwnedBrowserSession.activeTaskCount - 1);
+  if (!AUTO_CLOSE_LAUNCHED_BROWSER || bridgeOwnedBrowserSession.activeTaskCount > 0) return;
+
+  const session = bridgeOwnedBrowserSession;
+  bridgeOwnedBrowserSession = null;
+  traceBridgeEvent("bridge_browser_closing", { browser: session.browser, reason });
+  setTimeout(() => closeBrowserApplication(session.browser, session.closeMode), 300).unref?.();
+}
+
+function getBrowserLaunchSpec(browser, targetUrls = ["about:blank"]) {
   const normalized = normalizeBrowserName(browser);
   const appName = normalized === "edge" ? "Microsoft Edge" : "Google Chrome";
+  const profileId = normalizeProfileId(lastBrowserConnection?.profileId);
+  const profileArgs = profileId ? ["--profile-directory", profileId] : [];
+  const urls = (Array.isArray(targetUrls) ? targetUrls : [targetUrls])
+    .filter((url) => typeof url === "string" && /^(https?:|about:)/.test(url));
+  const launchUrls = urls.length > 0 ? urls : ["about:blank"];
 
   if (!normalized) return null;
 
   if (process.platform === "darwin") {
+    // When no specific profile is required, hand URLs to the app directly.
+    // macOS/Chrome then opens them as tabs in the existing front window (or in
+    // one newly-created window) instead of silently ignoring --args for an
+    // already-running Chrome process.
+    if (!profileId) {
+      return {
+        command: "open",
+        args: ["-a", appName, ...launchUrls]
+      };
+    }
     return {
       command: "open",
-      args: ["-a", appName, "--args", "--new-window", "about:blank"]
+      args: ["-a", appName, "--args", ...profileArgs, "--new-window", ...launchUrls]
     };
   }
 
@@ -283,14 +488,14 @@ function getBrowserLaunchSpec(browser) {
     if (browserPath) {
       return {
         command: browserPath,
-        args: ["--new-window", "about:blank"]
+        args: [...profileArgs, "--new-window", ...launchUrls]
       };
     }
 
     const executable = normalized === "edge" ? "msedge" : "chrome";
     return {
       command: "cmd.exe",
-      args: ["/d", "/s", "/c", "start", "", executable, "--new-window", "about:blank"]
+      args: ["/d", "/s", "/c", "start", "", executable, ...profileArgs, "--new-window", ...launchUrls]
     };
   }
 
@@ -302,17 +507,18 @@ function getBrowserLaunchSpec(browser) {
 
   return {
     command: executable,
-    args: ["--new-window", "about:blank"]
+    args: [...profileArgs, "--new-window", ...launchUrls]
   };
 }
 
-async function launchBrowserForExtension() {
+async function launchBrowserForExtension(action, targetUrlsOverride = null) {
   if (!AUTO_LAUNCH_BROWSER) {
     return { attempted: false, launched: false, reason: "disabled" };
   }
 
   const browser = getBrowserToLaunch();
-  const spec = getBrowserLaunchSpec(browser);
+  const targetUrls = targetUrlsOverride || [getBrowserTargetUrl(action)];
+  const spec = getBrowserLaunchSpec(browser, targetUrls);
   if (!spec) {
     return { attempted: false, launched: false, reason: "browser_unknown" };
   }
@@ -322,11 +528,13 @@ async function launchBrowserForExtension() {
     return { attempted: false, launched: false, browser, reason: "cooldown" };
   }
   lastBrowserLaunchAt = Date.now();
+  const browserWasRunning = isBrowserRunning(browser);
+  const browserWindowCount = getBrowserWindowCount(browser);
 
   browserLaunchPromise = new Promise((resolve) => {
     if (AUTO_LAUNCH_BROWSER_DRY_RUN) {
       console.log(`🧪 Browser launch dry run: ${browser}`);
-      resolve({ attempted: true, launched: true, browser, dryRun: true });
+      resolve({ attempted: true, launched: true, browser, targetUrls, browserWasRunning, dryRun: true });
       return;
     }
 
@@ -351,8 +559,22 @@ async function launchBrowserForExtension() {
     });
     child.once("spawn", () => {
       child.unref();
-      console.log(`🌐 Started ${browser} while waiting for the extension connection`);
-      resolve({ attempted: true, launched: true, browser });
+      console.log(`🌐 Started ${browser} while waiting for the extension connection (${targetUrls.join(", ")})`);
+      let bridgeBrowserSessionId = "";
+      const ownsLaunchedWindow = process.platform === "darwin"
+        ? browserWindowCount === 0
+        : !browserWasRunning;
+      if (ownsLaunchedWindow) {
+        bridgeOwnedBrowserSession = {
+          id: `bridge-browser-${Date.now()}-${bridgeBrowserSessionCounter++}`,
+          browser,
+          activeTaskCount: 0,
+          startedAt: Date.now(),
+          closeMode: process.platform === "darwin" ? "window" : "application"
+        };
+        bridgeBrowserSessionId = bridgeOwnedBrowserSession.id;
+      }
+      resolve({ attempted: true, launched: true, browser, targetUrls, browserWasRunning, browserWindowCount, bridgeBrowserSessionId });
     });
   });
 
@@ -399,20 +621,54 @@ async function ensureExtensionConnection(action) {
   }
 
   traceBridgeEvent("extension_connection_wait_started", { action });
-  const launch = await launchBrowserForExtension();
+  const browserToLaunch = getBrowserToLaunch();
+  // 安装状态不能靠旧的本地记录判断：用户可能卸载、禁用，或换了 Profile。
+  // 先只打开业务页并等待扩展握手；未握手时才打开商店页引导安装。
+  const initialTargetUrls = [getBrowserTargetUrl(action)];
+  const launch = await launchBrowserForExtension(action, initialTargetUrls);
+  let onboarding = null;
+  let phase = "browser_starting";
   console.log(
-    `⏳ Extension not connected yet. Waiting up to ${EXTENSION_CONNECT_TIMEOUT_MS / 1000}s ` +
+    `⏳ Extension not connected yet. Waiting up to ${EXTENSION_RECONNECT_PROBE_TIMEOUT_MS / 1000}s ` +
     `(action: ${action}, browser: ${launch.browser || "unknown"})`
   );
-  const connected = await waitForExtensionConnection();
+  let connected = await waitForExtensionConnection(Math.min(EXTENSION_CONNECT_TIMEOUT_MS, EXTENSION_RECONNECT_PROBE_TIMEOUT_MS));
+
+  if (!connected && launch.browser) {
+    phase = "waiting_user_install_or_enable";
+    onboarding = openExtensionStorePage(launch.browser);
+    if (onboarding.url) {
+      console.log(
+        `🧩 Extension not connected. Opened ${onboarding.url}; waiting up to ` +
+        `${EXTENSION_ONBOARDING_TIMEOUT_MS / 1000}s for installation or enablement.`
+      );
+      traceBridgeEvent("extension_onboarding_wait_started", {
+        action,
+        browser: launch.browser,
+        storeUrl: onboarding.url,
+        timeoutMs: EXTENSION_ONBOARDING_TIMEOUT_MS
+      });
+      connected = await waitForExtensionConnection(EXTENSION_ONBOARDING_TIMEOUT_MS);
+    }
+  }
+
   const ready = connected && await waitForExtensionReadyGracePeriod();
+  if (ready) {
+    persistOnboardingState({ completedAt: Date.now(), completedBrowser: lastBrowserConnection?.browser || launch.browser || "" });
+    phase = "ready";
+  } else if (!launch.browser) {
+    phase = "browser_not_found";
+  } else {
+    phase = "extension_not_connected";
+  }
   traceBridgeEvent("extension_connection_wait_finished", {
     action,
     connected: ready,
+    phase,
     browser: launch.browser || "",
     launchReason: launch.reason || ""
   });
-  return { connected: ready, launch };
+  return { connected: ready, launch, onboarding, phase };
 }
 
 function extensionConnectionError(connection) {
@@ -428,6 +684,14 @@ function extensionConnectionError(connection) {
     details.push(`Failed to start ${launch.browser || "the saved browser"}: ${launch.reason || "unknown error"}`);
   } else if (launch.attempted) {
     details.push(`${launch.browser} was started, but its extension did not connect in time.`);
+  }
+
+  if (connection?.phase === "waiting_user_install_or_enable") {
+    details.push("The browser is open and Bridge waited for installation or enablement, but the extension did not reconnect.");
+  }
+
+  if (connection?.onboarding?.url) {
+    details.push(`Install or enable the Gecho extension here: ${connection.onboarding.url}`);
   }
 
   return [
@@ -944,6 +1208,7 @@ async function runAsyncAttempt({ jobId, action, params, payload, attempt }) {
     });
     return;
   }
+  const bridgeBrowserSessionId = retainBridgeOwnedBrowser();
 
   const requestId = `${jobId}:a${attempt}`;
   lastDispatchedRequestId = requestId;
@@ -974,6 +1239,7 @@ async function runAsyncAttempt({ jobId, action, params, payload, attempt }) {
       error: `Scraping timeout (${Math.floor(ASYNC_ATTEMPT_TIMEOUT_MS / 1000)}s) for action: ${action}`,
       retryCount: 0
     });
+    releaseBridgeOwnedBrowser(bridgeBrowserSessionId, "async_action_timed_out");
   }, ASYNC_ATTEMPT_TIMEOUT_MS);
 
   pendingRequests.set(requestId, {
@@ -986,6 +1252,7 @@ async function runAsyncAttempt({ jobId, action, params, payload, attempt }) {
       requestIndex.delete(requestId);
       schedulePersistRequestIndex();
       finalizeAsyncJobResult(jobId, result, attempt);
+      releaseBridgeOwnedBrowser(bridgeBrowserSessionId, "async_action_finished");
     }
   });
 
@@ -1054,6 +1321,33 @@ wss.on("connection", (ws, request) => {
   ws.on("message", (message) => {
     try {
       const parsed = JSON.parse(message);
+      const handshakeMethods = new Set(["gecho_extension_handshake", "extension_handshake", "handshake"]);
+      if (handshakeMethods.has(parsed.method)) {
+        const identity = parsed.params && typeof parsed.params === "object" ? parsed.params : parsed;
+        const extensionId = String(identity.extensionId || "").trim();
+        if (extensionId && extensionId !== GECHO_EXTENSION_ID) {
+          traceBridgeEvent("extension_handshake_rejected", { browser, extensionId });
+          ws.close(1008, "unexpected_extension_id");
+          return;
+        }
+        const handshakeBrowser = normalizeBrowserName(identity.browser) || browser;
+        if (handshakeBrowser) {
+          persistLastBrowserConnection(handshakeBrowser, {
+            profileId: identity.profileId || identity.profileDirectory,
+            profileDisplayName: identity.profileDisplayName,
+            installationId: identity.installationId || identity.profileInstallationId,
+            extensionVersion: identity.extensionVersion || identity.version
+          });
+        }
+        ws.extensionIdentity = {
+          extensionId: extensionId || GECHO_EXTENSION_ID,
+          extensionVersion: String(identity.extensionVersion || identity.version || "").slice(0, 80),
+          profileId: normalizeProfileId(identity.profileId || identity.profileDirectory),
+          installationId: String(identity.installationId || identity.profileInstallationId || "").slice(0, 160)
+        };
+        traceBridgeEvent("extension_handshake", { browser: handshakeBrowser, profileId: ws.extensionIdentity.profileId });
+        return;
+      }
       if (parsed.method === "action_progress" && parsed.requestId) {
         traceBridgeEvent("extension_progress", { requestId: parsed.requestId });
         const pending = pendingRequests.get(parsed.requestId);
@@ -1153,6 +1447,8 @@ const server = http.createServer(async (req, res) => {
       dataDir: JOBS_DIR,
       extensionConnected: isExtensionConnected(),
       lastConnectedBrowser: lastBrowserConnection?.browser || null,
+      lastConnectedProfile: lastBrowserConnection?.profileId || null,
+      extensionOnboarding: loadOnboardingState(),
       autoBrowserLaunch: {
         enabled: AUTO_LAUNCH_BROWSER,
         browser: getBrowserToLaunch() || null
@@ -1279,6 +1575,7 @@ const server = http.createServer(async (req, res) => {
     let body = "";
     req.on("data", chunk => { body += chunk; });
     req.on("end", async () => {
+      let bridgeBrowserSessionId = "";
       try {
         const payload = JSON.parse(body);
         const action = payload.action;
@@ -1293,6 +1590,7 @@ const server = http.createServer(async (req, res) => {
           res.statusCode = 503;
           return res.end(JSON.stringify({ error: extensionConnectionError(connection) }));
         }
+        bridgeBrowserSessionId = retainBridgeOwnedBrowser();
 
         console.log(`🚀 Dispatching action: [${action}]`);
         const requestId = `svc-${Date.now()}-${requestIdCounter++}`;
@@ -1304,6 +1602,7 @@ const server = http.createServer(async (req, res) => {
           const timeoutId = setTimeout(() => {
             pendingRequests.delete(requestId);
             resolve({ error: `Scraping timeout (600s) for action: ${action}` });
+            releaseBridgeOwnedBrowser(bridgeBrowserSessionId, "sync_action_timed_out");
           }, 600000);
 
           pendingRequests.set(requestId, {
@@ -1354,7 +1653,9 @@ const server = http.createServer(async (req, res) => {
           }
         }
         res.end(JSON.stringify({ success: true, data: result, savePath, saveWarning }));
+        releaseBridgeOwnedBrowser(bridgeBrowserSessionId, "sync_action_finished");
       } catch (e) {
+        releaseBridgeOwnedBrowser(bridgeBrowserSessionId, "sync_action_failed");
         res.statusCode = 500;
         res.end(JSON.stringify({ error: e.message }));
       }
