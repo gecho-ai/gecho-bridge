@@ -1564,6 +1564,96 @@ function applyOnboardingFooter(html) {
   return html.replace("</footer></main><script>", `</footer>${footer}</main><script>`);
 }
 
+function applyOnboardingStateCopy(html, locale) {
+  const english = locale === "en";
+  const copy = english ? {
+    readyNav: "Browser connected",
+    waitingNav: "Waiting for extension",
+    notDetectedMarker: "not detected",
+    eyebrowReady: "Task running · Browser connected",
+    eyebrowWaiting: "Action required · Connect your browser",
+    eyebrowNotDetected: "Extension not detected · Check your browser",
+    eyebrowStarting: "First use · Connecting your browser",
+    kickerReady: "Current task is running",
+    kickerWaiting: "Current task is waiting for you",
+    kickerNotDetected: "Current task is waiting for the extension",
+    kickerStarting: "Current task is being prepared",
+    noteReady: "The extension is connected. Keep this browser window open while Bridge continues your task.",
+    noteWaiting: "The Gecho extension must be installed and enabled before the task can start. Keep this page open after installation and Bridge will continue automatically.",
+    noteNotDetected: "The extension was not detected. Confirm it is installed, enabled, and signed in, then click Check connection again.",
+    noteStarting: "Bridge is starting the browser and checking the extension. Keep this page open.",
+    titleReady: "Your task is continuing",
+    titleWaiting: "Install the extension to continue",
+    titleNotDetected: "Connect the extension to continue",
+    titleStarting: "Your task will continue after connection",
+    leadReady: "The extension is connected. Bridge is running the current task in your browser.",
+    leadWaiting: "Install and enable the extension in the official store. Bridge will resume the current task automatically.",
+    leadNotDetected: "Check that the extension is installed, enabled, and signed in with this browser Profile, then recheck the connection.",
+    leadStarting: "Bridge is preparing the browser environment. The current task will resume when the extension connects.",
+    extensionTitleReady: "Extension connected",
+    extensionTitleWaiting: "Install and connect the extension",
+    extensionTitleNotDetected: "Check the extension connection",
+    extensionTitleStarting: "Waiting for the extension",
+    extensionCopyReady: "Connection confirmed. Bridge is continuing the current task.",
+    extensionCopyWaiting: "Click Install above, then confirm the installation and enable the extension.",
+    extensionCopyNotDetected: "Confirm the extension is installed, enabled, and signed in, then click Check connection again.",
+    extensionCopyStarting: "Bridge is checking the Gecho extension. No repeated action is needed yet.",
+    taskTitleReady: "Run the current task",
+    taskTitleWaiting: "Waiting to continue",
+    taskTitleNotDetected: "Waiting for the connection",
+    taskTitleStarting: "Waiting to start"
+  } : {
+    readyNav: "浏览器已连接",
+    waitingNav: "等待扩展",
+    notDetectedMarker: "未检测到扩展",
+    eyebrowReady: "任务执行中 · 浏览器已连接",
+    eyebrowWaiting: "需要操作 · 请完成浏览器连接",
+    eyebrowNotDetected: "未检测到扩展 · 请检查浏览器",
+    eyebrowStarting: "首次使用 · 正在连接浏览器",
+    kickerReady: "当前任务正在执行",
+    kickerWaiting: "当前任务等待你的操作",
+    kickerNotDetected: "当前任务等待扩展连接",
+    kickerStarting: "当前任务正在准备",
+    noteReady: "扩展已连接。请保持浏览器窗口打开，Bridge 正在继续当前任务。",
+    noteWaiting: "必须安装并启用 Gecho 扩展，任务才能开始。完成后请保持此页面打开，Bridge 会自动继续。",
+    noteNotDetected: "未检测到扩展。请确认扩展已安装、启用并登录，然后点击“重新检测连接”。",
+    noteStarting: "Bridge 正在启动浏览器并检测扩展，请保持此页面打开。",
+    titleReady: "任务正在继续",
+    titleWaiting: "安装扩展后，任务将自动继续",
+    titleNotDetected: "连接扩展后，任务将自动继续",
+    titleStarting: "连接完成后，任务将自动继续",
+    leadReady: "扩展已连接，Bridge 正在浏览器中执行当前任务。",
+    leadWaiting: "请在官方商店完成安装并启用扩展，Bridge 会自动恢复当前任务。",
+    leadNotDetected: "请确认当前浏览器 Profile 中的扩展已安装、启用并登录，然后重新检测连接。",
+    leadStarting: "Bridge 正在准备浏览器环境，扩展连接后会自动恢复当前任务。",
+    extensionTitleReady: "扩展已连接",
+    extensionTitleWaiting: "安装并连接扩展",
+    extensionTitleNotDetected: "检查扩展连接",
+    extensionTitleStarting: "等待扩展连接",
+    extensionCopyReady: "连接已确认，Bridge 正在继续当前任务。",
+    extensionCopyWaiting: "点击上方安装按钮，在官方商店确认安装并启用扩展。",
+    extensionCopyNotDetected: "请确认扩展已安装、启用并登录，然后点击“重新检测连接”。",
+    extensionCopyStarting: "Bridge 正在检测 Gecho 扩展，暂时无需重复操作。",
+    taskTitleReady: "执行当前任务",
+    taskTitleWaiting: "等待任务继续",
+    taskTitleNotDetected: "等待连接完成",
+    taskTitleStarting: "等待任务开始"
+  };
+  const extensionTitle = english ? "Install and connect the extension" : "安装并连接扩展";
+  const extensionCopy = english ? "Click Install above, then confirm “Add to Chrome” in the official store." : "点击上方安装按钮，在官方商店确认“添加至 Chrome”。";
+  const taskTitle = english ? "Continue the current task" : "继续当前任务";
+  const withIds = html
+    .replace('<div class="eyebrow">', '<div class="eyebrow" id="eyebrow">')
+    .replace('<div class="card-kicker">', '<div class="card-kicker" id="card-kicker">')
+    .replace('<h2 class="section-title">', '<h2 class="section-title" id="readiness-title">')
+    .replace('<p class="section-lead">', '<p class="section-lead" id="readiness-lead">')
+    .replace(`<h3 class="step-title">${extensionTitle}</h3>`, `<h3 class="step-title" id="extension-title">${extensionTitle}</h3>`)
+    .replace(`<p class="step-copy">${extensionCopy}</p>`, `<p class="step-copy" id="extension-copy">${extensionCopy}</p>`)
+    .replace(`<h3 class="step-title">${taskTitle}</h3>`, `<h3 class="step-title" id="task-title">${taskTitle}</h3>`);
+  const stateScript = `<script>(function(){const copy=${JSON.stringify(copy)};function sync(){const nav=document.getElementById('nav-status')?.textContent||'';const status=document.getElementById('status')?.textContent||'';const ready=nav===copy.readyNav;const waiting=nav===copy.waitingNav;const notDetected=waiting&&status.toLowerCase().includes(copy.notDetectedMarker.toLowerCase());const key=ready?'Ready':notDetected?'NotDetected':waiting?'Waiting':'Starting';const suffix=key==='Ready'?'Ready':key==='NotDetected'?'NotDetected':key==='Waiting'?'Waiting':'Starting';const set=(id,value)=>{const el=document.getElementById(id);if(el)el.textContent=value};set('eyebrow',copy['eyebrow'+suffix]);set('card-kicker',copy['kicker'+suffix]);set('task-note',copy['note'+suffix]);set('readiness-title',copy['title'+suffix]);set('readiness-lead',copy['lead'+suffix]);set('extension-title',copy['extensionTitle'+suffix]);set('extension-copy',copy['extensionCopy'+suffix]);set('task-title',copy['taskTitle'+suffix])}sync();setInterval(sync,500)})();</script>`;
+  return withIds.replace("</body>", `${stateScript}</body>`);
+}
+
 function getOnboardingLocale(acceptLanguage) {
   return /^zh(?:[-_,;]|$)/i.test(String(acceptLanguage || "").trim()) ? "zh" : "en";
 }
@@ -1689,7 +1779,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && req.url === ONBOARDING_PATH) {
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     const locale = getOnboardingLocale(req.headers["accept-language"]);
-    return res.end(applyOnboardingLocale(applyOnboardingCopy(applyOnboardingFooter(applyOnboardingLogo(renderOnboardingPage()))), locale));
+    return res.end(applyOnboardingStateCopy(applyOnboardingLocale(applyOnboardingCopy(applyOnboardingFooter(applyOnboardingLogo(renderOnboardingPage()))), locale), locale));
   }
 
   if (req.method === "GET" && req.url === "/onboarding/status") {
