@@ -750,17 +750,9 @@ async function ensureExtensionConnection(action) {
     phase = "ready";
     const browser = selectedConnection?.browser || launch.browser;
     const taskTargetUrl = getBrowserTargetUrl(action);
-    // 只有本次确实由 Bridge 拉起 onboarding 时，才在扩展就绪后打开任务页。
-    // 已连接的日常调用不改动用户当前的浏览器标签页。
-    if (launch.launched && launch.targetUrls?.includes(getOnboardingUrl()) && /^https?:/.test(taskTargetUrl)) {
-      try {
-        const child = openExternalUrl(taskTargetUrl, browser);
-        child.unref();
-        traceBridgeEvent("task_page_opened_after_onboarding", { action, browser, url: taskTargetUrl });
-      } catch (e) {
-        traceBridgeEvent("task_page_open_failed_after_onboarding", { action, browser, message: e.message });
-      }
-    }
+    // 任务页由扩展根据 action 统一打开。Bridge 不再额外打开 TikTok 首页，
+    // 避免出现“首页 + 搜索页”两个重复标签页。
+    traceBridgeEvent("task_page_delegated_to_extension", { action, browser, expectedUrl: taskTargetUrl });
     updateOnboardingRuntime({ stage: "ready", action, browser, taskTargetUrl });
   } else if (!launch.browser) {
     phase = "browser_not_found";
