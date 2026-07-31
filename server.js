@@ -44,6 +44,7 @@ const EXTENSION_ONBOARDING_TIMEOUT_MS = Math.max(5000, Number(process["env"].GEC
 const EXTENSION_CONNECT_POLL_MS = 500;
 const EXTENSION_READY_GRACE_MS = Math.max(0, Number(process["env"].GECHO_EXTENSION_READY_GRACE_MS || 1500));
 const AUTO_LAUNCH_BROWSER = process["env"].GECHO_AUTO_LAUNCH_BROWSER !== "0";
+const AUTO_OPEN_ONBOARDING_ON_FIRST_START = process["env"].GECHO_AUTO_OPEN_ONBOARDING_ON_FIRST_START !== "0";
 const AUTO_CLOSE_LAUNCHED_BROWSER = process["env"].GECHO_AUTO_CLOSE_LAUNCHED_BROWSER !== "0";
 const AUTO_LAUNCH_BROWSER_DRY_RUN = process["env"].GECHO_AUTO_LAUNCH_BROWSER_DRY_RUN === "1";
 const AUTO_LAUNCH_BROWSER_COOLDOWN_MS = Math.max(0, Number(process["env"].GECHO_AUTO_LAUNCH_BROWSER_COOLDOWN_MS || 10000));
@@ -58,6 +59,7 @@ let browserLaunchPromise = null;
 let lastBrowserLaunchAt = 0;
 let lastStoreOpenAt = 0;
 let lastOnboardingPageOpenAt = 0;
+let firstStartOnboardingOpenedAt = 0;
 let onboardingRuntime = { stage: "idle", updatedAt: Date.now() };
 const bridgeOwnedBrowserSessions = new Map();
 let bridgeBrowserSessionCounter = 1;
@@ -288,6 +290,45 @@ function openOnboardingPage(browser) {
   } catch (e) {
     return { opened: false, reason: e.message };
   }
+}
+
+function maybeOpenOnboardingOnFirstStart() {
+  if (!AUTO_OPEN_ONBOARDING_ON_FIRST_START || !AUTO_LAUNCH_BROWSER) {
+    return { opened: false, reason: "disabled" };
+  }
+
+  const state = loadOnboardingState();
+  // completedAt 兼容旧版本：已经完成过一次扩展连接的用户，不再被首次引导打扰。
+  if (state.onboardingAutoOpenedAt || state.completedAt) {
+    return { opened: false, reason: "already_opened" };
+  }
+
+  const browser = getBrowserToLaunch();
+  if (!browser) return { opened: false, reason: "browser_unknown" };
+
+  const result = AUTO_LAUNCH_BROWSER_DRY_RUN
+    ? { opened: true, url: getOnboardingUrl(), dryRun: true }
+    : openOnboardingPage(browser);
+  if (!result.opened) return result;
+
+  const openedAt = Date.now();
+  firstStartOnboardingOpenedAt = openedAt;
+  persistOnboardingState({
+    onboardingAutoOpenedAt: openedAt,
+    onboardingAutoOpenedBrowser: browser,
+    onboardingAutoOpenedUrl: getOnboardingUrl()
+  });
+  updateOnboardingRuntime({
+    stage: isExtensionConnected(browser) ? "ready" : "idle",
+    browser,
+    onboardingAutoOpenedAt: openedAt
+  });
+  traceBridgeEvent("onboarding_auto_opened_on_first_start", {
+    browser,
+    url: getOnboardingUrl(),
+    dryRun: !!result.dryRun
+  });
+  return { ...result, browser };
 }
 
 function escapeHtml(value) {
@@ -556,6 +597,14 @@ async function launchBrowserForExtension(action, targetUrlsOverride = null) {
   lastBrowserLaunchAt = Date.now();
   const browserWasRunning = isBrowserRunning(browser);
   const browserWindowCount = getBrowserWindowCount(browser);
+
+  // 首次启动已经打开了 onboarding 时，后续 Agent 紧接着发起任务不要再
+  // 打开第二个 onboarding 标签页；沿用当前浏览器窗口即可。
+  const requestedOnboarding = targetUrls.includes(getOnboardingUrl());
+  if (requestedOnboarding && browserWasRunning && firstStartOnboardingOpenedAt && Date.now() - firstStartOnboardingOpenedAt < 10 * 60 * 1000) {
+    traceBridgeEvent("onboarding_page_reused_for_action", { browser, url: getOnboardingUrl() });
+    return { attempted: true, launched: true, browser, targetUrls, browserWasRunning, browserWindowCount, reusedExistingOnboarding: true };
+  }
 
   browserLaunchPromise = new Promise((resolve) => {
     if (AUTO_LAUNCH_BROWSER_DRY_RUN) {
@@ -1522,6 +1571,7 @@ const server = http.createServer(async (req, res) => {
       storeUrl: getExtensionStoreUrl(preferredBrowser),
       websiteUrl: GECHO_WEBSITE_URL || null,
       tutorialUrl: GECHO_TUTORIAL_URL || null,
+      onboardingAutoOpenedAt: onboardingRuntime.onboardingAutoOpenedAt || null,
       message: messages[stage] || "正在准备浏览器环境…",
       updatedAt: onboardingRuntime.updatedAt
     }));
@@ -1569,6 +1619,10 @@ const server = http.createServer(async (req, res) => {
       lastConnectedBrowser: lastBrowserConnection?.browser || null,
       lastConnectedProfile: lastBrowserConnection?.profileId || null,
       extensionOnboarding: loadOnboardingState(),
+      onboardingAutoOpen: {
+        enabled: AUTO_OPEN_ONBOARDING_ON_FIRST_START,
+        openedAt: loadOnboardingState().onboardingAutoOpenedAt || null
+      },
       autoBrowserLaunch: {
         enabled: AUTO_LAUNCH_BROWSER,
         browser: getBrowserToLaunch() || null
@@ -1790,6 +1844,22 @@ server.listen(HTTP_PORT, "127.0.0.1", () => {
   console.log(`🚀 TikTok Bridge Service Layer is running:`);
   console.log(`   - WebSocket (Extension): ws://127.0.0.1:${WS_PORT}`);
   console.log(`   - HTTP API (Client): http://127.0.0.1:${HTTP_PORT}`);
+
+  // 等 HTTP 服务真正监听后再打开 onboarding，确保浏览器打开页面时不会遇到
+  // 连接拒绝；状态写入成功后，后续 Agent 重复拉起 Bridge 不会再次打开。
+  const startupOnboardingTimer = setTimeout(() => {
+    try {
+      const result = maybeOpenOnboardingOnFirstStart();
+      if (result.opened) {
+        console.log(`🧭 First-start onboarding opened in ${result.browser || "the selected browser"}`);
+      } else if (result.reason !== "already_opened") {
+        console.log(`ℹ️ First-start onboarding not opened: ${result.reason}`);
+      }
+    } catch (e) {
+      console.warn(`Failed to open first-start onboarding: ${e.message}`);
+    }
+  }, 250);
+  startupOnboardingTimer.unref?.();
 });
 
 process.on("SIGTERM", () => gracefulShutdown("sigterm"));
