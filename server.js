@@ -33,6 +33,8 @@ const CHROME_EXTENSION_STORE_URL = `https://chromewebstore.google.com/detail/gec
 // this listing after the user confirms Edge's one-time "allow other stores"
 // prompt, so do not send users to an unrelated Edge Add-ons search page.
 const EDGE_EXTENSION_STORE_URL = CHROME_EXTENSION_STORE_URL;
+const GECHO_WEBSITE_URL = String(process["env"].GECHO_WEBSITE_URL || "https://gecho.ai/").trim();
+const GECHO_TUTORIAL_URL = String(process["env"].GECHO_TUTORIAL_URL || "").trim();
 const JOB_TTL_MS = Number(process["env"].GECHO_JOB_TTL_MS || 3 * 24 * 60 * 60 * 1000); // 默认 3 天
 const MAX_PERSISTED_JOBS = Number(process["env"].GECHO_MAX_PERSISTED_JOBS || 2000);
 const CLEANUP_INTERVAL_MS = Number(process["env"].GECHO_CLEANUP_INTERVAL_MS || 10 * 60 * 1000);
@@ -42,9 +44,7 @@ const EXTENSION_ONBOARDING_TIMEOUT_MS = Math.max(5000, Number(process["env"].GEC
 const EXTENSION_CONNECT_POLL_MS = 500;
 const EXTENSION_READY_GRACE_MS = Math.max(0, Number(process["env"].GECHO_EXTENSION_READY_GRACE_MS || 1500));
 const AUTO_LAUNCH_BROWSER = process["env"].GECHO_AUTO_LAUNCH_BROWSER !== "0";
-const AUTO_OPEN_EXTENSION_STORE = process["env"].GECHO_AUTO_OPEN_EXTENSION_STORE !== "0";
 const AUTO_CLOSE_LAUNCHED_BROWSER = process["env"].GECHO_AUTO_CLOSE_LAUNCHED_BROWSER !== "0";
-const EXTENSION_STORE_REOPEN_COOLDOWN_MS = Math.max(0, Number(process["env"].GECHO_EXTENSION_STORE_REOPEN_COOLDOWN_MS || 5 * 60 * 1000));
 const AUTO_LAUNCH_BROWSER_DRY_RUN = process["env"].GECHO_AUTO_LAUNCH_BROWSER_DRY_RUN === "1";
 const AUTO_LAUNCH_BROWSER_COOLDOWN_MS = Math.max(0, Number(process["env"].GECHO_AUTO_LAUNCH_BROWSER_COOLDOWN_MS || 10000));
 
@@ -299,29 +299,7 @@ function renderOnboardingPage() {
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Gecho 浏览器准备</title><style>
 :root{--ink:#16171c;--muted:#777b88;--line:#e6e7eb;--panel:#fafafa;--cyan:#21d9ee;--violet:#7557f7}*{box-sizing:border-box}body{margin:0;background:#fff;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif}.wrap{max-width:900px;margin:0 auto;padding:72px 28px 56px}.brand{display:flex;justify-content:center;margin-bottom:30px}.mark{position:relative;width:60px;height:60px;transform:rotate(-8deg)}.mark i{position:absolute;display:block;width:32px;height:22px;border-radius:7px 16px 7px 16px;background:linear-gradient(135deg,#42e5fa,#1688ee);box-shadow:0 4px 12px #33d9f866}.mark i:first-child{left:3px;top:10px;transform:rotate(-21deg)}.mark i:last-child{right:2px;bottom:5px;transform:rotate(78deg);background:linear-gradient(135deg,#9b57f6,#2c51e9)}h1{text-align:center;font-size:38px;line-height:1.2;margin:0 0 14px;letter-spacing:-1px}.lead{text-align:center;color:var(--muted);font-size:19px;line-height:1.65;margin:0 auto;max-width:620px}.status{display:flex;align-items:center;gap:11px;margin:42px auto 22px;max-width:680px;padding:18px 20px;border:1px solid var(--line);border-radius:16px;background:#fff}.dot{width:11px;height:11px;background:#1d1e24;border-radius:50%;flex:0 0 auto}.status-copy{font-size:16px;font-weight:650}.meta{margin-left:auto;color:var(--muted);font-size:13px}.steps{display:grid;gap:12px;margin:20px auto 40px;max-width:680px}.step{display:flex;align-items:flex-start;gap:14px;padding:16px 18px;border:1px solid var(--line);border-radius:14px;background:var(--panel)}.num{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#1d1e24;color:#fff;font-size:13px;font-weight:700;flex:0 0 auto}.step strong{display:block;font-size:15px;margin-bottom:3px}.step span{display:block;color:var(--muted);font-size:14px;line-height:1.5}.actions{display:flex;gap:12px;justify-content:center;margin:26px 0 48px}.button{border:0;border-radius:10px;background:#1b1c22;color:#fff;padding:12px 18px;font-size:15px;font-weight:650;cursor:pointer}.button.secondary{background:#fff;color:#25262d;border:1px solid var(--line)}.notice{border:1px solid #dedfe4;border-radius:22px;padding:26px 28px;background:#fcfcfd}.notice h2{font-size:18px;margin:0 0 16px}.notice ul{margin:0;padding-left:23px;color:var(--muted);line-height:2;font-size:15px}.notice b{color:#25262d}@media(max-width:600px){.wrap{padding:48px 18px}h1{font-size:31px}.meta{display:none}.actions{flex-direction:column}.button{width:100%}}</style></head>
-<body><main class="wrap"><div class="brand"><div class="mark"><i></i><i></i></div></div><h1 id="title">正在准备 Gecho 浏览器环境</h1><p class="lead" id="lead">请不要离开此页面，完成扩展安装后任务会自动继续。</p><section class="status"><i class="dot" id="dot"></i><div class="status-copy" id="status">正在检测浏览器扩展…</div><div class="meta" id="browser"></div></section><section class="steps"><div class="step"><div class="num">1</div><div><strong>在扩展商店确认安装 Gecho</strong><span>我们已为你打开官方安装页面；请点击“添加至 Chrome”并确认权限。</span></div></div><div class="step"><div class="num">2</div><div><strong>保持浏览器打开</strong><span>Bridge 会自动检测扩展连接，无需返回 Trae 或再次执行任务。</span></div></div><div class="step"><div class="num">3</div><div><strong>自动继续当前任务</strong><span>扩展连接成功后，原本的搜索会继续执行。</span></div></div></section><div class="actions"><button class="button" id="store">安装 Gecho 扩展</button><button class="button secondary" id="recheck">重新检测</button></div><p class="lead" id="feedback" aria-live="polite"></p><section class="notice"><h2>● 提升连接成功率的注意事项</h2><ul><li>请使用安装 Gecho 扩展的同一个浏览器和 Profile。</li><li>请确认 Gecho 扩展已登录，并保持浏览器窗口打开。</li><li>如平台要求登录、验证或 CAPTCHA，请先在浏览器中手动完成。</li></ul></section></main><script>const $=id=>document.getElementById(id);let state={};async function refresh(message=''){try{const r=await fetch('/onboarding/status');state=await r.json();$('status').textContent=state.message||'正在检测浏览器扩展…';$('browser').textContent=state.browser?('浏览器：'+state.browser.toUpperCase()):'';const ready=state.stage==='ready';$('dot').style.background=ready?'#28b76b':'#1d1e24';$('title').textContent=ready?'扩展已连接，正在继续任务':'请完成 Gecho 扩展安装';$('lead').textContent=ready?'浏览器环境已准备完成，请稍候。':'请在已打开的扩展商店页面确认安装；完成后会自动继续。';$('store').disabled=ready;$('store').textContent=ready?'已连接':'安装 Gecho 扩展';if(message)$('feedback').textContent=message}catch(_){$('feedback').textContent='暂时无法连接 Bridge，请保持此页面打开后重试。'}}$('store').onclick=()=>{if(state.storeUrl){window.open(state.storeUrl,'_blank');$('feedback').textContent='已打开扩展商店，请确认安装。'}};$('recheck').onclick=async()=>{const r=await fetch('/onboarding/recheck',{method:'POST'});const s=await r.json();refresh(s.extensionConnected?'检测成功：扩展已连接。':'暂未检测到扩展，请完成安装或确认扩展已启用。')};refresh();setInterval(refresh,1500);</script></body></html>`;
-}
-
-function openExtensionStorePage(browser) {
-  if (!AUTO_OPEN_EXTENSION_STORE) return { opened: false, reason: "disabled", url: getExtensionStoreUrl(browser) };
-  if (!normalizeBrowserName(browser)) return { opened: false, reason: "browser_unknown", url: "" };
-  const url = getExtensionStoreUrl(browser);
-  const state = loadOnboardingState();
-  const lastOpenedAt = Math.max(Number(state.storeOpenedAt || 0), lastStoreOpenAt);
-  const isSameStoreTarget = state.browser === browser && state.storeUrl === url;
-  if (isSameStoreTarget && Date.now() - lastOpenedAt < EXTENSION_STORE_REOPEN_COOLDOWN_MS) {
-    return { opened: false, reason: "cooldown", url };
-  }
-  try {
-    const child = openExternalUrl(url, browser);
-    child.unref();
-    lastStoreOpenAt = Date.now();
-    persistOnboardingState({ storeOpenedAt: lastStoreOpenAt, storeUrl: url, browser, storeOpenCount: Number(state.storeOpenCount || 0) + 1 });
-    traceBridgeEvent("extension_store_opened", { browser, url });
-    return { opened: true, url };
-  } catch (e) {
-    return { opened: false, reason: e.message, url };
-  }
+<body><main class="wrap"><div class="brand"><div class="mark"><i></i><i></i></div></div><h1 id="title">正在准备 Gecho 浏览器环境</h1><p class="lead" id="lead">请不要离开此页面，完成扩展安装后任务会自动继续。</p><section class="status"><i class="dot" id="dot"></i><div class="status-copy" id="status">正在检测浏览器扩展…</div><div class="meta" id="browser"></div></section><section class="steps"><div class="step"><div class="num">1</div><div><strong>在扩展商店确认安装 Gecho</strong><span>点击下方按钮打开官方商店，并确认“添加至 Chrome”权限。</span></div></div><div class="step"><div class="num">2</div><div><strong>保持浏览器打开</strong><span>Bridge 会自动检测扩展连接，无需返回 Trae 或再次执行任务。</span></div></div><div class="step"><div class="num">3</div><div><strong>自动继续当前任务</strong><span>扩展连接成功后，Bridge 会打开任务页面并继续原来的操作。</span></div></div></section><div class="actions"><button class="button" id="store">安装 Gecho 扩展</button><button class="button secondary" id="recheck">重新检测</button></div><div class="actions" id="resources" style="margin-top:-26px"><button class="button secondary" id="website" hidden>访问官网</button><button class="button secondary" id="tutorial" hidden>查看教程</button></div><p class="lead" id="feedback" aria-live="polite"></p><section class="notice"><h2>● 提升连接成功率的注意事项</h2><ul><li>请使用安装 Gecho 扩展的同一个浏览器和 Profile。</li><li>请确认 Gecho 扩展已登录，并保持浏览器窗口打开。</li><li>如平台要求登录、验证或 CAPTCHA，请先在浏览器中手动完成。</li></ul></section></main><script>const $=id=>document.getElementById(id);let state={};function setLink(id,url){const el=$(id);el.hidden=!url;if(url)el.onclick=()=>window.open(url,'_blank')}async function refresh(message=''){try{const r=await fetch('/onboarding/status');state=await r.json();$('status').textContent=state.message||'正在检测浏览器扩展…';$('browser').textContent=state.browser?('浏览器：'+state.browser.toUpperCase()):'';const ready=state.stage==='ready';$('dot').style.background=ready?'#28b76b':'#1d1e24';$('title').textContent=ready?'扩展已连接，正在继续任务':'请完成 Gecho 扩展安装';$('lead').textContent=ready?'浏览器环境已准备完成，请稍候。':'完成扩展安装后，Bridge 会自动打开任务页面并继续。';$('store').disabled=ready;$('store').textContent=ready?'已连接':'安装 Gecho 扩展';setLink('website',state.websiteUrl);setLink('tutorial',state.tutorialUrl);if(message)$('feedback').textContent=message}catch(_){$('feedback').textContent='暂时无法连接 Bridge，请保持此页面打开后重试。'}}$('store').onclick=()=>{if(state.storeUrl){window.open(state.storeUrl,'_blank');$('feedback').textContent='已打开扩展商店，请确认安装。'}};$('recheck').onclick=async()=>{const r=await fetch('/onboarding/recheck',{method:'POST'});const s=await r.json();refresh(s.extensionConnected?'检测成功：扩展已连接。':'暂未检测到扩展，请完成安装或确认扩展已启用。')};refresh();setInterval(refresh,1500);</script></body></html>`;
 }
 
 function findFirstExistingPath(paths) {
@@ -676,8 +654,9 @@ async function ensureExtensionConnection(action) {
   traceBridgeEvent("extension_connection_wait_started", { action });
   const browserToLaunch = preferredBrowser;
   // 安装状态不能靠旧的本地记录判断：用户可能卸载、禁用，或换了 Profile。
-  // 先只打开业务页并等待扩展握手；未握手时才打开商店页引导安装。
-  const initialTargetUrls = [getBrowserTargetUrl(action)];
+  // 未连接时始终先进入 onboarding，不要抢先打开业务页。这样用户能清楚地
+  // 看到安装与连接状态，而不是在 TikTok/Amazon 的空白任务页里迷失。
+  const initialTargetUrls = [getOnboardingUrl()];
   const launch = await launchBrowserForExtension(action, initialTargetUrls);
   let onboarding = null;
   let phase = "browser_starting";
@@ -690,22 +669,29 @@ async function ensureExtensionConnection(action) {
 
   if (!connected && launch.browser) {
     phase = "waiting_user_install_or_enable";
-    onboarding = openExtensionStorePage(launch.browser);
-    openOnboardingPage(launch.browser);
-    updateOnboardingRuntime({ stage: "waiting_user_install_or_enable", action, browser: launch.browser, storeUrl: onboarding.url || getExtensionStoreUrl(launch.browser) });
-    if (onboarding.url) {
-      console.log(
-        `🧩 Extension not connected. Opened ${onboarding.url}; waiting up to ` +
-        `${EXTENSION_ONBOARDING_TIMEOUT_MS / 1000}s for installation or enablement.`
-      );
-      traceBridgeEvent("extension_onboarding_wait_started", {
-        action,
-        browser: launch.browser,
-        storeUrl: onboarding.url,
-        timeoutMs: EXTENSION_ONBOARDING_TIMEOUT_MS
-      });
-      connected = await waitForExtensionConnection(EXTENSION_ONBOARDING_TIMEOUT_MS, launch.browser);
-    }
+    // 商店页只应由用户在 onboarding 中主动打开：自动打开会抢焦点、产生
+    // 重复标签页，也让“为什么突然打开页面”变得不清楚。
+    onboarding = { opened: false, url: getExtensionStoreUrl(launch.browser), reason: "user_action_required" };
+    if (!launch.launched) openOnboardingPage(launch.browser);
+    updateOnboardingRuntime({
+      stage: "waiting_user_install_or_enable",
+      action,
+      browser: launch.browser,
+      storeUrl: onboarding.url,
+      onboardingUrl: getOnboardingUrl()
+    });
+    console.log(
+      `🧩 Extension not connected. Onboarding is open; waiting up to ` +
+      `${EXTENSION_ONBOARDING_TIMEOUT_MS / 1000}s for installation or enablement.`
+    );
+    traceBridgeEvent("extension_onboarding_wait_started", {
+      action,
+      browser: launch.browser,
+      storeUrl: onboarding.url,
+      onboardingUrl: getOnboardingUrl(),
+      timeoutMs: EXTENSION_ONBOARDING_TIMEOUT_MS
+    });
+    connected = await waitForExtensionConnection(EXTENSION_ONBOARDING_TIMEOUT_MS, launch.browser);
   }
 
   const ready = connected && await waitForExtensionReadyGracePeriod(launch.browser);
@@ -713,7 +699,20 @@ async function ensureExtensionConnection(action) {
   if (ready) {
     persistOnboardingState({ completedAt: Date.now(), completedBrowser: lastBrowserConnection?.browser || launch.browser || "" });
     phase = "ready";
-    updateOnboardingRuntime({ stage: "ready", action, browser: selectedConnection?.browser || launch.browser });
+    const browser = selectedConnection?.browser || launch.browser;
+    const taskTargetUrl = getBrowserTargetUrl(action);
+    // 只有本次确实由 Bridge 拉起 onboarding 时，才在扩展就绪后打开任务页。
+    // 已连接的日常调用不改动用户当前的浏览器标签页。
+    if (launch.launched && launch.targetUrls?.includes(getOnboardingUrl()) && /^https?:/.test(taskTargetUrl)) {
+      try {
+        const child = openExternalUrl(taskTargetUrl, browser);
+        child.unref();
+        traceBridgeEvent("task_page_opened_after_onboarding", { action, browser, url: taskTargetUrl });
+      } catch (e) {
+        traceBridgeEvent("task_page_open_failed_after_onboarding", { action, browser, message: e.message });
+      }
+    }
+    updateOnboardingRuntime({ stage: "ready", action, browser, taskTargetUrl });
   } else if (!launch.browser) {
     phase = "browser_not_found";
     updateOnboardingRuntime({ stage: "extension_not_connected", action, browser: "" });
@@ -1520,6 +1519,8 @@ const server = http.createServer(async (req, res) => {
       browser: preferredBrowser || null,
       extensionConnected: connected,
       storeUrl: getExtensionStoreUrl(preferredBrowser),
+      websiteUrl: GECHO_WEBSITE_URL || null,
+      tutorialUrl: GECHO_TUTORIAL_URL || null,
       message: messages[stage] || "正在准备浏览器环境…",
       updatedAt: onboardingRuntime.updatedAt
     }));
@@ -1534,7 +1535,9 @@ const server = http.createServer(async (req, res) => {
       const child = openExternalUrl(url, browser);
       child.unref();
       lastStoreOpenAt = Date.now();
-      persistOnboardingState({ storeOpenedAt: lastStoreOpenAt, storeUrl: url, browser });
+      const state = loadOnboardingState();
+      persistOnboardingState({ storeOpenedAt: lastStoreOpenAt, storeUrl: url, browser, storeOpenCount: Number(state.storeOpenCount || 0) + 1 });
+      traceBridgeEvent("extension_store_opened_by_user", { browser, url });
       result = { opened: true, url };
     } catch (e) {
       result = { opened: false, reason: e.message, url };
