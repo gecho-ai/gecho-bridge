@@ -1562,25 +1562,51 @@ function getOnboardingLocale(acceptLanguage) {
 
 const ONBOARDING_STATUS_MESSAGES = {
   zh: {
-    idle: "正在检测浏览器扩展…",
-    browser_starting: "正在启动浏览器…",
-    waiting_user_install_or_enable: "请在扩展商店确认安装 Gecho 扩展。",
-    ready: "扩展已连接，正在继续你的任务。",
-    extension_not_connected: "扩展暂未连接；请确认已安装、启用并登录。"
+    idle: "正在检查浏览器环境…",
+    browser_starting: "正在启动浏览器，准备连接…",
+    waiting_user_install_or_enable: "必须安装并启用 Gecho 扩展，任务才能开始。",
+    ready: "扩展已连接，正在继续任务。",
+    extension_not_connected: "未检测到 Gecho 扩展，请安装、启用并登录。"
   },
   en: {
-    idle: "Detecting the browser extension…",
-    browser_starting: "Starting the browser…",
-    waiting_user_install_or_enable: "Confirm the Gecho extension installation in the extension store.",
+    idle: "Checking your browser environment…",
+    browser_starting: "Starting the browser and preparing the connection…",
+    waiting_user_install_or_enable: "The Gecho extension is required before a task can start.",
     ready: "Extension connected. Continuing your task.",
-    extension_not_connected: "The extension is not connected. Make sure it is installed, enabled, and signed in."
+    extension_not_connected: "Gecho extension not detected. Install, enable, and sign in to continue."
   }
 };
+
+function applyOnboardingCopy(html) {
+  const replacements = {
+    "首次使用 · 浏览器连接": "首次使用 · 必须完成浏览器连接",
+    "安装 Gecho 扩展后，AI 将在你已登录的浏览器环境中完成检索、采集与分析。当前任务会自动继续，无需回到 Trae 再次执行。": "Gecho 扩展是执行任务的必要组件。未安装并启用扩展，任务无法开始。点击下方按钮安装，完成后 Bridge 会自动检测并继续。",
+    "安装 Gecho 扩展": "安装 Gecho 扩展（必需）",
+    "当前正在准备": "当前任务等待扩展连接",
+    "正在检测 Gecho 扩展…": "正在检查浏览器环境…",
+    "请在当前浏览器完成安装，连接成功后会自动继续。": "必须安装并启用 Gecho 扩展，任务才能开始。完成后请保持此页面打开，Bridge 会自动继续。",
+    "请使用安装扩展的同一个浏览器 Profile；如需登录平台，请先在浏览器中完成。": "未安装、未启用或未登录 Gecho 扩展，任务无法开始。请使用同一个浏览器 Profile 完成安装和登录。"
+  };
+  return Object.entries(replacements)
+    .sort((a, b) => b[0].length - a[0].length)
+    .reduce((result, [source, target]) => result.split(source).join(target), html);
+}
 
 function applyOnboardingLocale(html, locale) {
   if (locale !== "en") return html;
   const replacements = {
     'lang="zh-CN"': 'lang="en"',
+    "首次使用 · 必须完成浏览器连接": "First use · Browser connection required",
+    "Gecho 扩展是执行任务的必要组件。未安装并启用扩展，任务无法开始。点击下方按钮安装，完成后 Bridge 会自动检测并继续。": "The Gecho extension is required to run tasks. Without it installed and enabled, a task cannot start. Click Install below and Bridge will detect it and continue automatically.",
+    "安装 Gecho 扩展（必需）": "Install Gecho extension (required)",
+    "当前任务等待扩展连接": "Current task waiting for extension",
+    "必须安装并启用 Gecho 扩展，任务才能开始。完成后请保持此页面打开，Bridge 会自动继续。": "The Gecho extension must be installed and enabled before the task can start. Keep this page open after installation and Bridge will continue automatically.",
+    "未安装、未启用或未登录 Gecho 扩展，任务无法开始。请使用同一个浏览器 Profile 完成安装和登录。": "The task cannot start until the Gecho extension is installed, enabled, and signed in. Use the same browser Profile to install and sign in.",
+    "正在检查浏览器环境…": "Checking your browser environment…",
+    "正在启动浏览器，准备连接…": "Starting the browser and preparing the connection…",
+    "必须安装并启用 Gecho 扩展，任务才能开始。": "The Gecho extension is required before a task can start.",
+    "未检测到 Gecho 扩展，请安装、启用并登录。": "Gecho extension not detected. Install, enable, and sign in to continue.",
+    "扩展已连接，正在继续任务。": "Extension connected. Continuing your task.",
     "Gecho · 浏览器准备中心": "Gecho · Browser Setup",
     "首次使用 · 浏览器连接": "First use · Browser connection",
     "让 AI 在你的<em>真实浏览器</em>中完成任务": "Let AI work in your <em>real browser</em>",
@@ -1652,7 +1678,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && req.url === ONBOARDING_PATH) {
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     const locale = getOnboardingLocale(req.headers["accept-language"]);
-    return res.end(applyOnboardingLocale(applyOnboardingLogo(renderOnboardingPage()), locale));
+    return res.end(applyOnboardingLocale(applyOnboardingCopy(applyOnboardingLogo(renderOnboardingPage())), locale));
   }
 
   if (req.method === "GET" && req.url === "/onboarding/status") {
