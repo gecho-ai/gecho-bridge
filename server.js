@@ -1560,7 +1560,7 @@ function applyOnboardingLogo(html) {
 function applyOnboardingFooter(html) {
   const aboutUrl = escapeHtml(GECHO_ABOUT_URL || "https://www.gecho.ai/about/");
   const websiteUrl = escapeHtml(GECHO_WEBSITE_URL || "https://gecho.ai/");
-  const footer = `<section class="privacy-strip" aria-label="隐私说明"><div class="privacy-icon">✓</div><div><strong>隐私优先，你的浏览器由你掌控</strong><span>Gecho 通过本地 Bridge 连接你的浏览器，绝不读取或保存账号密码；浏览器数据仅在你授权的任务范围内处理。</span></div></section><footer class="site-footer"><div class="footer-brand"><strong>Gecho</strong><small>© 2026 Gecho</small></div><div class="footer-links"><a class="text-link" href="${aboutUrl}" target="_blank" rel="noopener">关于 Gecho</a><a class="text-link" href="${websiteUrl}" target="_blank" rel="noopener">官网</a><span>隐私保护</span></div></footer>`;
+  const footer = `<section class="privacy-strip" aria-label="隐私说明"><div class="privacy-icon">✓</div><div><strong>隐私优先，你的浏览器由你掌控</strong><span>Gecho 通过本地 Bridge 连接你的浏览器，绝不读取或保存账号密码；浏览器数据仅在你授权的任务范围内处理。</span></div></section><footer class="site-footer"><div class="footer-brand"><strong>Gecho</strong><small>© 2026 Gecho</small></div><div class="footer-links"><a class="text-link" href="${aboutUrl}" target="_blank" rel="noopener">关于 Gecho</a><a class="text-link" href="${websiteUrl}" target="_blank" rel="noopener">官网</a><span>隐私政策</span></div></footer>`;
   return html.replace("</footer></main><script>", `</footer>${footer}</main><script>`);
 }
 
@@ -1655,7 +1655,7 @@ function applyOnboardingLocale(html, locale) {
     "Gecho 通过本地 Bridge 连接你的浏览器，绝不读取或保存账号密码；浏览器数据仅在你授权的任务范围内处理。": "Gecho connects to your browser through a local Bridge. We never read or store your account passwords, and browser data is handled only within the tasks you authorize.",
     "关于 Gecho": "About Gecho",
     "官网": "Website",
-    "隐私保护": "Privacy protection",
+    "隐私政策": "Privacy Policy",
     "TikTok 搜索任务": "TikTok search task",
     "TikTok 视频搜索任务": "TikTok video search task",
     "Amazon 搜索任务": "Amazon search task",
