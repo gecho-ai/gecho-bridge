@@ -337,11 +337,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "amazon_search",
-        description: "在 Amazon 上搜索关键词，自动采集多页商品信息（支持自动翻页）。",
+        description: "在 Amazon 上搜索关键词，自动采集多页商品信息（支持自动翻页）。marketplace 可选，未传时默认 US。",
         inputSchema: {
           type: "object",
           properties: {
             query: { type: "string", description: "搜索关键词 (例如: 'clothes')" },
+            marketplace: { type: "string", description: "可选 Amazon 站点国家码，例如 US、IN；未传时默认 US", default: "US" },
             targetPages: { type: "number", description: "预期采集的页数，默认 5 (约100条)", default: 5 },
             save_dir: { type: "string", description: "可选的保存目录绝对路径" }
           },
@@ -350,11 +351,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "amazon_product",
-        description: "获取 Amazon 商品详情页的完整数据（标题、价格、描述、变体、规格等）。",
+        description: "获取 Amazon 商品详情页的完整数据（标题、价格、描述、变体、规格等）。marketplace 可选，裸 ASIN 未传时默认 US。",
         inputSchema: {
           type: "object",
           properties: {
             product_url: { type: "string", description: "商品详情页 URL 或 ASIN (例如: 'B0CXJJHY8B' 或 'https://www.amazon.com/dp/...') " },
+            marketplace: { type: "string", description: "可选 Amazon 站点国家码，例如 US、IN；仅传 ASIN 时用于确定站点，未传时默认 US", default: "US" },
             save_dir: { type: "string", description: "可选的保存目录绝对路径" }
           },
           required: ["product_url"]
@@ -362,11 +364,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "amazon_reviews",
-        description: "在 Amazon 专用评论页采集评论，支持多页自动翻页。",
+        description: "在 Amazon 专用评论页采集评论，支持多页自动翻页。marketplace 可选，裸 ASIN 未传时默认 US。",
         inputSchema: {
           type: "object",
           properties: {
             product_url: { type: "string", description: "商品详情页 URL 或 ASIN (例如: 'B0CXJJHY8B' 或 'https://www.amazon.com/product-reviews/...') " },
+            marketplace: { type: "string", description: "可选 Amazon 站点国家码，例如 US、IN；仅传 ASIN 时用于确定站点，未传时默认 US", default: "US" },
             targetCount: { type: "number", description: "预期采集的评论数量，默认 100", default: 100 },
             save_dir: { type: "string", description: "可选的保存目录绝对路径" }
           },
