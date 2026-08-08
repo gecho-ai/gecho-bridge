@@ -2,6 +2,9 @@
 
 这个目录只保留当前还在使用的发布脚本，目标是把 `gecho-bridge` 以 `Bundle Plugin` 形式发布到 ClawHub，同时不影响 npm 的包名与发布流程。
 
+Skill 和 Bundle Plugin 是两条独立的 ClawHub 发布链路：Plugin 使用
+`publish-bundle-dist.sh`，Skill 使用下面的 `publish-skills.sh`。
+
 ## 当前保留的脚本
 
 ### `build-bundle.js`
@@ -202,6 +205,69 @@ CLAWHUB_OWNER='gecho-ai' \
 CLAWHUB_DISPLAY_NAME='Gecho Bridge' \
 npm run bundle:publish:dist
 ```
+
+---
+
+### `publish-skills.sh`
+
+作用：
+
+- 把 `skills/` 和 `distribution-skills/` 下的独立 Skill 复制到干净的临时目录。
+- 通过支持 owner 的最新版 `clawhub sync` 对比 ClawHub 上的内容指纹。
+- 只发布新增或发生变化的 Skill，避免重复发布。
+- 默认显式发布到团队 owner `gecho-ai`，不会跟随个人当前账号误发。
+- 默认隔离本机 OpenClaw/Clawdbot 的其他 Skill 目录，避免误发布本地文件。
+
+支持三种模式：
+
+- `stage`：只准备临时目录，不访问 ClawHub。
+- `dry-run`：显示将要发布的 Skill，不上传。
+- `publish`：上传新增或变化的 Skill。
+
+对应命令：
+
+```bash
+npm run skill:stage
+npm run skill:dry-run
+npm run skill:publish
+```
+
+发布前需要先完成一次 ClawHub 登录：
+
+```bash
+clawhub login
+clawhub whoami
+```
+
+登录账号只用于鉴权，脚本固定传入 `--owner gecho-ai`，所以真正的发布目标是 Gecho AI 团队；当前登录账号必须拥有该团队的发布权限。切换鉴权账号时，先执行
+`clawhub logout` 再重新 `clawhub login`。
+
+常用环境变量：
+
+```bash
+CLAWHUB_CHANGELOG='Release 1.1.31' npm run skill:publish
+CLAWHUB_BUMP=minor CLAWHUB_CHANGELOG='New skill capabilities' npm run skill:publish
+```
+
+默认使用 `npx -y clawhub@latest`，因为旧版 CLI 不支持 `sync --owner`。如需使用已安装的最新版 CLI，可以指定：
+
+```bash
+CLAWHUB_CLI='clawhub' npm run skill:dry-run
+```
+
+默认发布的目录是：
+
+- `skills/`
+- `distribution-skills/`
+
+中文 Skill 目录默认不参与发布。如需单独发布，可以显式指定：
+
+```bash
+SKILL_ROOTS='skills-zh-CN distribution-skills-zh-CN' npm run skill:dry-run
+```
+
+注意：Skill 版本由 ClawHub 根据远端版本自动递增；正式版发布前先执行
+`npm run sync:version`，再执行 `npm run skill:dry-run` 确认发布计划。
 
 ### 指定 ClawHub 版本号
 

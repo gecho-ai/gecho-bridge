@@ -100,6 +100,22 @@ npm run sync:version
 
 正式版需要让 `package.json`、插件配置和 skill metadata 版本保持一致。
 
+### 2.1 预览 ClawHub Skill 发布计划
+
+Skill 发布与 Plugin 发布相互独立。正式版如果包含 Skill 内容变更，先执行：
+
+```bash
+npm run skill:dry-run
+```
+
+确认只包含本次变更的 Skill 后，再执行：
+
+```bash
+CLAWHUB_CHANGELOG='Release 1.1.30' npm run skill:publish
+```
+
+脚本默认发布 `skills/` 和 `distribution-skills/`，只上传 ClawHub 上不存在或内容已变化的 Skill，并显式指定团队 owner `gecho-ai`。中文 Skill 目录不默认发布，需要通过 `SKILL_ROOTS` 显式指定。
+
 ### 3. 构建和预检查
 
 ```bash
