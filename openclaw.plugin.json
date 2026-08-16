@@ -2,7 +2,7 @@
   "id": "gecho-ai-gecho-bridge",
   "name": "@gecho-ai/gecho-bridge",
   "description": "TikTok Search and Insight tools for OpenClaw, connecting LLMs to TikTok via Chrome Extension.",
-  "version": "1.1.30",
+  "version": "1.1.36",
   "skills": [
     "./skills"
   ],
