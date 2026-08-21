@@ -101,23 +101,25 @@ npm run skillhub:tencent:stage
 npm run skillhub:tencent:dry-run -- --skill tiktok-insight
 
 # Publish one Skill through the public/community CLI
-npm run skillhub:tencent:publish -- --skill tiktok-insight --locale zh-CN
+skillhub login --key skh_...
+npm run skillhub:tencent:publish -- --community --skill tiktok-insight --locale zh-CN
 
 # Check platform metadata for every Skill
 npm run publish:config:check
 ```
 
-For a Tencent SkillHub team workspace, use an enterprise key (`sk-ent-...`). The publisher first checks whether the team already has the target slug, then calls the team version endpoint for an existing Skill or the team creation endpoint for a new one. It does not send updates to the public community endpoint and never uploads `publish.json`.
+For the public community, use a `skh_...` key and pass `--community` so a saved enterprise credential is not selected accidentally. The installed official CLI is currently `2026.8.5`: it has `skillhub publish` for the public community, but not the `skillhub skill publish` command shown in the website screenshot.
+
+An enterprise key (`sk-ent-...`) can log in to the enterprise source and search or install team Skills, but the current team upload endpoint requires a web login session. Team publication must therefore be completed in the [enterprise publishing console](https://skillhub.cn/enterprise/dashboard/publish); this repository can still generate and validate the upload copy.
 
 ```bash
-# Create an enterprise API key in the Tencent SkillHub enterprise console,
-# or run: skillhub login --key sk-ent-...
-TENCENT_SKILLHUB_KEY='sk-ent-...' \
+# Public/community publication: log in with skh_... first
+skillhub login --key skh_...
 npm run skillhub:tencent:publish -- \
-  --skill tiktok-video-search --locale zh-CN --changelog 'Update Skill content'
+  --community --skill tiktok-video-search --locale zh-CN --changelog 'Update Skill content'
 ```
 
-An enterprise key can be reused from `~/.skillhub/credentials.json`; pass `--key` to override it. The organization ID is derived from the key unless `--org-id` is explicitly needed. Chinese targets normally use `update-or-create`, while English targets commonly use an independent `create` slug; check each Skill's `publish.json`. Team submissions may still require the platform's review/publication workflow before becoming publicly visible.
+An enterprise key can be reused from `~/.skillhub/credentials.json`, but `--community` deliberately ignores it. Chinese targets normally use `update-or-create`, while English targets commonly use an independent `create` slug; check each Skill's `publish.json`.
 
 A new team Skill also requires at least one team category ID. For an existing Skill, the publisher inherits category IDs from the remote Skill detail. For a new Skill, set `platforms.tencent-skillhub.categoryIds` in its `publish.json`, or pass `--category-ids 12,13` for a one-off publish. If they are missing, the script fetches the team's available categories and stops before uploading with the IDs to use.
 

@@ -9,6 +9,7 @@ const {
   buildEnterpriseRequest,
   detectPublishMode,
   publishEnterpriseTarget,
+  resolvePublishOptions,
   stageSkills,
   upsertFrontmatter
 } = require("../scripts/publish-tencent-skillhub.js");
@@ -17,6 +18,38 @@ test("Tencent publish mode distinguishes team API keys from community sessions",
   assert.equal(detectPublishMode("sk-ent-example"), "enterprise");
   assert.equal(detectPublishMode("skh_example"), "community");
   assert.equal(detectPublishMode(""), "session");
+});
+
+test("saved enterprise credentials select the team publishing path", () => {
+  const resolved = resolvePublishOptions({
+    mode: "publish",
+    host: "https://api.skillhub.cn",
+    key: null,
+    orgId: null
+  }, {
+    key: "sk-ent-example",
+    orgId: "12345"
+  });
+
+  assert.equal(resolved.key, "sk-ent-example");
+  assert.equal(resolved.orgId, "12345");
+  assert.equal(resolved.credentialSource, "stored");
+});
+
+test("explicit community mode does not reuse a saved enterprise credential", () => {
+  const resolved = resolvePublishOptions({
+    mode: "publish",
+    host: "https://api.skillhub.cn",
+    key: null,
+    orgId: null,
+    community: true
+  }, {
+    key: "sk-ent-example",
+    orgId: "12345"
+  });
+
+  assert.equal(resolved.key, null);
+  assert.equal(resolved.credentialSource, undefined);
 });
 
 test("existing team Skills publish a version instead of creating a new slug", () => {

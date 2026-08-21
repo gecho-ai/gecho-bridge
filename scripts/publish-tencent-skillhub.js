@@ -31,6 +31,7 @@ Options:
   --host <url>            SkillHub API host (default: https://api.skillhub.cn).
   --cli <path>            Official skillhub executable (default: skillhub).
   --key <key>             Tencent SkillHub key; sk-ent-* uses team publishing.
+  --community             Force the public/community publishing path and ignore saved enterprise credentials.
   --org-id <id>           Team organization ID (normally derived from sk-ent-*).
   --category-ids <ids>    Comma-separated team category IDs for a new Skill.
   --changelog <text>      Changelog for publish mode.
@@ -114,6 +115,7 @@ function parseArgs(argv) {
     host: process.env.TENCENT_SKILLHUB_HOST || null,
     cli: process.env.TENCENT_SKILLHUB_CLI || null,
     key: process.env.TENCENT_SKILLHUB_KEY || null,
+    community: false,
     orgId: process.env.TENCENT_SKILLHUB_ORG_ID || null,
     categoryIds: parseCategoryIds(process.env.TENCENT_SKILLHUB_CATEGORY_IDS),
     changelog: "",
@@ -151,6 +153,9 @@ function parseArgs(argv) {
         break;
       case "--key":
         options.key = nextValue(flag);
+        break;
+      case "--community":
+        options.community = true;
         break;
       case "--org-id":
         options.orgId = nextValue(flag);
@@ -498,6 +503,24 @@ function loadStoredEnterpriseCredential(host) {
   };
 }
 
+function resolvePublishOptions(options, storedCredential = null) {
+  if (options.mode !== "publish" || options.community) {
+    if (options.community && options.key && detectPublishMode(options.key) !== "community") {
+      throw new Error("--community requires a public/community key starting with skh_, or an existing public login session");
+    }
+    return options;
+  }
+  if (options.key) return options;
+  const stored = storedCredential || loadStoredEnterpriseCredential(options.host.replace(/\/$/, ""));
+  if (!stored) return options;
+  return {
+    ...options,
+    key: stored.key,
+    orgId: options.orgId || stored.orgId,
+    credentialSource: "stored"
+  };
+}
+
 async function publishEnterpriseTarget(target, context = {}) {
   const key = String(context.key || "").trim();
   if (detectPublishMode(key) !== "enterprise") {
@@ -696,6 +719,9 @@ function runCli(mode, options, staged) {
 async function runEnterprisePublish(options, staged) {
   let key = options.key;
   let orgId = options.orgId;
+  if (options.credentialSource === "stored") {
+    console.log("Using the stored Tencent SkillHub enterprise credential.");
+  }
   if (!key) {
     const stored = loadStoredEnterpriseCredential(options.host.replace(/\/$/, ""));
     if (stored) {
@@ -751,7 +777,7 @@ function printSummary(staged) {
 }
 
 async function main(argv = process.argv.slice(2)) {
-  const options = parseArgs(argv);
+  const options = resolvePublishOptions(parseArgs(argv));
   if (options.help) {
     console.log(usage());
     return;
@@ -784,6 +810,7 @@ module.exports = {
   buildTargets,
   detectPublishMode,
   publishEnterpriseTarget,
+  resolvePublishOptions,
   stageSkills,
   upsertFrontmatter
 };

@@ -101,22 +101,25 @@ npm run skillhub:tencent:stage
 npm run skillhub:tencent:dry-run -- --skill tiktok-insight
 
 # 使用个人/社区 Key，通过官方 CLI 发布单个 Skill
-npm run skillhub:tencent:publish -- --skill tiktok-insight --locale zh-CN
+skillhub login --key skh_...
+npm run skillhub:tencent:publish -- --community --skill tiktok-insight --locale zh-CN
 
 # 检查所有 Skill 是否都有三个平台注册配置
 npm run publish:config:check
 ```
 
-如果发布目标是腾讯 SkillHub 的团队空间，请使用企业 Key（`sk-ent-...`）。脚本会先查询团队内是否已有相同 slug：已有则调用团队版本接口，未有则调用团队创建接口；不会把更新误发成公共 Skill，也不会把 `publish.json` 上传到平台。
+公共社区发布使用 `skh_...` Key，并建议加 `--community`，避免脚本误用本机保存的企业凭证。当前官方 CLI `2026.8.5` 没有截图中的 `skillhub skill publish` 命令，`skillhub publish` 仍是公共社区发布接口。
+
+企业 Key（`sk-ent-...`）目前可以登录企业源、搜索和安装团队 Skill，但不能直接调用团队上传接口。团队发布需要在[企业发布控制台](https://skillhub.cn/enterprise/dashboard/publish)完成；本脚本可以继续生成和检查上传副本。
 
 ```bash
-# 先在腾讯 SkillHub 企业控制台创建企业 API Key，或执行 skillhub login --key sk-ent-...
-TENCENT_SKILLHUB_KEY='sk-ent-...' \
+# 公共社区发布：先登录 skh_...，再显式选择公共链路
+skillhub login --key skh_...
 npm run skillhub:tencent:publish -- \
-  --skill tiktok-video-search --locale zh-CN --changelog '更新 Skill 内容'
+  --community --skill tiktok-video-search --locale zh-CN --changelog '更新 Skill 内容'
 ```
 
-`sk-ent-...` 的企业 Key 默认从 `~/.skillhub/credentials.json` 复用；也可以显式传 `--key`。企业组织 ID 会通过 Key 自动获取，只有在接口要求手工指定时才需要 `--org-id`。中文目标配置为 `update-or-create`，英文目标通常配置为独立 slug 的 `create`，具体以各 Skill 的 `publish.json` 为准。团队提交后仍需按平台审核/发布状态查看最终公开结果。
+企业 Key 会从 `~/.skillhub/credentials.json` 复用，但不会用于 `--community` 公共发布。中文目标配置为 `update-or-create`，英文目标通常配置为独立 slug 的 `create`，具体以各 Skill 的 `publish.json` 为准。
 
 新建团队 Skill 还必须有至少一个团队分类 ID。已有 Skill 更新时脚本会从远端 Skill 详情继承分类；新建时可在对应 `publish.json` 的 `platforms.tencent-skillhub.categoryIds` 配置，或临时传 `--category-ids 12,13`。如果没有配置，脚本会先读取团队分类并在上传前给出可用 ID，不会提交一个必然失败的请求。
 
