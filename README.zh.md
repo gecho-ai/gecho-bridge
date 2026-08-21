@@ -87,6 +87,41 @@ openclaw gateway restart
 *如需升级已安装的版本，使用 `openclaw plugins update clawhub:@gecho-ai/gecho-bridge-bundle` 即可。*
 *插件会在需要时自动启动本地 Gecho Service。如果是先打开了客户端、后打开浏览器扩展，建议再执行一次 `openclaw gateway restart` 重新建立连接。*
 
+### 腾讯 SkillHub 发布
+
+腾讯 SkillHub 当前要求在 `SKILL.md` 顶层声明 `slug`、`version` 和 `displayName`。项目提供了独立发布脚本：每次执行都会在被 Git 忽略的 `tmp/tencent-skillhub-publish/` 中重新生成副本，不修改源 Skill。
+
+每个分发 Skill 都有自己的 `publish.json`，分别维护 ClawHub、腾讯 SkillHub 和魔塔社区的 slug/displayName。腾讯 SkillHub 的中文配置会沿用已有条目的 slug，英文配置使用独立 slug，避免把更新误发成新 Skill。`publish.json` 只参与发布准备，不会被上传到平台。
+
+```bash
+# 只生成发布副本，默认处理全部中英文 Skill
+npm run skillhub:tencent:stage
+
+# 使用官方 CLI 做单个 Skill 的本地 dry-run
+npm run skillhub:tencent:dry-run -- --skill tiktok-insight
+
+# 使用个人/社区 Key，通过官方 CLI 发布单个 Skill
+npm run skillhub:tencent:publish -- --skill tiktok-insight --locale zh-CN
+
+# 检查所有 Skill 是否都有三个平台注册配置
+npm run publish:config:check
+```
+
+如果发布目标是腾讯 SkillHub 的团队空间，请使用企业 Key（`sk-ent-...`）。脚本会先查询团队内是否已有相同 slug：已有则调用团队版本接口，未有则调用团队创建接口；不会把更新误发成公共 Skill，也不会把 `publish.json` 上传到平台。
+
+```bash
+# 先在腾讯 SkillHub 企业控制台创建企业 API Key，或执行 skillhub login --key sk-ent-...
+TENCENT_SKILLHUB_KEY='sk-ent-...' \
+npm run skillhub:tencent:publish -- \
+  --skill tiktok-video-search --locale zh-CN --changelog '更新 Skill 内容'
+```
+
+`sk-ent-...` 的企业 Key 默认从 `~/.skillhub/credentials.json` 复用；也可以显式传 `--key`。企业组织 ID 会通过 Key 自动获取，只有在接口要求手工指定时才需要 `--org-id`。中文目标配置为 `update-or-create`，英文目标通常配置为独立 slug 的 `create`，具体以各 Skill 的 `publish.json` 为准。团队提交后仍需按平台审核/发布状态查看最终公开结果。
+
+新建团队 Skill 还必须有至少一个团队分类 ID。已有 Skill 更新时脚本会从远端 Skill 详情继承分类；新建时可在对应 `publish.json` 的 `platforms.tencent-skillhub.categoryIds` 配置，或临时传 `--category-ids 12,13`。如果没有配置，脚本会先读取团队分类并在上传前给出可用 ID，不会提交一个必然失败的请求。
+
+官方文档：[CLI 安装](https://skillhub.cn/install/skillhub.md)、[公共发布](https://skillhub.cn/ai/release.md)、[企业发布控制台](https://skillhub.cn/enterprise/dashboard/publish)、[企业 API Key](https://skillhub.cn/enterprise/dashboard/keys)。
+
 ### 方式二：在 Hermes 中一键配置 (Hermes Skill Hub)
 你可以通过以下命令将服务快捷添加到 Hermes 并重启：
 ```bash

@@ -87,6 +87,42 @@ openclaw gateway restart
 *If you need to upgrade an installed version, use `openclaw plugins update clawhub:@gecho-ai/gecho-bridge-bundle`.*
 *The plugin will automatically start a local Gecho service when needed. If the browser extension was opened after the client, run `openclaw gateway restart` once to reconnect cleanly.*
 
+### Publish to Tencent SkillHub
+
+Tencent SkillHub currently requires top-level `slug`, `version`, and `displayName` fields in `SKILL.md`. This repository provides a dedicated publisher: every run rebuilds copies under the Git-ignored `tmp/tencent-skillhub-publish/` directory and leaves source Skills unchanged.
+
+Each distribution Skill has a `publish.json` with platform-specific slug/display-name values for ClawHub, Tencent SkillHub, and ModelScope. Tencent's Chinese entries keep the slug of existing publications, while English entries use a separate slug so an update is not accidentally published as a new Skill. These config files are used only during staging and are not uploaded.
+
+```bash
+# Build publish copies for all English and Chinese Skills
+npm run skillhub:tencent:stage
+
+# Run the official CLI dry-run for one Skill
+npm run skillhub:tencent:dry-run -- --skill tiktok-insight
+
+# Publish one Skill through the public/community CLI
+npm run skillhub:tencent:publish -- --skill tiktok-insight --locale zh-CN
+
+# Check platform metadata for every Skill
+npm run publish:config:check
+```
+
+For a Tencent SkillHub team workspace, use an enterprise key (`sk-ent-...`). The publisher first checks whether the team already has the target slug, then calls the team version endpoint for an existing Skill or the team creation endpoint for a new one. It does not send updates to the public community endpoint and never uploads `publish.json`.
+
+```bash
+# Create an enterprise API key in the Tencent SkillHub enterprise console,
+# or run: skillhub login --key sk-ent-...
+TENCENT_SKILLHUB_KEY='sk-ent-...' \
+npm run skillhub:tencent:publish -- \
+  --skill tiktok-video-search --locale zh-CN --changelog 'Update Skill content'
+```
+
+An enterprise key can be reused from `~/.skillhub/credentials.json`; pass `--key` to override it. The organization ID is derived from the key unless `--org-id` is explicitly needed. Chinese targets normally use `update-or-create`, while English targets commonly use an independent `create` slug; check each Skill's `publish.json`. Team submissions may still require the platform's review/publication workflow before becoming publicly visible.
+
+A new team Skill also requires at least one team category ID. For an existing Skill, the publisher inherits category IDs from the remote Skill detail. For a new Skill, set `platforms.tencent-skillhub.categoryIds` in its `publish.json`, or pass `--category-ids 12,13` for a one-off publish. If they are missing, the script fetches the team's available categories and stops before uploading with the IDs to use.
+
+Official documentation: [CLI installation](https://skillhub.cn/install/skillhub.md), [community publishing](https://skillhub.cn/ai/release.md), [enterprise publishing](https://skillhub.cn/enterprise/dashboard/publish), and [enterprise API keys](https://skillhub.cn/enterprise/dashboard/keys).
+
 ### Option 2: One-Click Setup in Hermes (Hermes Skill Hub)
 You can quickly add the service to Hermes and restart it with the following commands:
 ```bash
