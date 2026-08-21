@@ -29,6 +29,7 @@
     "bundle:publish": "bash ./scripts/publish-bundle-dist.sh publish",
     "bundle:stage:dist": "bash ./scripts/publish-bundle-dist.sh stage",
     "bundle:publish:dist": "bash ./scripts/publish-bundle-dist.sh publish",
+    "skill:validate": "node ./scripts/validate-skills.js",
     "skill:stage": "bash ./scripts/publish-skills.sh stage",
     "skill:dry-run": "bash ./scripts/publish-skills.sh dry-run",
     "skill:publish": "bash ./scripts/publish-skills.sh publish"

@@ -217,7 +217,7 @@ npm run bundle:publish:dist
 - 只发布新增或发生变化的 Skill，避免重复发布。
 - 默认显式发布到团队 owner `gecho-ai`，不会跟随个人当前账号误发。
 - 默认隔离本机 OpenClaw/Clawdbot 的其他 Skill 目录，避免误发布本地文件。
-- 默认在暂存前校验每个 Skill 的 frontmatter 和 `_meta.json`；校验失败会停止流程。
+- 默认在暂存前运行全量 Skill 验收，并校验每个 Skill 的 frontmatter、`_meta.json` 和中文发布元数据；校验失败会停止流程。
 
 支持三种模式：
 
@@ -231,6 +231,12 @@ npm run bundle:publish:dist
 npm run skill:stage
 npm run skill:dry-run
 npm run skill:publish
+```
+
+只做本地全量验收、不准备 staging 目录：
+
+```bash
+npm run skill:validate
 ```
 
 发布前需要先完成一次 ClawHub 登录：

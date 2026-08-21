@@ -160,6 +160,12 @@ echo "Skill roots:  $SKILL_ROOTS"
 echo "Skill validation: $SKILL_VALIDATE"
 echo "ClawHub owner: $CLAWHUB_OWNER"
 
+if [[ "$SKILL_VALIDATE" == "1" ]]; then
+  echo
+  echo "Running full Skill validation..."
+  node "$PROJECT_ROOT/scripts/validate-skills.js"
+fi
+
 echo
 echo "Preparing staged skills..."
 rm -rf "$STAGE_DIR"
