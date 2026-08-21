@@ -79,6 +79,10 @@ rsync -a \
   --exclude 'data/' \
   --exclude 'node_modules/' \
   --exclude '.openclaw/' \
+  --exclude '.DS_Store' \
+  --exclude '.idea/' \
+  --exclude '.codex-plugin/' \
+  --exclude '.skillatlas-*' \
   "$PROJECT_ROOT"/ "$STAGE_DIR"/
 
 # Override the staged MCP entry to launch the bundled dist client instead of

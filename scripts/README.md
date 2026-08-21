@@ -121,6 +121,10 @@ npm run build:bundle
 - `data/`
 - `node_modules/`
 - `.openclaw/`
+- `.DS_Store`
+- `.idea/`
+- `.codex-plugin/`
+- `.skillatlas-*` 探测文件
 
 ### 3. 重写 staged `.mcp.json`
 
