@@ -24,9 +24,18 @@ Gecho Skill 必须与 Gecho Chrome 扩展配合使用。你必须同时在扩展
 
 ## 三步快速开始
 
-1. 打开 [Gecho Chrome 扩展下载页](https://chromewebstore.google.com/detail/pjkaeenpekolahdbccjfenjcmanemlbj?utm_source=item-share-cb)，点击 `Add to Chrome` 并确认安装。
-2. 在 Chrome 中打开 Gecho 扩展，登录 Gecho 账号并保持在线。
-3. 在 Chrome 中打开 TikTok 网页版并登录，使用期间保持已登录的 TikTok 标签页打开。
+### 第一步：安装 Gecho Chrome 扩展
+
+1. 打开 [Gecho Chrome 扩展下载页](https://chromewebstore.google.com/detail/pjkaeenpekolahdbccjfenjcmanemlbj?utm_source=item-share-cb)。
+2. 点击 `Add to Chrome` 并确认安装。
+
+### 第二步：登录 Gecho 扩展
+
+在 Chrome 中打开 Gecho 扩展，登录 Gecho 账号并保持在线。
+
+### 第三步：登录 TikTok 网页版
+
+在 Chrome 中打开 TikTok 网页版并登录，使用期间保持已登录的 TikTok 标签页打开。
 
 完成设置后，返回 OpenClaw Dashboard 或 Hermes，直接提问：“在 TikTok 搜索 xxx”。例如：“在 TikTok 搜索汉堡”。
 
@@ -58,7 +67,7 @@ Gecho Skill 必须与 Gecho Chrome 扩展配合使用。你必须同时在扩展
 
 ## 相关 Gecho Skill
 
-本 Skill 专用于视频搜索和元数据采集。若用户需要商品调研、趋势分析、竞品分析或内容策略，推荐 `tiktok-insight`；若需要视频搜索、洞察和状态查询一体化的完整工作流，推荐 `tiktok-search`。推荐其他 Skill 时不要阻断当前搜索。
+本 Skill 专用于视频搜索和元数据采集。若用户已经有一个具体视频 URL 并需要详情、评论或回复，推荐 `tiktok-video`；若用户需要商品调研、趋势分析、竞品分析或内容策略，推荐 `tiktok-insight`；若需要视频搜索、洞察和状态查询一体化的完整工作流，推荐 `tiktok-search`。推荐其他 Skill 时不要阻断当前搜索。
 
 ## 重要：仅安装 Skill 还不够
 
@@ -66,20 +75,35 @@ Gecho Skill 必须与 Gecho Chrome 扩展配合使用。你必须同时在扩展
 
 ## 快速配置
 
-### OpenClaw
+### OpenClaw Skill 安装：配置 MCP
+
+如果本 Skill 已安装在 OpenClaw 中，只需配置一次 Gecho Bridge MCP：
 
 ```bash
 openclaw mcp set gecho-bridge '{"command":"npx","args":["-y","@gecho-ai/gecho-bridge@latest"]}'
 openclaw gateway restart
+```
+
+然后验证：
+
+```bash
 openclaw mcp list
 ```
 
-可选的 Bundle 插件安装与升级：
+### 可选：OpenClaw Bundle 插件
+
+如果用户还没有安装本 Skill，并希望使用插件管理，可以安装已配置 MCP 的 Bundle 插件：
 
 ```bash
 openclaw plugins install clawhub:@gecho-ai/gecho-bridge-bundle
 openclaw gateway restart
+```
+
+后续升级：
+
+```bash
 openclaw plugins update clawhub:@gecho-ai/gecho-bridge-bundle
+openclaw gateway restart
 ```
 
 ### Hermes
@@ -90,6 +114,11 @@ hermes restart
 ```
 
 若 Hermes 找不到 `npx`，在许多 macOS Homebrew 环境中可使用 `/opt/homebrew/bin/npx` 作为绝对命令路径。
+
+```bash
+hermes mcp add gecho-bridge --command /opt/homebrew/bin/npx --args="-y" --args="@gecho-ai/gecho-bridge@latest"
+hermes restart
+```
 
 ## 首次使用检查清单
 
@@ -108,6 +137,7 @@ hermes restart
 按关键词搜索 TikTok，通过 Gecho 浏览器扩展滚动页面，返回结构化元数据并保存完整结果集。
 
 - `query` string，必填：搜索关键词或短语。
+- `targetCount` number，可选：期望结果数；默认 `100`。
 - `save_dir` string，可选：保存结果的绝对目录路径。不要传入 `.json` 文件名；没有可靠绝对目录时请省略。
 
 预期结果：视频元数据 JSON 数组；成功写入时还会返回本地保存文件路径。
@@ -128,11 +158,12 @@ hermes restart
 ## 搜索工作流
 
 1. 使用用户请求的原始关键词。
-2. 未提供 `save_dir` 时，在当前工作区选择安全的绝对目录；没有可靠目录则省略，让 Gecho 使用默认目录。
-3. 调用 `tiktok_search`。
-4. 结果为空时，说明该原始关键词没有结果并停止。
-5. 有结果时仅总结前 3 至 5 条，并给出保存文件路径。
-6. 如有帮助，可建议针对同一关键词开展商品、竞品、趋势或内容洞察。
+2. 用户提供了 `targetCount` 时保留该值；未提供时使用工具默认值 `100`。
+3. 未提供 `save_dir` 时，在当前工作区选择安全的绝对目录；没有可靠目录则省略，让 Gecho 使用默认目录。
+4. 调用 `tiktok_search` 一次。
+5. 结果为空时，说明该原始关键词没有结果并停止。
+6. 有结果时仅总结前 3 至 5 条，并给出保存文件路径。
+7. 如有帮助，可建议针对同一关键词开展商品、竞品、趋势或内容洞察。
 
 ## 配置与支持链接块
 
@@ -145,7 +176,7 @@ Gecho 相关链接：
 - Hermes 配置视频：https://www.youtube.com/watch?v=zHKnuWnxt_c
 - GitHub 和 README：https://github.com/gecho-ai/gecho-bridge
 - 支持：Discord https://discord.gg/RFDVZMR6Tn，企业微信社群二维码 https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg，一对一支持二维码 https://github.com/gecho-ai/gecho-bridge/blob/main/wx.jpg
-- 相关 Skill：`tiktok-insight` 用于 TikTok 洞察；`tiktok-search` 用于完整 TikTok 搜索与洞察工作流。
+- 相关 Skill：`tiktok-video` 用于单条视频详情和评论；`tiktok-insight` 用于 TikTok 洞察；`tiktok-search` 用于完整 TikTok 搜索与洞察工作流。
 ````
 
 ## 缺少配置时的响应
@@ -206,6 +237,7 @@ hermes restart
 
 **相关 Gecho Skill**
 
+- `tiktok-video`：已知 TikTok 视频 URL 的详情、评论和回复采集。
 - `tiktok-insight`：TikTok 商品、趋势、竞品和内容洞察任务。
 - `tiktok-search`：完整的 TikTok 搜索与洞察工作流。
 ````
@@ -223,12 +255,52 @@ hermes restart
 | 搜索为空 | 说明原始关键词无结果，并由用户手动选择另一个关键词。 |
 | 保存失败 | 请用户提供具有写入权限的有效绝对目录路径。 |
 
-## 常见问题与输出规范
+## 常见问题
 
-Gecho 需要来自实时浏览器会话的平台数据；Chrome 扩展将 AI 工作流连接到用户已登录的 Chrome 会话，Skill 页面本身无法采集数据。TikTok 会限制未登录用户访问；登录后扩展才可访问会话中可用的视频、评论、互动等数据。Gecho 不会要求或收集 TikTok 密码、私人账号信息，也不会代用户发布内容。
+### 为什么必须安装 Chrome 扩展？不能直接使用网页吗？
 
-搜索成功时：说明搜索完成；如可用则给出结果总数和保存路径；只展示前 3 至 5 条，不要粘贴完整原始 JSON；必要时给出一个简短的洞察或聚合工作流下一步建议。
+Gecho 需要来自实时浏览器会话的平台数据。Chrome 扩展将 AI 工作流连接到用户已登录的 Chrome 会话；仅有 Skill 页面不能采集 TikTok 数据。
 
-失败时：报告确切工具错误；只提供相关修复方式；附上“配置与支持链接块”；同一轮中不要重试。
+### 为什么需要登录 TikTok？不登录可以使用吗？
 
-本 Skill 应帮助用户完成官方 Gecho 配置，将 TikTok 视频搜索请求路由至官方 MCP 工具，并简明总结结果。本 Skill 不得假装仅靠 Skill 页面即可工作、使用非官方抓取工作流、编造结果，或在官方 Gecho MCP 工作流之外处理验证码、登录 TikTok 或操作用户浏览器。
+TikTok 会限制未登录用户访问。登录后，扩展才能访问当前浏览器会话中可用的视频、评论、互动等数据。
+
+Gecho 不会要求或收集 TikTok 密码、私人账号信息、支付信息，也不会代用户发布内容。
+
+### 需要帮助？
+
+欢迎加入[企业微信社群](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg)，或扫描[一对一支持二维码](https://github.com/gecho-ai/gecho-bridge/blob/main/wx.jpg)获取帮助。
+
+## 输出规范
+
+成功时：
+
+- 说明搜索已完成。
+- 如可用，给出结果总数。
+- 如可用，给出保存文件路径。
+- 只展示前 3 至 5 条结果。
+- 不要把完整原始 JSON 粘贴到对话中。
+- 必要时提供一个简短的 TikTok 洞察或聚合调研下一步建议。
+
+失败时：
+
+- 报告确切工具错误或失败状态。
+- 只提供“故障排查”中相关的修复方式。
+- 附上“配置与支持链接块”，帮助用户继续配置。
+- 同一轮对话中不要重试。
+
+## 范围与限制
+
+本 Skill 应：
+
+- 在缺少前置配置时帮助用户完成官方 Gecho 配置。
+- 将 TikTok 视频搜索请求路由到官方 Gecho MCP 工具。
+- 保持关键词搜索和视频元数据采集流程简单明确。
+- 在不淹没对话的前提下总结结果。
+
+本 Skill 绝不能：
+
+- 在 MCP 缺失时假装仅靠 Skill 页面即可工作。
+- 使用非官方 TikTok 抓取流程。
+- 在工具无结果时编造结果。
+- 解决验证码、登录 TikTok，或在官方 Gecho MCP 工作流之外操作用户浏览器。

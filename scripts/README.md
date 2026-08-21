@@ -217,6 +217,7 @@ npm run bundle:publish:dist
 - 只发布新增或发生变化的 Skill，避免重复发布。
 - 默认显式发布到团队 owner `gecho-ai`，不会跟随个人当前账号误发。
 - 默认隔离本机 OpenClaw/Clawdbot 的其他 Skill 目录，避免误发布本地文件。
+- 默认在暂存前校验每个 Skill 的 frontmatter 和 `_meta.json`；校验失败会停止流程。
 
 支持三种模式：
 
@@ -247,6 +248,8 @@ clawhub whoami
 ```bash
 CLAWHUB_CHANGELOG='Release 1.1.31' npm run skill:publish
 CLAWHUB_BUMP=minor CLAWHUB_CHANGELOG='New skill capabilities' npm run skill:publish
+# 仅在已经完成外部校验、需要跳过本地结构校验时使用
+SKILL_VALIDATE=0 npm run skill:dry-run
 ```
 
 默认使用 `npx -y clawhub@latest`，因为旧版 CLI 不支持 `sync --owner`。如需使用已安装的最新版 CLI，可以指定：
@@ -315,7 +318,9 @@ npm run sync:version
 
 - `.claude-plugin/plugin.json`
 - `openclaw.plugin.json`
-- `skills/tiktok-search/_meta.json`
+- `skills/`、`skills-zh-CN/`、`distribution-skills/`、`distribution-skills-zh-CN/` 下所有 Skill 的 `_meta.json`
+
+如果某个目录包含 `SKILL.md` 但缺少 `_meta.json`，同步会直接失败，避免新 Skill 被漏掉。
 
 另外：
 

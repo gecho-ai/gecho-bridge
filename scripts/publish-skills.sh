@@ -16,6 +16,7 @@ Description:
 Environment variables:
   STAGE_DIR             Override the temporary staging directory
   SKILL_ROOTS           Space-separated source roots (default: "skills distribution-skills")
+  SKILL_VALIDATE        Validate Skill metadata before staging (default: 1)
   CLAWHUB_REGISTRY      Override the ClawHub registry URL
   CLAWHUB_CLI           ClawHub command (default: "npx -y clawhub@latest")
   CLAWHUB_BUMP          Version bump for changed skills (default: patch)
@@ -55,6 +56,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 STAGE_DIR="${STAGE_DIR:-/tmp/clean_publish_gecho_bridge_skills}"
 SKILL_ROOTS="${SKILL_ROOTS:-skills distribution-skills}"
+SKILL_VALIDATE="${SKILL_VALIDATE:-1}"
 CLAWHUB_REGISTRY="${CLAWHUB_REGISTRY:-}"
 # Skills for this repository are owned by the Gecho AI team. Keep this fixed
 # so a shell-level environment variable cannot redirect a release to a
@@ -74,10 +76,88 @@ case "$CLAWHUB_BUMP" in
     ;;
 esac
 
+case "$SKILL_VALIDATE" in
+  0|1)
+    ;;
+  *)
+    echo "SKILL_VALIDATE must be 0 or 1 (got: $SKILL_VALIDATE)." >&2
+    exit 1
+    ;;
+esac
+
+validate_skill_dir() {
+  local skill_dir="$1"
+
+  SKILL_DIR="$skill_dir" node <<'NODE'
+const fs = require("fs");
+const path = require("path");
+
+const skillDir = process.env.SKILL_DIR;
+const skillPath = path.join(skillDir, "SKILL.md");
+const metaPath = path.join(skillDir, "_meta.json");
+const skillName = path.basename(skillDir);
+const skillRootName = path.basename(path.dirname(skillDir));
+
+if (!fs.existsSync(skillPath)) {
+  throw new Error(`missing SKILL.md in ${skillDir}`);
+}
+
+const text = fs.readFileSync(skillPath, "utf8");
+const frontmatter = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
+if (!frontmatter) {
+  throw new Error(`missing YAML frontmatter in ${skillPath}`);
+}
+
+const nameMatch = frontmatter[1].match(/^name:\s*([^\s]+)\s*$/m);
+const descriptionMatch = frontmatter[1].match(/^description:\s*\S.*$/m);
+if (!nameMatch || nameMatch[1] !== skillName) {
+  throw new Error(`frontmatter name must match ${skillName} in ${skillPath}`);
+}
+if (!descriptionMatch) {
+  throw new Error(`missing frontmatter description in ${skillPath}`);
+}
+
+if (!fs.existsSync(metaPath)) {
+  throw new Error(`missing _meta.json in ${skillDir}`);
+}
+
+let metadata;
+try {
+  metadata = JSON.parse(fs.readFileSync(metaPath, "utf8"));
+} catch (error) {
+  throw new Error(`invalid _meta.json in ${skillDir}: ${error.message}`);
+}
+if (metadata.slug !== skillName) {
+  throw new Error(`_meta.json slug must match ${skillName} in ${metaPath}`);
+}
+
+if (skillRootName.endsWith("-zh-CN")) {
+  const publishPath = path.join(skillDir, "skillhub-publish.json");
+  if (!fs.existsSync(publishPath)) {
+    throw new Error(`missing skillhub-publish.json in ${skillDir}`);
+  }
+
+  let publishMetadata;
+  try {
+    publishMetadata = JSON.parse(fs.readFileSync(publishPath, "utf8"));
+  } catch (error) {
+    throw new Error(`invalid skillhub-publish.json in ${skillDir}: ${error.message}`);
+  }
+  if (publishMetadata.slug !== skillName) {
+    throw new Error(`skillhub-publish.json slug must match ${skillName} in ${publishPath}`);
+  }
+  if (publishMetadata.locale !== "zh-CN") {
+    throw new Error(`skillhub-publish.json locale must be zh-CN in ${publishPath}`);
+  }
+}
+NODE
+}
+
 echo "Project root: $PROJECT_ROOT"
 echo "Stage dir:    $STAGE_DIR"
 echo "Mode:         $MODE"
 echo "Skill roots:  $SKILL_ROOTS"
+echo "Skill validation: $SKILL_VALIDATE"
 echo "ClawHub owner: $CLAWHUB_OWNER"
 
 echo
@@ -105,6 +185,10 @@ for source_root in $SKILL_ROOTS; do
     fi
 
     slug="$(basename "$skill_dir")"
+    if [[ "$SKILL_VALIDATE" == "1" ]]; then
+      validate_skill_dir "$skill_dir"
+      echo "  validated $source_root/$slug"
+    fi
     destination="$stage_root/$slug"
     mkdir -p "$destination"
     rsync -a --delete "$skill_dir/" "$destination/"

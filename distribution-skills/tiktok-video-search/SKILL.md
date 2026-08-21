@@ -73,6 +73,7 @@ If the user wants deeper research after seeing search results, recommend the rel
 
 - TikTok Insight: for product research, trend analysis, competitor analysis, and content strategy.
 - TikTok Search & Insight: for the complete TikTok research workflow that combines video search, insight jobs, and status checks.
+- TikTok Video Detail: for collecting detail data, comments, and replies from one known TikTok video URL.
 
 When recommending another Skill, keep the current answer useful first. Do not block the current TikTok search result on installing another Skill.
 
@@ -162,6 +163,7 @@ Searches TikTok for a keyword, scrolls the page through the Gecho browser extens
 Parameters:
 
 - `query` string, required: search keyword or phrase.
+- `targetCount` number, optional: desired result count; default `100`.
 - `save_dir` string, optional: absolute directory path for saving results. Do not pass a `.json` filename. Omit this parameter if no reliable absolute directory is available.
 
 Expected result:
@@ -188,11 +190,12 @@ Core rules:
 ## Search workflow
 
 1. Use the exact keyword requested by the user.
-2. If the user did not provide `save_dir`, choose a safe absolute directory path in the current workspace. If no reliable absolute directory is available, omit `save_dir` and let Gecho use its default data directory.
-3. Call `tiktok_search`.
-4. If the result is empty, say that the exact keyword returned no results and stop.
-5. If results are present, summarize only the top 3 to 5 items and provide the saved file path.
-6. If useful, offer a light next step such as running TikTok insight for product, competitor, trend, or content analysis.
+2. If the user provided `targetCount`, preserve it; otherwise use the tool default of `100`.
+3. If the user did not provide `save_dir`, choose a safe absolute directory path in the current workspace. If no reliable absolute directory is available, omit `save_dir` and let Gecho use its default data directory.
+4. Call `tiktok_search` once.
+5. If the result is empty, say that the exact keyword returned no results and stop.
+6. If results are present, summarize only the top 3 to 5 items and provide the saved file path.
+7. If useful, offer a light next step such as running TikTok insight for product, competitor, trend, or content analysis.
 
 ## Setup and support links block
 
@@ -207,7 +210,7 @@ Helpful Gecho links:
 - Hermes setup video: https://www.youtube.com/watch?v=zHKnuWnxt_c
 - GitHub and README: https://github.com/gecho-ai/gecho-bridge
 - Support: Discord https://discord.gg/RFDVZMR6Tn, WeCom group QR https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg, 1:1 support QR https://github.com/gecho-ai/gecho-bridge/blob/main/wx.jpg
-- Related Skills: `tiktok-insight` for focused TikTok insight, and `tiktok-search` for the complete TikTok search and insight workflow.
+- Related Skills: `tiktok-video` for one-video detail and comments, `tiktok-insight` for focused TikTok insight, and `tiktok-search` for the complete TikTok search and insight workflow.
 ````
 
 ## Setup-missing response
@@ -290,6 +293,7 @@ After setup, return to OpenClaw Dashboard or Hermes and ask again, for example:
 
 **Related Gecho Skills**
 
+- `tiktok-video`: detail data, comments, and replies for one known TikTok video URL.
 - `tiktok-insight`: TikTok product, trend, competitor, and content insight jobs.
 - `tiktok-search`: complete TikTok search and insight workflow.
 ````

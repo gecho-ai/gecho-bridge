@@ -24,11 +24,32 @@ Gecho Skill 必须与 Gecho Chrome 扩展配合使用。你必须在扩展中登
 
 ## 三步快速开始
 
-1. 打开 [Gecho Chrome 扩展下载页](https://chromewebstore.google.com/detail/pjkaeenpekolahdbccjfenjcmanemlbj?utm_source=item-share-cb)，点击 `Add to Chrome` 并确认安装。
-2. 打开 Chrome 中的 Gecho 扩展，登录 Gecho 账号并保持在线。
-3. 在 Chrome 中登录 TikTok，保持目标主页或可用的 TikTok 标签页打开。
+### 第一步：安装 Gecho Chrome 扩展
+
+1. 打开 [Gecho Chrome 扩展下载页](https://chromewebstore.google.com/detail/pjkaeenpekolahdbccjfenjcmanemlbj?utm_source=item-share-cb)。
+2. 点击 `Add to Chrome` 并确认安装。
+
+### 第二步：登录 Gecho 扩展
+
+打开 Chrome 中的 Gecho 扩展，登录 Gecho 账号并保持在线。
+
+### 第三步：在 Chrome 中打开 TikTok
+
+在 Chrome 中登录 TikTok，保持目标主页或可用的 TikTok 标签页打开。Gecho 运行期间也要保持相关标签页可用。
 
 完成后，返回 OpenClaw Dashboard 或 Hermes，直接提问：“获取 TikTok 创作者 @example 的视频”。
+
+## 官方链接与配置帮助
+
+- 官网：[gecho.ai](https://gecho.ai/)
+- GitHub：[gecho-ai/gecho-bridge](https://github.com/gecho-ai/gecho-bridge)
+- YouTube 频道：[@Gecho-AI](https://www.youtube.com/@Gecho-AI)
+- Chrome 扩展：[Gecho 扩展](https://chromewebstore.google.com/detail/pjkaeenpekolahdbccjfenjcmanemlbj?utm_source=item-share-cb)
+- OpenClaw 配置视频：[OpenClaw + TikTok](https://www.youtube.com/watch?v=ggwY9hISHcQ)
+- Hermes 配置视频：[Hermes + TikTok](https://www.youtube.com/watch?v=zHKnuWnxt_c)
+- Discord：[https://discord.gg/RFDVZMR6Tn](https://discord.gg/RFDVZMR6Tn)
+- 企业微信社群二维码：[qywx.jpg](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg)
+- 一对一支持二维码：[wx.jpg](https://github.com/gecho-ai/gecho-bridge/blob/main/wx.jpg)
 
 ## 本 Skill 能做什么
 
@@ -54,18 +75,34 @@ Gecho Skill 必须与 Gecho Chrome 扩展配合使用。你必须在扩展中登
 
 ## 快速配置
 
-### OpenClaw
+### OpenClaw Skill 安装：配置 MCP
+
+如果本 Skill 已安装在 OpenClaw 中，只需配置一次 Gecho Bridge MCP：
 
 ```bash
 openclaw mcp set gecho-bridge '{"command":"npx","args":["-y","@gecho-ai/gecho-bridge@latest"]}'
 openclaw gateway restart
+```
+
+然后验证：
+
+```bash
 openclaw mcp list
 ```
 
-可选 Bundle 插件：
+### 可选：OpenClaw Bundle 插件
+
+如果用户还没有安装本 Skill，并希望使用插件管理，可以安装已配置 MCP 的 Bundle 插件：
 
 ```bash
 openclaw plugins install clawhub:@gecho-ai/gecho-bridge-bundle
+openclaw gateway restart
+```
+
+后续升级：
+
+```bash
+openclaw plugins update clawhub:@gecho-ai/gecho-bridge-bundle
 openclaw gateway restart
 ```
 
@@ -76,7 +113,12 @@ hermes mcp add gecho-bridge --command npx --args="-y" --args="@gecho-ai/gecho-br
 hermes restart
 ```
 
-若 Hermes 找不到 `npx`，许多 macOS Homebrew 环境可以使用 `/opt/homebrew/bin/npx`。
+若 Hermes 找不到 `npx`，许多 macOS Homebrew 环境可以使用 `/opt/homebrew/bin/npx`：
+
+```bash
+hermes mcp add gecho-bridge --command /opt/homebrew/bin/npx --args="-y" --args="@gecho-ai/gecho-bridge@latest"
+hermes restart
+```
 
 ## 首次使用检查清单
 
@@ -87,6 +129,8 @@ hermes restart
 - 活跃平台标签页未被验证码、登录墙、验证、地区提示、Cookie 提示或卡死页面阻断。
 
 完整配置指南：[Gecho Bridge README](https://github.com/gecho-ai/gecho-bridge/blob/main/README.md)
+
+相关视频和支持链接见上方“官方链接与配置帮助”。
 
 ## 官方 MCP 工具
 
@@ -161,6 +205,11 @@ https://chromewebstore.google.com/detail/pjkaeenpekolahdbccjfenjcmanemlbj?utm_so
 ```bash
 openclaw mcp set gecho-bridge '{"command":"npx","args":["-y","@gecho-ai/gecho-bridge@latest"]}'
 openclaw gateway restart
+```
+
+然后验证：
+
+```bash
 openclaw mcp list
 ```
 
@@ -208,10 +257,52 @@ hermes restart
 | 缺少创作者 | 请求用户提供 TikTok 用户名或主页 URL。 |
 | 创作者结果为空 | 说明该创作者没有可采集视频，并请用户手动核实主页。 |
 
-## 常见问题、输出规范与限制
+## 常见问题
 
-Gecho 需要实时浏览器会话的平台数据。Chrome 扩展将 AI 工作流连接到用户 Chrome 会话；仅有 Skill 页面不能采集数据。TikTok 可能出现登录、验证码、验证、地区、Cookie 或平台页面提示，保持页面可用可使 Gecho 使用用户可见的同一浏览器状态。Gecho 不会要求或收集 TikTok 密码、私人账号或支付信息，也不会代用户发布内容。
+### 为什么必须安装 Chrome 扩展？不能直接使用网页吗？
 
-成功时说明工具已完成；如可用给出结果总数和保存路径；只显示最有用字段或前 3 至 5 条，不要粘贴完整原始 JSON；必要时提供一个搜索或洞察的下一步建议。失败时报告确切错误，只提供相关修复方式，附上“配置与支持链接块”，同一轮不要重试。
+Gecho 需要来自实时浏览器会话的平台数据，例如需要登录状态的 TikTok 页面。Chrome 扩展将 AI 工作流连接到用户的 Chrome 会话；仅有 Skill 页面不能采集数据。
 
-本 Skill 应帮助用户完成官方 Gecho 配置，将达人采集请求路由到官方 MCP 工具，并简明总结结果。本 Skill 不得假装仅靠 Skill 页面即可工作、使用非官方抓取、编造达人视频，或在官方 Gecho MCP 工作流之外处理验证码、登录 TikTok 或操作用户浏览器。
+### 为什么需要在 Chrome 中打开 TikTok？
+
+TikTok 可能出现登录检查、验证码、验证、地区提示、Cookie 提示或平台页面阻断。保持平台页面打开且可用，可以让 Gecho 使用用户可见的同一浏览器状态。
+
+Gecho 不会要求或收集 TikTok 密码、私人账号信息、支付信息，也不会代用户发布内容。
+
+### 需要帮助？
+
+欢迎加入[企业微信社群](https://github.com/gecho-ai/gecho-bridge/blob/main/qywx.jpg)，或扫描[一对一支持二维码](https://github.com/gecho-ai/gecho-bridge/blob/main/wx.jpg)获取帮助。
+
+## 输出规范
+
+成功时：
+
+- 说明工具已完成。
+- 如可用，给出结果总数。
+- 如可用，给出保存文件路径。
+- 只展示最有用的字段或前 3 至 5 条结果。
+- 不要把完整原始 JSON 粘贴到对话中。
+- 必要时提供一个 TikTok 搜索或洞察的简短下一步建议。
+
+失败时：
+
+- 报告确切工具错误或失败状态。
+- 只提供“故障排查”中相关的修复方式。
+- 附上“配置与支持链接块”，帮助用户继续配置。
+- 同一轮对话中不要重试。
+
+## 范围与限制
+
+本 Skill 应：
+
+- 在缺少前置配置时帮助用户完成官方 Gecho 配置。
+- 将 TikTok 达人视频采集请求路由到官方 Gecho MCP 工具。
+- 保持单工具工作流简单明确。
+- 在不淹没对话的前提下总结结果。
+
+本 Skill 绝不能：
+
+- 在 MCP 缺失时假装仅靠 Skill 页面即可工作。
+- 使用非官方 TikTok 抓取流程。
+- 编造创作者视频结果。
+- 解决验证码、登录 TikTok，或在官方 Gecho MCP 工作流之外操作用户浏览器。
