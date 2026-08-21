@@ -15,6 +15,7 @@ Description:
 
 Environment variables:
   STAGE_DIR             Override the temp staging directory
+  SKILL_VALIDATE        Validate all Skills before staging (default: 1)
   CLAWHUB_NAME          Override the ClawHub package name for this publish only
   CLAWHUB_OWNER         Override the ClawHub owner/publisher handle
   CLAWHUB_VERSION       Override the ClawHub version for this publish only
@@ -56,12 +57,29 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 STAGE_DIR="${STAGE_DIR:-/tmp/clean_publish_gecho_bridge_dist}"
+SKILL_VALIDATE="${SKILL_VALIDATE:-1}"
 CLAWHUB_FAMILY="${CLAWHUB_FAMILY:-bundle-plugin}"
 export CLAWHUB_NAME="${CLAWHUB_NAME:-@gecho-ai/gecho-bridge-bundle}"
+
+case "$SKILL_VALIDATE" in
+  0|1)
+    ;;
+  *)
+    echo "SKILL_VALIDATE must be 0 or 1 (got: $SKILL_VALIDATE)." >&2
+    exit 1
+    ;;
+esac
 
 echo "Project root: $PROJECT_ROOT"
 echo "Stage dir:    $STAGE_DIR"
 echo "Mode:         $MODE"
+echo "Skill validation: $SKILL_VALIDATE"
+
+if [[ "$SKILL_VALIDATE" == "1" ]]; then
+  echo
+  echo "Running full Skill validation..."
+  node "$PROJECT_ROOT/scripts/validate-skills.js"
+fi
 
 echo
 echo "Building dist artifacts..."

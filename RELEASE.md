@@ -56,6 +56,7 @@ npm version 1.1.30-beta.0 --no-git-tag-version
 ### 3. 构建和预检查
 
 ```bash
+npm run skill:validate
 npm run build:bundle
 npm pack --dry-run --registry=https://registry.npmjs.org
 npm publish --dry-run --registry=https://registry.npmjs.org
@@ -116,9 +117,16 @@ CLAWHUB_CHANGELOG='Release 1.1.30' npm run skill:publish
 
 脚本默认发布 `skills/` 和 `distribution-skills/`，只上传 ClawHub 上不存在或内容已变化的 Skill，并显式指定团队 owner `gecho-ai`。中文 Skill 目录不默认发布，需要通过 `SKILL_ROOTS` 显式指定。
 
+当前三条发布链路的内容范围固定如下：
+
+- npm 包：Bridge 运行时、英文 `skills/` 和英文 `distribution-skills/`。
+- Bundle Plugin：完整暂存仓库，包含中英文聚合 Skill 和分发 Skill。
+- 独立 Skill 发布：默认英文；中文通过 `SKILL_ROOTS='skills-zh-CN distribution-skills-zh-CN'` 单独发布。
+
 ### 3. 构建和预检查
 
 ```bash
+npm run skill:validate
 npm run build:bundle
 npm pack --dry-run --registry=https://registry.npmjs.org
 npm publish --dry-run --registry=https://registry.npmjs.org
@@ -198,5 +206,5 @@ Bridge 默认使用系统用户目录，不依赖 npm/npx 缓存目录：
 2. Beta 使用 `beta` 标签，正式版使用 `latest` 标签。
 3. Beta 只改 Bridge 时，不强制升级 skill metadata。
 4. 正式版发布前，统一包、插件和 skill metadata 版本。
-5. 每次发布必须先执行 `npm pack --dry-run` 和 `npm publish --dry-run`。
+5. 每次发布必须先执行 `npm run skill:validate`、`npm pack --dry-run` 和 `npm publish --dry-run`。
 6. 发布完成后必须验证 npm dist-tags 和实际安装命令。

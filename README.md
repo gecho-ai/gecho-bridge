@@ -135,13 +135,20 @@ After the environment is configured and your AI client has restarted, you can di
 
 ### 🧩 Skills
 
-Gecho provides both an aggregate TikTok Skill and focused single-tool Skills:
+Gecho provides four aggregate Skills:
 
-- **`tiktok-search`**: the default aggregate Skill for the complete TikTok search and insight workflow. It covers `tiktok_search`, `tiktok_insight`, and `check_insight_status`.
-- **`tiktok-video-search`**: a focused distribution Skill for keyword-based TikTok video search and metadata collection.
-- **`tiktok-insight`**: a focused distribution Skill for TikTok product, trend, competitor, and content insight jobs, plus insight status checks.
+- **`amazon`**: Amazon search, product detail, and review collection.
+- **`tiktok-search`**: the aggregate TikTok research workflow, covering keyword video search, video detail, influencer lookup, insight jobs, and insight status checks.
+- **`tiktok-shop`**: TikTok Shop search and product detail.
+- **`x`**: X search and post detail.
 
-If you only need one focused capability, use the single-tool Skills. If you want the full research workflow, use `tiktok-search`.
+Focused single-tool Skills are also available:
+
+- **Amazon**: `amazon-search`, `amazon-product`, `amazon-reviews`.
+- **TikTok**: `tiktok-video-search` for keyword-based video search; `tiktok-video` for a specific video’s detail, comments, and replies; `tiktok-influencer`, `tiktok-insight`, `tiktok-product`, and `tiktok-shop-search` for focused workflows.
+- **X**: `x-search` and `x-post-detail`.
+
+Use `tiktok-video-search` when you want to discover videos by keyword. Use `tiktok-video` when you already have a video URL and need its detail data. If you want the full TikTok research workflow, use `tiktok-search`.
 
 ### 🔍 Basic Search (`tiktok_search`)
 Suitable for quickly retrieving and collecting video data.

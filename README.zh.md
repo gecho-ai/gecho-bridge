@@ -135,13 +135,20 @@ claude mcp add gecho-bridge -- npx -y @gecho-ai/gecho-bridge@latest
 
 ### 🧩 Skills 说明
 
-Gecho 同时提供 TikTok 聚合 Skill 和单工具分发 Skill：
+Gecho 提供四个聚合 Skill：
 
-- **`tiktok-search`**：默认聚合 Skill，适合完整 TikTok 搜索 + 洞察工作流，覆盖 `tiktok_search`、`tiktok_insight` 和 `check_insight_status`。
-- **`tiktok-video-search`**：单工具分发 Skill，适合按关键词搜索 TikTok 视频并采集元数据。
-- **`tiktok-insight`**：单工具分发 Skill，适合 TikTok 产品、趋势、竞品和内容洞察任务，并支持查询洞察任务状态。
+- **`amazon`**：覆盖 Amazon 搜索、商品详情和评论采集。
+- **`tiktok-search`**：TikTok 聚合研究工作流，覆盖关键词视频搜索、视频详情、达人查询、洞察任务和洞察状态查询。
+- **`tiktok-shop`**：TikTok Shop 搜索和商品详情。
+- **`x`**：X 搜索和帖子详情。
 
-如果只需要某个单点能力，可以使用单工具 Skill；如果需要完整研究流程，建议使用 `tiktok-search`。
+同时提供单功能 Skill：
+
+- **Amazon**：`amazon-search`、`amazon-product`、`amazon-reviews`。
+- **TikTok**：`tiktok-video-search` 用于按关键词搜索视频；`tiktok-video` 用于指定视频的详情、评论和回复；另有 `tiktok-influencer`、`tiktok-insight`、`tiktok-product` 和 `tiktok-shop-search`。
+- **X**：`x-search` 和 `x-post-detail`。
+
+需要按关键词发现视频时使用 `tiktok-video-search`；已有视频 URL、需要获取视频详情时使用 `tiktok-video`。需要完整 TikTok 研究工作流时，使用 `tiktok-search`。
 
 ### 🔍 基础搜索 (`tiktok_search`)
 适用于快速检索和收集视频数据。

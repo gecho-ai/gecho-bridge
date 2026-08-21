@@ -126,6 +126,9 @@ npm run build:bundle
 - `.codex-plugin/`
 - `.skillatlas-*` 探测文件
 
+Bundle 暂存前默认会运行 `npm run skill:validate` 对全部 38 个中英文 Skill 做验收。
+如需在已完成外部校验后跳过，可显式设置 `SKILL_VALIDATE=0`。
+
 ### 3. 重写 staged `.mcp.json`
 
 发布时会把临时目录里的 `.mcp.json` 改成：
@@ -278,6 +281,8 @@ CLAWHUB_CLI='clawhub' npm run skill:dry-run
 ```bash
 SKILL_ROOTS='skills-zh-CN distribution-skills-zh-CN' npm run skill:dry-run
 ```
+
+Skill 暂存同样会排除 `.DS_Store`、`.idea/`、`.codex-plugin/` 和 `.skillatlas-*` 等本地文件。
 
 注意：Skill 版本由 ClawHub 根据远端版本自动递增；正式版发布前先执行
 `npm run sync:version`，再执行 `npm run skill:dry-run` 确认发布计划。

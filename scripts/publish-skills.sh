@@ -197,7 +197,12 @@ for source_root in $SKILL_ROOTS; do
     fi
     destination="$stage_root/$slug"
     mkdir -p "$destination"
-    rsync -a --delete "$skill_dir/" "$destination/"
+    rsync -a --delete \
+      --exclude '.DS_Store' \
+      --exclude '.idea/' \
+      --exclude '.codex-plugin/' \
+      --exclude '.skillatlas-*' \
+      "$skill_dir/" "$destination/"
     skill_count=$((skill_count + 1))
     echo "  staged $source_root/$slug"
   done
