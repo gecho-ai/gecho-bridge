@@ -15,6 +15,11 @@
     "modelscope": {
       "slug": "tiktok-video-search",
       "displayName": "tiktok-video-search"
+    },
+    "aily-skillhub": {
+      "slug": "tiktok-video-search-en",
+      "displayName": "TikTok Video Search by Gecho",
+      "mode": "create"
     }
   }
 }

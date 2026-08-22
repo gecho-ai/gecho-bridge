@@ -15,6 +15,11 @@
     "modelscope": {
       "slug": "amazon-reviews-gecho",
       "displayName": "Amazon 商品评论【Gecho 官方】"
+    },
+    "aily-skillhub": {
+      "slug": "amazon-reviews",
+      "displayName": "Amazon 商品评论【Gecho 官方】",
+      "mode": "update-or-create"
     }
   }
 }

@@ -15,6 +15,11 @@
     "modelscope": {
       "slug": "tiktok-insight",
       "displayName": "tiktok-insight"
+    },
+    "aily-skillhub": {
+      "slug": "tiktok-insight-en",
+      "displayName": "TikTok Insight by Gecho",
+      "mode": "create"
     }
   }
 }

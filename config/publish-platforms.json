@@ -12,6 +12,11 @@
       "namespace": "gecho",
       "cli": "skillhub"
     },
+    "aily-skillhub": {
+      "kind": "skill-registry",
+      "mode": "manual",
+      "docs": "https://aily.feishu.cn/hc/1u7kleqg/gprkq9za"
+    },
     "modelscope": {
       "kind": "skill-registry",
       "host": "https://modelscope.cn",

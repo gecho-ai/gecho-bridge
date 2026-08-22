@@ -15,6 +15,11 @@
     "modelscope": {
       "slug": "tiktok-search",
       "displayName": "tiktok-search"
+    },
+    "aily-skillhub": {
+      "slug": "tiktok-search-en",
+      "displayName": "TikTok Search & Insight by Gecho",
+      "mode": "create"
     }
   }
 }

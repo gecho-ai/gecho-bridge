@@ -15,6 +15,11 @@
     "modelscope": {
       "slug": "tiktok-video-gecho",
       "displayName": "TikTok 视频详情、评论与回复【Gecho 官方】"
+    },
+    "aily-skillhub": {
+      "slug": "tiktok-video",
+      "displayName": "TikTok 视频详情、评论与回复【Gecho 官方】",
+      "mode": "update-or-create"
     }
   }
 }

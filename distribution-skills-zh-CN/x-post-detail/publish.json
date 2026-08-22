@@ -15,6 +15,11 @@
     "modelscope": {
       "slug": "x-post-detail-gecho",
       "displayName": "X 帖子详情与回复【Gecho 官方】"
+    },
+    "aily-skillhub": {
+      "slug": "x-post-detail",
+      "displayName": "X 帖子详情与回复【Gecho 官方】",
+      "mode": "update-or-create"
     }
   }
 }

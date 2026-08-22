@@ -39,6 +39,12 @@ function writeMissingConfigs() {
     const sourceSlug = skill.sourceSlug;
     const isChinese = skill.locale === "zh-CN";
 
+    const tencentTarget = {
+      slug: isChinese ? sourceSlug : `${sourceSlug}-en`,
+      displayName,
+      mode: isChinese ? "update-or-create" : "create"
+    };
+
     const config = {
       schemaVersion: 1,
       sourceSlug,
@@ -48,11 +54,8 @@ function writeMissingConfigs() {
           slug: isChinese ? `${sourceSlug}-zh-cn` : sourceSlug,
           displayName
         },
-        "tencent-skillhub": {
-          slug: isChinese ? sourceSlug : `${sourceSlug}-en`,
-          displayName,
-          mode: isChinese ? "update-or-create" : "create"
-        },
+        "tencent-skillhub": tencentTarget,
+        "aily-skillhub": { ...tencentTarget },
         modelscope: {
           slug: isChinese ? `${sourceSlug}-gecho` : sourceSlug,
           displayName
@@ -69,7 +72,7 @@ function writeMissingConfigs() {
 
 function checkConfigs() {
   const skills = listDistributionSkills();
-  const platforms = ["clawhub", "tencent-skillhub", "modelscope"];
+    const platforms = ["clawhub", "tencent-skillhub", "aily-skillhub", "modelscope"];
   const seen = new Map(platforms.map((platform) => [platform, new Set()]));
   for (const skill of skills) {
     for (const platform of platforms) {

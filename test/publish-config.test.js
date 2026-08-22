@@ -9,7 +9,7 @@ const {
 
 test("every distribution Skill has platform-specific publish identity", () => {
   const skills = listDistributionSkills();
-  const platforms = ["clawhub", "tencent-skillhub", "modelscope"];
+  const platforms = ["clawhub", "tencent-skillhub", "aily-skillhub", "modelscope"];
   const registry = loadPlatformRegistry();
 
   assert.equal(skills.length, 30);
@@ -36,6 +36,17 @@ test("Tencent Chinese identity follows the existing SkillHub publication", () =>
   assert.equal(target.slug, "gecho-tiktok-insight");
   assert.equal(target.displayName, "TikTok 选品、趋势、竞品与内容洞察【Gecho 官方】");
   assert.equal(target.mode, "update");
+});
+
+test("Aily SkillHub mirrors Tencent SkillHub identity configuration", () => {
+  for (const skill of listDistributionSkills()) {
+    const tencent = resolvePlatformTarget(skill.directory, "tencent-skillhub");
+    const aily = resolvePlatformTarget(skill.directory, "aily-skillhub");
+    assert.deepEqual(
+      { slug: aily.slug, displayName: aily.displayName, mode: aily.mode },
+      { slug: tencent.slug, displayName: tencent.displayName, mode: tencent.mode }
+    );
+  }
 });
 
 test("ModelScope uses the public owner namespace and Chinese suffix", () => {

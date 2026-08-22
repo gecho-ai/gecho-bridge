@@ -15,6 +15,11 @@
     "modelscope": {
       "slug": "amazon-search",
       "displayName": "Amazon Product Search by Gecho"
+    },
+    "aily-skillhub": {
+      "slug": "amazon-search-en",
+      "displayName": "Amazon Product Search by Gecho",
+      "mode": "create"
     }
   }
 }

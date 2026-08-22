@@ -15,6 +15,11 @@
     "modelscope": {
       "slug": "tiktok-video",
       "displayName": "TikTok Video Detail and Comments by Gecho"
+    },
+    "aily-skillhub": {
+      "slug": "tiktok-video-en",
+      "displayName": "TikTok Video Detail and Comments by Gecho",
+      "mode": "create"
     }
   }
 }

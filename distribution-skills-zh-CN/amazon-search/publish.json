@@ -15,6 +15,11 @@
     "modelscope": {
       "slug": "amazon-search-gecho",
       "displayName": "Amazon 商品搜索【Gecho 官方】"
+    },
+    "aily-skillhub": {
+      "slug": "amazon-search",
+      "displayName": "Amazon 商品搜索【Gecho 官方】",
+      "mode": "update-or-create"
     }
   }
 }

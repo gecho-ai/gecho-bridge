@@ -15,6 +15,11 @@
     "modelscope": {
       "slug": "tiktok-influencer",
       "displayName": "tiktok-influencer"
+    },
+    "aily-skillhub": {
+      "slug": "tiktok-influencer-en",
+      "displayName": "TikTok Influencer Videos by Gecho",
+      "mode": "create"
     }
   }
 }

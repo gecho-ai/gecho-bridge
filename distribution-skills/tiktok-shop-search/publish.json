@@ -15,6 +15,11 @@
     "modelscope": {
       "slug": "tiktok-shop-search",
       "displayName": "TikTok Shop Product Search by Gecho"
+    },
+    "aily-skillhub": {
+      "slug": "tiktok-shop-search-en",
+      "displayName": "TikTok Shop Product Search by Gecho",
+      "mode": "create"
     }
   }
 }

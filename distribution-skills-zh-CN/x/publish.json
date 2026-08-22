@@ -15,6 +15,11 @@
     "modelscope": {
       "slug": "x-gecho",
       "displayName": "X 帖子全链路调研：搜索、帖子详情与回复分析【Gecho 官方】"
+    },
+    "aily-skillhub": {
+      "slug": "gecho-x",
+      "displayName": "X 帖子全链路调研：搜索、帖子详情与回复分析【Gecho 官方】",
+      "mode": "update-or-create"
     }
   }
 }

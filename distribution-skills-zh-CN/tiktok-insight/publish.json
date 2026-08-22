@@ -15,6 +15,11 @@
     "modelscope": {
       "slug": "tiktok-insight-gecho",
       "displayName": "TikTok 选品、趋势、竞品与内容洞察【Gecho 官方】"
+    },
+    "aily-skillhub": {
+      "slug": "gecho-tiktok-insight",
+      "displayName": "TikTok 选品、趋势、竞品与内容洞察【Gecho 官方】",
+      "mode": "update"
     }
   }
 }

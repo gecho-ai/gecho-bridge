@@ -227,7 +227,7 @@ npm run bundle:publish:dist
 - 通过 ClawHub 公开 resolve 接口对比内容指纹，只发布新增或发生变化的 Skill。
 - 只发布新增或发生变化的 Skill，避免重复发布。
 - 默认显式发布到团队 owner `gecho-ai`，不会跟随个人当前账号误发。
-- 默认在暂存前运行全量 Skill 验收，并校验每个 Skill 的 frontmatter、`_meta.json` 和三平台发布配置；校验失败会停止流程。
+- 默认在暂存前运行全量 Skill 验收，并校验每个 Skill 的 frontmatter、`_meta.json` 和四个平台发布配置；校验失败会停止流程。
 
 ### 平台级 Skill 发布配置
 
@@ -236,9 +236,12 @@ npm run bundle:publish:dist
 - `sourceSlug` / `locale`：源 Skill 的身份和语言。
 - `platforms.clawhub`：ClawHub 的 slug 和显示名。
 - `platforms.tencent-skillhub`：腾讯 SkillHub 的 slug、显示名和发布模式。
+- `platforms.aily-skillhub`：Aily SkillHub 的 slug、显示名和发布模式；当前用于手动上传。
 - `platforms.modelscope`：魔塔社区的 slug 和显示名。
 
 平台公共信息（例如腾讯 SkillHub 的 namespace、API host 和 CLI 名称）统一放在 `config/publish-platforms.json`。平台配置不放进上传副本，避免被某个平台的字段污染其他平台。
+
+Aily SkillHub 当前没有接入自动发布脚本；其 Skill 身份配置与腾讯 SkillHub 保持一致，便于手动上传时沿用同一套 slug 和 displayName。
 
 当前魔塔社区的公开 owner 是 `Gecho`，开发者标识是 `gecho-ai`；中文 Skill 的魔塔 slug 使用 `<sourceSlug>-gecho`，英文 Skill 沿用源 slug。这个命名只属于魔塔，不会改变 Skill 源目录、ClawHub slug 或腾讯 SkillHub slug。
 

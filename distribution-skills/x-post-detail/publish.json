@@ -15,6 +15,11 @@
     "modelscope": {
       "slug": "x-post-detail",
       "displayName": "X Post Details by Gecho"
+    },
+    "aily-skillhub": {
+      "slug": "x-post-detail-en",
+      "displayName": "X Post Details by Gecho",
+      "mode": "create"
     }
   }
 }

@@ -15,6 +15,11 @@
     "modelscope": {
       "slug": "x",
       "displayName": "X Research by Gecho"
+    },
+    "aily-skillhub": {
+      "slug": "x-en",
+      "displayName": "X Research by Gecho",
+      "mode": "create"
     }
   }
 }
