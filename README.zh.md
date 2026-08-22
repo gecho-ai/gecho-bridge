@@ -125,6 +125,31 @@ npm run skillhub:tencent:publish -- \
 
 官方文档：[CLI 安装](https://skillhub.cn/install/skillhub.md)、[公共发布](https://skillhub.cn/ai/release.md)、[企业发布控制台](https://skillhub.cn/enterprise/dashboard/publish)、[企业 API Key](https://skillhub.cn/enterprise/dashboard/keys)。
 
+### Aily SkillHub 发布
+
+Aily 当前通过网页上传 Skill 压缩包。项目提供了浏览器自动化脚本，复用已登录的 Edge，
+从 `tmp/manual-skill-packages/manifest.tsv` 读取压缩包，并使用每个 Skill 的
+`publish.json` 中 `platforms.aily-skillhub.displayName` 自动填写展示名称。
+
+首次使用需要完全退出 Edge 后，以远程调试端口启动，再在该窗口登录 Aily：
+
+```bash
+/Applications/Microsoft\ Edge.app/Contents/MacOS/Microsoft\ Edge \
+  --remote-debugging-port=9222
+```
+
+然后执行：
+
+```bash
+npm run skill:package:manual
+npm run skillhub:aily:dry-run -- --skill tiktok-shop-search --locale zh-CN
+npm run skillhub:aily:publish -- --skill tiktok-shop-search --locale zh-CN
+```
+
+脚本只修改网页表单，不修改源 Skill，也不保存浏览器凭证；发布结果写入
+`tmp/aily-browser-publish/results.json`。完整参数和批量发布方式见
+[`scripts/README.md`](scripts/README.md)。
+
 ### 方式二：在 Hermes 中一键配置 (Hermes Skill Hub)
 你可以通过以下命令将服务快捷添加到 Hermes 并重启：
 ```bash

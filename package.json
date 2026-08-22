@@ -40,6 +40,8 @@
     "skillhub:tencent:stage": "bash ./scripts/publish-tencent-skillhub.sh stage",
     "skillhub:tencent:dry-run": "bash ./scripts/publish-tencent-skillhub.sh dry-run",
     "skillhub:tencent:publish": "bash ./scripts/publish-tencent-skillhub.sh publish",
+    "skillhub:aily:dry-run": "bash ./scripts/publish-aily-browser.sh dry-run",
+    "skillhub:aily:publish": "bash ./scripts/publish-aily-browser.sh publish",
     "skillhub:modelscope:stage": "bash ./scripts/publish-modelscope-skills.sh stage",
     "skillhub:modelscope:dry-run": "bash ./scripts/publish-modelscope-skills.sh dry-run",
     "skillhub:modelscope:publish": "bash ./scripts/publish-modelscope-skills.sh publish",
@@ -65,7 +67,8 @@
     "ws": "^8.19.0"
   },
   "devDependencies": {
-    "esbuild": "^0.25.4"
+    "esbuild": "^0.25.4",
+    "playwright-core": "^1.62.1"
   },
   "publishConfig": {
     "access": "public"

@@ -4,8 +4,9 @@
 
 Skill 和 Bundle Plugin 是两条独立的发布链路：Bundle Plugin 使用
 `publish-bundle-dist.sh`；Skill 根据平台分别使用
-`publish-clawhub-skills.sh`、`publish-tencent-skillhub.sh` 和
-`publish-modelscope-skills.sh`。旧的 `publish-skills.sh` 仍保留为兼容入口。
+`publish-clawhub-skills.sh`、`publish-tencent-skillhub.sh`、
+`publish-modelscope-skills.sh` 和 `publish-aily-browser.js`。
+旧的 `publish-skills.sh` 仍保留为兼容入口。
 
 ## 当前保留的脚本
 
@@ -248,6 +249,49 @@ npm run skill:package:manual
 ./scripts/package-manual-skills.sh tmp/aily-skillhub-packages
 ```
 
+### `publish-aily-browser.js`
+
+作用：
+
+- 复用已登录的 Edge，通过 CDP 自动操作 Aily SkillHub 的网页上传流程。
+- 从 `tmp/manual-skill-packages/manifest.tsv` 找到压缩包，并从对应 Skill 的
+  `publish.json` 读取 Aily 的 `displayName` 和 slug。
+- 上传压缩包后自动填写展示名称，点击完成，并把每个结果写入 JSON 报告。
+- 不修改源 Skill、不上传 `publish.json`，也不会读取或保存浏览器 Cookie、Token。
+
+这个脚本是网页自动化，不是 Aily 官方 CLI。首次使用需要让 Edge 开启远程调试端口；
+需要先完全退出 Edge，再用原来的用户配置启动：
+
+```bash
+/Applications/Microsoft\ Edge.app/Contents/MacOS/Microsoft\ Edge \
+  --remote-debugging-port=9222
+```
+
+启动后在这个 Edge 中登录 Aily，再先检查队列：
+
+```bash
+npm run skill:package:manual
+npm run skillhub:aily:dry-run -- --skill tiktok-shop-search --locale zh-CN
+```
+
+确认输出的 `archive` 和 `displayName` 后发布一个 Skill：
+
+```bash
+npm run skillhub:aily:publish -- --skill tiktok-shop-search --locale zh-CN
+```
+
+批量发布时可以按语言、数量筛选；失败默认停止，确认流程稳定后再使用
+`--continue-on-error`：
+
+```bash
+npm run skillhub:aily:publish -- --locale zh-CN --limit 3
+npm run skillhub:aily:publish -- --locale all --continue-on-error
+```
+
+默认使用 `http://127.0.0.1:9222` 和 `https://aily.feishu.cn/market/skills`，可通过
+`--endpoint`、`--url`、`--package-dir`、`--timeout` 和 `--report` 覆盖。报告默认写入
+被 Git 忽略的 `tmp/aily-browser-publish/results.json`。脚本不会主动关闭用户的 Edge。
+
 ---
 
 ### `publish-clawhub-skills.sh`
@@ -274,7 +318,8 @@ npm run skill:package:manual
 
 平台公共信息（例如腾讯 SkillHub 的 namespace、API host 和 CLI 名称）统一放在 `config/publish-platforms.json`。平台配置不放进上传副本，避免被某个平台的字段污染其他平台。
 
-Aily SkillHub 当前没有接入自动发布脚本；其 Skill 身份配置与腾讯 SkillHub 保持一致，便于手动上传时沿用同一套 slug 和 displayName。
+Aily SkillHub 当前通过网页上传；`publish-aily-browser.js` 使用浏览器自动化完成上传，
+其 Skill 身份配置与腾讯 SkillHub 保持一致，便于沿用同一套 slug 和 displayName。
 
 当前魔塔社区的公开 owner 是 `Gecho`，开发者标识是 `gecho-ai`；中文 Skill 的魔塔 slug 使用 `<sourceSlug>-gecho`，英文 Skill 沿用源 slug。这个命名只属于魔塔，不会改变 Skill 源目录、ClawHub slug 或腾讯 SkillHub slug。
 
