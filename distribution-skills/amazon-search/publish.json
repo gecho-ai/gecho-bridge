@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "amazon-search",
+  "locale": "en",
+  "platforms": {
+    "clawhub": {
+      "slug": "amazon-search",
+      "displayName": "Amazon Product Search by Gecho"
+    },
+    "tencent-skillhub": {
+      "slug": "amazon-search-en",
+      "displayName": "Amazon Product Search by Gecho",
+      "mode": "create"
+    },
+    "modelscope": {
+      "slug": "amazon-search",
+      "displayName": "Amazon Product Search by Gecho"
+    }
+  }
+}

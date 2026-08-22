@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "x-post-detail",
+  "locale": "zh-CN",
+  "platforms": {
+    "clawhub": {
+      "slug": "x-post-detail-zh-cn",
+      "displayName": "X 帖子详情与回复【Gecho 官方】"
+    },
+    "tencent-skillhub": {
+      "slug": "x-post-detail",
+      "displayName": "X 帖子详情与回复【Gecho 官方】",
+      "mode": "update-or-create"
+    },
+    "modelscope": {
+      "slug": "x-post-detail-gecho",
+      "displayName": "X 帖子详情与回复【Gecho 官方】"
+    }
+  }
+}

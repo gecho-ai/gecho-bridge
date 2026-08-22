@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "tiktok-video",
+  "locale": "en",
+  "platforms": {
+    "clawhub": {
+      "slug": "tiktok-video",
+      "displayName": "TikTok Video Detail and Comments by Gecho"
+    },
+    "tencent-skillhub": {
+      "slug": "tiktok-video-en",
+      "displayName": "TikTok Video Detail and Comments by Gecho",
+      "mode": "create"
+    },
+    "modelscope": {
+      "slug": "tiktok-video",
+      "displayName": "TikTok Video Detail and Comments by Gecho"
+    }
+  }
+}

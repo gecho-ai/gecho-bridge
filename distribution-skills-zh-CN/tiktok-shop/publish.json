@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "tiktok-shop",
+  "locale": "zh-CN",
+  "platforms": {
+    "clawhub": {
+      "slug": "tiktok-shop-zh-cn",
+      "displayName": "TikTok Shop 商品全链路调研：搜索、选品与商品详情【Gecho 官方】"
+    },
+    "tencent-skillhub": {
+      "slug": "tiktok-shop",
+      "displayName": "TikTok Shop 商品全链路调研：搜索、选品与商品详情【Gecho 官方】",
+      "mode": "update-or-create"
+    },
+    "modelscope": {
+      "slug": "tiktok-shop-gecho",
+      "displayName": "TikTok Shop 商品全链路调研：搜索、选品与商品详情【Gecho 官方】"
+    }
+  }
+}

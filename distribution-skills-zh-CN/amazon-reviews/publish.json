@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "amazon-reviews",
+  "locale": "zh-CN",
+  "platforms": {
+    "clawhub": {
+      "slug": "amazon-reviews-zh-cn",
+      "displayName": "Amazon 商品评论【Gecho 官方】"
+    },
+    "tencent-skillhub": {
+      "slug": "amazon-reviews",
+      "displayName": "Amazon 商品评论【Gecho 官方】",
+      "mode": "update-or-create"
+    },
+    "modelscope": {
+      "slug": "amazon-reviews-gecho",
+      "displayName": "Amazon 商品评论【Gecho 官方】"
+    }
+  }
+}

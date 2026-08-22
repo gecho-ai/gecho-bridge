@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "x-post-detail",
+  "locale": "en",
+  "platforms": {
+    "clawhub": {
+      "slug": "x-post-detail",
+      "displayName": "X Post Details by Gecho"
+    },
+    "tencent-skillhub": {
+      "slug": "x-post-detail-en",
+      "displayName": "X Post Details by Gecho",
+      "mode": "create"
+    },
+    "modelscope": {
+      "slug": "x-post-detail",
+      "displayName": "X Post Details by Gecho"
+    }
+  }
+}

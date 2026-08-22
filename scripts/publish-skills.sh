@@ -164,6 +164,8 @@ if [[ "$SKILL_VALIDATE" == "1" ]]; then
   echo
   echo "Running full Skill validation..."
   node "$PROJECT_ROOT/scripts/validate-skills.js"
+  echo "Checking platform publish metadata..."
+  node "$PROJECT_ROOT/scripts/generate-publish-configs.js" --check
 fi
 
 echo
@@ -202,6 +204,8 @@ for source_root in $SKILL_ROOTS; do
       --exclude '.idea/' \
       --exclude '.codex-plugin/' \
       --exclude '.skillatlas-*' \
+      --exclude 'publish.json' \
+      --exclude 'skillhub-publish.json' \
       "$skill_dir/" "$destination/"
     skill_count=$((skill_count + 1))
     echo "  staged $source_root/$slug"

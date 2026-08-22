@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "tiktok-insight",
+  "locale": "en",
+  "platforms": {
+    "clawhub": {
+      "slug": "tiktok-insight",
+      "displayName": "tiktok-insight"
+    },
+    "tencent-skillhub": {
+      "slug": "tiktok-insight-en",
+      "displayName": "TikTok Insight by Gecho",
+      "mode": "create"
+    },
+    "modelscope": {
+      "slug": "tiktok-insight",
+      "displayName": "tiktok-insight"
+    }
+  }
+}

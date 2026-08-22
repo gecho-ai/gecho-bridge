@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "tiktok-shop-search",
+  "locale": "en",
+  "platforms": {
+    "clawhub": {
+      "slug": "tiktok-shop-search",
+      "displayName": "TikTok Shop Product Search by Gecho"
+    },
+    "tencent-skillhub": {
+      "slug": "tiktok-shop-search-en",
+      "displayName": "TikTok Shop Product Search by Gecho",
+      "mode": "create"
+    },
+    "modelscope": {
+      "slug": "tiktok-shop-search",
+      "displayName": "TikTok Shop Product Search by Gecho"
+    }
+  }
+}

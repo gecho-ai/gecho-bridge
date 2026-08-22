@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "tiktok-influencer",
+  "locale": "zh-CN",
+  "platforms": {
+    "clawhub": {
+      "slug": "tiktok-influencer-zh-cn",
+      "displayName": "TikTok 达人视频采集、数据分析与内容研究【Gecho官方】"
+    },
+    "tencent-skillhub": {
+      "slug": "gecho-tiktok-influencer",
+      "displayName": "TikTok 达人视频采集、数据分析与内容研究【Gecho官方】",
+      "mode": "update"
+    },
+    "modelscope": {
+      "slug": "tiktok-influencer-gecho",
+      "displayName": "TikTok 达人视频采集、数据分析与内容研究【Gecho官方】"
+    }
+  }
+}

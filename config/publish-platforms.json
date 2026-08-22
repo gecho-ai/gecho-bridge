@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "platforms": {
+    "clawhub": {
+      "kind": "skill-registry",
+      "owner": "gecho-ai",
+      "registry": "https://clawhub.ai"
+    },
+    "tencent-skillhub": {
+      "kind": "skill-registry",
+      "host": "https://api.skillhub.cn",
+      "namespace": "gecho",
+      "cli": "skillhub"
+    },
+    "modelscope": {
+      "kind": "skill-registry",
+      "host": "https://modelscope.cn",
+      "owner": "Gecho",
+      "namespace": "Gecho",
+      "developer": "gecho-ai",
+      "category": "marketing-seo",
+      "license": "MIT License",
+      "sourceUrl": "https://github.com/gecho-ai/gecho-bridge"
+    }
+  }
+}

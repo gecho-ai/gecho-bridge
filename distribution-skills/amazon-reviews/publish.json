@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "amazon-reviews",
+  "locale": "en",
+  "platforms": {
+    "clawhub": {
+      "slug": "amazon-reviews",
+      "displayName": "Amazon Product Reviews by Gecho"
+    },
+    "tencent-skillhub": {
+      "slug": "amazon-reviews-en",
+      "displayName": "Amazon Product Reviews by Gecho",
+      "mode": "create"
+    },
+    "modelscope": {
+      "slug": "amazon-reviews",
+      "displayName": "Amazon Product Reviews by Gecho"
+    }
+  }
+}

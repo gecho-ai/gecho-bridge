@@ -2,8 +2,10 @@
 
 这个目录只保留当前还在使用的发布脚本，目标是把 `gecho-bridge` 以 `Bundle Plugin` 形式发布到 ClawHub，同时不影响 npm 的包名与发布流程。
 
-Skill 和 Bundle Plugin 是两条独立的 ClawHub 发布链路：Plugin 使用
-`publish-bundle-dist.sh`，Skill 使用下面的 `publish-skills.sh`。
+Skill 和 Bundle Plugin 是两条独立的发布链路：Bundle Plugin 使用
+`publish-bundle-dist.sh`；Skill 根据平台分别使用
+`publish-clawhub-skills.sh`、`publish-tencent-skillhub.sh` 和
+`publish-modelscope-skills.sh`。旧的 `publish-skills.sh` 仍保留为兼容入口。
 
 ## 当前保留的脚本
 
@@ -215,21 +217,46 @@ npm run bundle:publish:dist
 
 ---
 
-### `publish-skills.sh`
+### `publish-clawhub-skills.sh`
 
 作用：
 
-- 把 `skills/` 和 `distribution-skills/` 下的独立 Skill 复制到干净的临时目录。
-- 通过支持 owner 的最新版 `clawhub sync` 对比 ClawHub 上的内容指纹。
+- 把 `distribution-skills/` 和 `distribution-skills-zh-CN/` 下的全部 Skill 复制到干净的临时目录。
+- 读取每个 Skill 的 `publish.json`，显式使用 ClawHub 的 slug、displayName 和团队 owner。
+- 中英文使用不同的目标 slug，不会因为 source slug 相同而被 `sync` 去重。
+- 通过 ClawHub 公开 resolve 接口对比内容指纹，只发布新增或发生变化的 Skill。
 - 只发布新增或发生变化的 Skill，避免重复发布。
 - 默认显式发布到团队 owner `gecho-ai`，不会跟随个人当前账号误发。
-- 默认隔离本机 OpenClaw/Clawdbot 的其他 Skill 目录，避免误发布本地文件。
-- 默认在暂存前运行全量 Skill 验收，并校验每个 Skill 的 frontmatter、`_meta.json` 和中文发布元数据；校验失败会停止流程。
+- 默认在暂存前运行全量 Skill 验收，并校验每个 Skill 的 frontmatter、`_meta.json` 和三平台发布配置；校验失败会停止流程。
+
+### 平台级 Skill 发布配置
+
+`distribution-skills/` 和 `distribution-skills-zh-CN/` 下的每个 Skill 都有一个 `publish.json`。它只维护发布身份，不改变源 Skill：
+
+- `sourceSlug` / `locale`：源 Skill 的身份和语言。
+- `platforms.clawhub`：ClawHub 的 slug 和显示名。
+- `platforms.tencent-skillhub`：腾讯 SkillHub 的 slug、显示名和发布模式。
+- `platforms.modelscope`：魔塔社区的 slug 和显示名。
+
+平台公共信息（例如腾讯 SkillHub 的 namespace、API host 和 CLI 名称）统一放在 `config/publish-platforms.json`。平台配置不放进上传副本，避免被某个平台的字段污染其他平台。
+
+当前魔塔社区的公开 owner 是 `Gecho`，开发者标识是 `gecho-ai`；中文 Skill 的魔塔 slug 使用 `<sourceSlug>-gecho`，英文 Skill 沿用源 slug。这个命名只属于魔塔，不会改变 Skill 源目录、ClawHub slug 或腾讯 SkillHub slug。
+
+生成缺失配置或检查全部配置：
+
+```bash
+npm run publish:config:generate
+npm run publish:config:check
+```
+
+ClawHub 和腾讯 SkillHub 发布脚本都会读取 `publish.json`，按配置生成临时副本，并把 `publish.json` 与旧版 `skillhub-publish.json` 排除在上传内容之外。中文 Skill 的 ClawHub slug 使用 `-zh-cn`，腾讯 SkillHub 保留已有中文 slug，英文 Skill 使用独立 slug；这些身份都可以在对应 Skill 的配置中单独调整。
+
+腾讯 SkillHub 脚本根据 Key 选择发布链路：`skh_...` 交给官方 CLI 的公共发布接口，`sk-ent-...` 走团队 API。团队更新会先按 slug 查询远端 Skill，再提交 `/versions`；团队新建会提交 `/skills`。团队新建要求 `categoryIds`，可放在 `publish.json` 的 `platforms.tencent-skillhub.categoryIds`，或通过 `--category-ids` 临时指定；已有 Skill 会优先继承远端分类。
 
 支持三种模式：
 
 - `stage`：只准备临时目录，不访问 ClawHub。
-- `dry-run`：显示将要发布的 Skill，不上传。
+- `dry-run`：对比远端内容，显示将要发布的 Skill 和实际命令，不上传。
 - `publish`：上传新增或变化的 Skill。
 
 对应命令：
@@ -259,33 +286,83 @@ clawhub whoami
 常用环境变量：
 
 ```bash
-CLAWHUB_CHANGELOG='Release 1.1.31' npm run skill:publish
-CLAWHUB_BUMP=minor CLAWHUB_CHANGELOG='New skill capabilities' npm run skill:publish
+CLAWHUB_VERSION='1.1.37' CLAWHUB_CHANGELOG='Release 1.1.37' npm run skill:publish
+CLAWHUB_TAGS='latest,beta' npm run skill:dry-run
 # 仅在已经完成外部校验、需要跳过本地结构校验时使用
 SKILL_VALIDATE=0 npm run skill:dry-run
 ```
 
-默认使用 `npx -y clawhub@latest`，因为旧版 CLI 不支持 `sync --owner`。如需使用已安装的最新版 CLI，可以指定：
+也可以指定暂存目录、registry 或已安装的 CLI：
 
 ```bash
-CLAWHUB_CLI='clawhub' npm run skill:dry-run
+CLAWHUB_STAGE_DIR="$PWD/tmp/clawhub-publish" \
+CLAWHUB_REGISTRY='https://clawhub.ai' \
+CLAWHUB_CLI='clawhub' \
+npm run skill:dry-run
 ```
 
 默认发布的目录是：
 
-- `skills/`
 - `distribution-skills/`
+- `distribution-skills-zh-CN/`
 
-中文 Skill 目录默认不参与发布。如需单独发布，可以显式指定：
+按语言或单个 Skill 发布：
 
 ```bash
-SKILL_ROOTS='skills-zh-CN distribution-skills-zh-CN' npm run skill:dry-run
+./scripts/publish-clawhub-skills.sh dry-run --locale zh-CN
+./scripts/publish-clawhub-skills.sh dry-run --skill tiktok-insight --locale zh-CN
 ```
 
 Skill 暂存同样会排除 `.DS_Store`、`.idea/`、`.codex-plugin/` 和 `.skillatlas-*` 等本地文件。
 
-注意：Skill 版本由 ClawHub 根据远端版本自动递增；正式版发布前先执行
+---
+
+### `publish-modelscope-skills.sh`
+
+作用：
+
+- 读取 `publish.json` 中的 ModelScope `slug` 和 `displayName`。
+- 为每个 Skill 创建只存在于 `tmp/modelscope-publish/` 的平台副本。
+- 在副本的 `SKILL.md` 中补齐 ModelScope CLI/API 要求的 `version`。
+- 通过 ModelScope 官方 OpenAPI 判断是创建、更新还是跳过。
+- 更新使用 `PATCH /openapi/v1/skills/{owner}/{skill_name}/settings`，不会因为重复执行产生新 Skill。
+
+ModelScope 的 `owner`、默认分类、许可证和源码地址放在
+`config/publish-platforms.json`；单个 Skill 可以在 `publish.json` 的
+`platforms.modelscope` 中覆盖 `category`、`tags`、`license` 和 `sourceUrl`。
+上传副本不会包含 `_meta.json`、`publish.json` 或其他平台配置。
+
+支持四种模式：
+
+- `stage`：只生成临时副本和 ZIP，不访问 ModelScope。
+- `dry-run`：查询远端并显示 create/update/skip，不上传。
+- `publish`：上传并创建或更新 Skill。
+- `verify`：查询远端，核对 owner、skill name、display name 和版本。
+
+对应命令：
+
+```bash
+npm run skillhub:modelscope:stage
+npm run skillhub:modelscope:dry-run -- --skill tiktok-insight --locale en
+npm run skillhub:modelscope:publish -- --locale all
+npm run skillhub:modelscope:verify -- --skill tiktok-insight --locale en
+```
+
+发布前设置 Token：
+
+```bash
+export MODELSCOPE_API_KEY='your-modelscope-token'
+```
+
+如果远端版本高于本地版本，脚本会中止；版本相同默认跳过，确需重发时显式使用
+`--force`。脚本不会自动重试创建或更新请求，避免网络超时后产生重复 Skill。
+
+注意：发布版本默认读取 `package.json`，如果远端已有更高版本，脚本会停止并要求先升级本地版本；正式版发布前先执行
 `npm run sync:version`，再执行 `npm run skill:dry-run` 确认发布计划。
+
+### `publish-skills.sh`（兼容旧流程）
+
+该脚本仍保留原来的 `clawhub sync` 行为，主要用于兼容旧的自定义 `SKILL_ROOTS` 调用。它不会读取平台级 `publish.json`，不建议用于中英文混合发布；默认的 `npm run skill:stage/dry-run/publish` 已切换到 `publish-clawhub-skills.sh`。
 
 ### 指定 ClawHub 版本号
 

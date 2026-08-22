@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "x",
+  "locale": "zh-CN",
+  "platforms": {
+    "clawhub": {
+      "slug": "x-zh-cn",
+      "displayName": "X 帖子全链路调研：搜索、帖子详情与回复分析【Gecho 官方】"
+    },
+    "tencent-skillhub": {
+      "slug": "gecho-x",
+      "displayName": "X 帖子全链路调研：搜索、帖子详情与回复分析【Gecho 官方】",
+      "mode": "update-or-create"
+    },
+    "modelscope": {
+      "slug": "x-gecho",
+      "displayName": "X 帖子全链路调研：搜索、帖子详情与回复分析【Gecho 官方】"
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "tiktok-search",
+  "locale": "zh-CN",
+  "platforms": {
+    "clawhub": {
+      "slug": "tiktok-search-zh-cn",
+      "displayName": "TikTok 全链路调研：爆款视频搜索、达人采集、单条视频详情、选品、趋势、竞品与内容洞察【Gecho 官方】"
+    },
+    "tencent-skillhub": {
+      "slug": "gecho-tiktok-search",
+      "displayName": "TikTok 全链路调研：爆款视频搜索、达人采集、选品、趋势、竞品与内容洞察【Gecho 官方】",
+      "mode": "update"
+    },
+    "modelscope": {
+      "slug": "tiktok-search-gecho",
+      "displayName": "TikTok 全链路调研：爆款视频搜索、达人采集、选品、趋势、竞品与内容洞察【Gecho 官方】"
+    }
+  }
+}

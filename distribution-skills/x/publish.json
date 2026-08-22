@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "x",
+  "locale": "en",
+  "platforms": {
+    "clawhub": {
+      "slug": "gecho-x-research",
+      "displayName": "X Research by Gecho"
+    },
+    "tencent-skillhub": {
+      "slug": "x-en",
+      "displayName": "X Research by Gecho",
+      "mode": "create"
+    },
+    "modelscope": {
+      "slug": "x",
+      "displayName": "X Research by Gecho"
+    }
+  }
+}

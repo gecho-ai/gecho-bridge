@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "tiktok-shop-search",
+  "locale": "zh-CN",
+  "platforms": {
+    "clawhub": {
+      "slug": "tiktok-shop-search-zh-cn",
+      "displayName": "TikTok Shop 商品搜索【Gecho 官方】"
+    },
+    "tencent-skillhub": {
+      "slug": "tiktok-shop-search",
+      "displayName": "TikTok Shop 商品搜索【Gecho 官方】",
+      "mode": "update-or-create"
+    },
+    "modelscope": {
+      "slug": "tiktok-shop-search-gecho",
+      "displayName": "TikTok Shop 商品搜索【Gecho 官方】"
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "tiktok-video-search",
+  "locale": "zh-CN",
+  "platforms": {
+    "clawhub": {
+      "slug": "tiktok-video-search-zh-cn",
+      "displayName": "TikTok 爆款视频搜索、数据采集与达人发现【Gecho 官方】"
+    },
+    "tencent-skillhub": {
+      "slug": "gecho-tiktok-video-search",
+      "displayName": "TikTok 爆款视频搜索、数据采集与达人发现【Gecho 官方】",
+      "mode": "update"
+    },
+    "modelscope": {
+      "slug": "tiktok-video-search-gecho",
+      "displayName": "TikTok 爆款视频搜索、数据采集与达人发现【Gecho 官方】"
+    }
+  }
+}

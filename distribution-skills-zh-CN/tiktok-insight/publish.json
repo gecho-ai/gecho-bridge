@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "tiktok-insight",
+  "locale": "zh-CN",
+  "platforms": {
+    "clawhub": {
+      "slug": "tiktok-insight-zh-cn",
+      "displayName": "TikTok 选品、趋势、竞品与内容洞察【Gecho 官方】"
+    },
+    "tencent-skillhub": {
+      "slug": "gecho-tiktok-insight",
+      "displayName": "TikTok 选品、趋势、竞品与内容洞察【Gecho 官方】",
+      "mode": "update"
+    },
+    "modelscope": {
+      "slug": "tiktok-insight-gecho",
+      "displayName": "TikTok 选品、趋势、竞品与内容洞察【Gecho 官方】"
+    }
+  }
+}

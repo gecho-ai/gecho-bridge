@@ -54,7 +54,7 @@ test("explicit community mode does not reuse a saved enterprise credential", () 
 
 test("existing team Skills publish a version instead of creating a new slug", () => {
   const target = {
-    publishedSlug: "tiktok-video-search",
+    publishedSlug: "gecho-tiktok-video-search",
     displayName: "TikTok 爆款视频搜索、数据采集与达人发现【Gecho 官方】",
     version: "1.1.37"
   };
@@ -66,7 +66,7 @@ test("existing team Skills publish a version instead of creating a new slug", ()
     }),
     {
       method: "POST",
-      path: "/api/v1/orgs/org-5hp80lfg/skills/tiktok-video-search/versions",
+      path: "/api/v1/orgs/org-5hp80lfg/skills/gecho-tiktok-video-search/versions",
       payload: {
         version: "1.1.37",
         displayName: "TikTok 爆款视频搜索、数据采集与达人发现【Gecho 官方】",
@@ -271,7 +271,7 @@ test("Tencent SkillHub target slugs are unique across English and Chinese skills
   );
   assert.equal(
     targets.find((target) => target.locale === "zh-CN" && target.sourceSlug === "tiktok-insight").publishedSlug,
-    "tiktok-insight"
+    "gecho-tiktok-insight"
   );
 });
 
@@ -300,14 +300,14 @@ test("staging writes unique copies and leaves the source frontmatter unchanged",
       skill: "tiktok-insight",
       locale: "zh-CN"
     });
-    const stagedPath = path.join(tempRoot, "stage/zh-CN/tiktok-insight/SKILL.md");
+    const stagedPath = path.join(tempRoot, "stage/zh-CN/gecho-tiktok-insight/SKILL.md");
     const staged = fs.readFileSync(stagedPath, "utf8");
 
     assert.equal(result.targets.length, 1);
-    assert.match(staged, /^slug: "tiktok-insight"/m);
+    assert.match(staged, /^slug: "gecho-tiktok-insight"/m);
     assert.match(staged, /^version: "1.1.37"/m);
-    assert.equal(fs.existsSync(path.join(tempRoot, "stage/zh-CN/tiktok-insight/publish.json")), false);
-    assert.equal(fs.existsSync(path.join(tempRoot, "stage/zh-CN/tiktok-insight/skillhub-publish.json")), false);
+    assert.equal(fs.existsSync(path.join(tempRoot, "stage/zh-CN/gecho-tiktok-insight/publish.json")), false);
+    assert.equal(fs.existsSync(path.join(tempRoot, "stage/zh-CN/gecho-tiktok-insight/skillhub-publish.json")), false);
     assert.notEqual(staged, sourceBefore);
     assert.equal(fs.readFileSync(sourcePath, "utf8"), sourceBefore);
   } finally {

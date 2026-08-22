@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "tiktok-influencer",
+  "locale": "en",
+  "platforms": {
+    "clawhub": {
+      "slug": "tiktok-influencer",
+      "displayName": "tiktok-influencer"
+    },
+    "tencent-skillhub": {
+      "slug": "tiktok-influencer-en",
+      "displayName": "TikTok Influencer Videos by Gecho",
+      "mode": "create"
+    },
+    "modelscope": {
+      "slug": "tiktok-influencer",
+      "displayName": "tiktok-influencer"
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "x-search",
+  "locale": "zh-CN",
+  "platforms": {
+    "clawhub": {
+      "slug": "x-search-zh-cn",
+      "displayName": "X 帖子搜索【Gecho 官方】"
+    },
+    "tencent-skillhub": {
+      "slug": "x-search",
+      "displayName": "X 帖子搜索【Gecho 官方】",
+      "mode": "update-or-create"
+    },
+    "modelscope": {
+      "slug": "x-search-gecho",
+      "displayName": "X 帖子搜索【Gecho 官方】"
+    }
+  }
+}

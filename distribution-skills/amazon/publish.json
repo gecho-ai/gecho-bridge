@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "amazon",
+  "locale": "en",
+  "platforms": {
+    "clawhub": {
+      "slug": "amazon",
+      "displayName": "Amazon Research by Gecho"
+    },
+    "tencent-skillhub": {
+      "slug": "amazon-en",
+      "displayName": "Amazon Research by Gecho",
+      "mode": "create"
+    },
+    "modelscope": {
+      "slug": "amazon",
+      "displayName": "Amazon Research by Gecho"
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "tiktok-search",
+  "locale": "en",
+  "platforms": {
+    "clawhub": {
+      "slug": "tiktok-search",
+      "displayName": "tiktok-search"
+    },
+    "tencent-skillhub": {
+      "slug": "tiktok-search-en",
+      "displayName": "TikTok Search & Insight by Gecho",
+      "mode": "create"
+    },
+    "modelscope": {
+      "slug": "tiktok-search",
+      "displayName": "tiktok-search"
+    }
+  }
+}

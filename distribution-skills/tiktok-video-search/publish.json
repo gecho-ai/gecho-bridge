@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "tiktok-video-search",
+  "locale": "en",
+  "platforms": {
+    "clawhub": {
+      "slug": "tiktok-video-search",
+      "displayName": "tiktok-video-search"
+    },
+    "tencent-skillhub": {
+      "slug": "tiktok-video-search-en",
+      "displayName": "TikTok Video Search by Gecho",
+      "mode": "create"
+    },
+    "modelscope": {
+      "slug": "tiktok-video-search",
+      "displayName": "tiktok-video-search"
+    }
+  }
+}

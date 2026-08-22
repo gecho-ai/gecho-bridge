@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "tiktok-video",
+  "locale": "zh-CN",
+  "platforms": {
+    "clawhub": {
+      "slug": "tiktok-video-zh-cn",
+      "displayName": "TikTok 视频详情、评论与回复【Gecho 官方】"
+    },
+    "tencent-skillhub": {
+      "slug": "tiktok-video",
+      "displayName": "TikTok 视频详情、评论与回复【Gecho 官方】",
+      "mode": "update-or-create"
+    },
+    "modelscope": {
+      "slug": "tiktok-video-gecho",
+      "displayName": "TikTok 视频详情、评论与回复【Gecho 官方】"
+    }
+  }
+}

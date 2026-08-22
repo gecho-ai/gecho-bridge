@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "amazon-product",
+  "locale": "zh-CN",
+  "platforms": {
+    "clawhub": {
+      "slug": "amazon-product-zh-cn",
+      "displayName": "Amazon 商品详情【Gecho 官方】"
+    },
+    "tencent-skillhub": {
+      "slug": "amazon-product",
+      "displayName": "Amazon 商品详情【Gecho 官方】",
+      "mode": "update-or-create"
+    },
+    "modelscope": {
+      "slug": "amazon-product-gecho",
+      "displayName": "Amazon 商品详情【Gecho 官方】"
+    }
+  }
+}
