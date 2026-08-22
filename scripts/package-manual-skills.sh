@@ -10,7 +10,8 @@ Usage:
   ./scripts/package-manual-skills.sh [output-dir]
 
 Description:
-  Package every Skill under the distribution roots into one ZIP per Skill.
+  Package every Skill under the distribution roots into one ZIP per Skill for
+  Aily SkillHub and other manual-upload platforms.
   The default output directory is tmp/manual-skill-packages/ inside this project.
   Existing files in that generated directory are removed before packaging.
 
@@ -159,6 +160,8 @@ for source_root in $SKILL_ROOTS; do
       zip -q -X -r "$archive_path" . \
         -x '.DS_Store' '*/.DS_Store' \
         -x '.skillatlas-*' '*/.skillatlas-*' \
+        -x 'publish.json' '*/publish.json' \
+        -x 'skillhub-publish.json' '*/skillhub-publish.json' \
         -x '*.zip' '*/.zip'
     )
 

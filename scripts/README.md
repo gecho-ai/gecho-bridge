@@ -217,6 +217,39 @@ npm run bundle:publish:dist
 
 ---
 
+### `package-manual-skills.sh`
+
+作用：
+
+- 把 `distribution-skills/` 和 `distribution-skills-zh-CN/` 下的全部 Skill 分别打成 ZIP。
+- 用于 Aily SkillHub 等需要手动上传压缩包的平台。
+- 每个压缩包的根目录直接包含 `SKILL.md`，避免平台上传后显示空文件。
+- 排除 `publish.json`、`skillhub-publish.json` 和本地探测文件，避免把平台内部配置上传出去。
+
+默认输出目录：
+
+```text
+tmp/manual-skill-packages/
+```
+
+执行：
+
+```bash
+npm run skill:package:manual
+```
+
+脚本每次执行都会清空并重新生成该目录，当前会生成中英文共 30 个 ZIP，并输出
+`manifest.tsv` 记录来源目录、语言、版本和压缩包名称。
+
+也可以直接执行脚本或指定输出目录：
+
+```bash
+./scripts/package-manual-skills.sh
+./scripts/package-manual-skills.sh tmp/aily-skillhub-packages
+```
+
+---
+
 ### `publish-clawhub-skills.sh`
 
 作用：
