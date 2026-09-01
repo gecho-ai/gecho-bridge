@@ -5,7 +5,8 @@
 Skill 和 Bundle Plugin 是两条独立的发布链路：Bundle Plugin 使用
 `publish-bundle-dist.sh`；Skill 根据平台分别使用
 `publish-clawhub-skills.sh`、`publish-tencent-skillhub.sh`、
-`publish-modelscope-skills.sh` 和 `publish-aily-browser.js`。
+`publish-modelscope-skills.sh`、`publish-aily-browser.js` 和
+`publish-skills-sh.sh`。
 旧的 `publish-skills.sh` 仍保留为兼容入口。
 
 ## 当前保留的脚本
@@ -248,6 +249,36 @@ npm run skill:package:manual
 ./scripts/package-manual-skills.sh
 ./scripts/package-manual-skills.sh tmp/aily-skillhub-packages
 ```
+
+### `publish-skills-sh.sh`
+
+作用：
+
+- 按 skills.sh 官方的公开安装流程处理 Skill。
+- 直接使用 GitHub 子目录 URL，不要求把 Skill 搬到 `skills/`。
+- 每个 Skill 在独立系统临时目录中执行 `npx skills add`，不修改仓库。
+- 支持中英文、单个 Skill、dry-run、失败继续和 JSON 报告。
+
+注意：skills.sh 没有传统的 Skill 发布 API。这里的“发布”实际是通过 CLI
+安装行为触发目录采集和匿名安装统计；执行成功不等于网页搜索结果会立即刷新。
+
+默认处理英文和中文 Skill 共 30 个：
+
+```bash
+npm run skill:skills-sh:dry-run
+npm run skill:skills-sh:publish
+```
+
+常用筛选：
+
+```bash
+npm run skill:skills-sh:publish -- --skill tiktok-video-search --locale zh-CN
+./scripts/publish-skills-sh.sh publish --limit 1 --report tmp/skills-sh-report.json
+```
+
+脚本默认使用 `universal` 作为临时安装目标。已有用户安装的 Skill 不会因为
+GitHub 更新而自动改写；消费方需要执行 `npx skills update`，或重新运行本脚本
+重新拉取当前 GitHub 内容。
 
 ### `publish-aily-browser.js`
 

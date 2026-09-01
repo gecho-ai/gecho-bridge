@@ -37,6 +37,8 @@
     "skill:legacy:stage": "bash ./scripts/publish-skills.sh stage",
     "skill:legacy:dry-run": "bash ./scripts/publish-skills.sh dry-run",
     "skill:legacy:publish": "bash ./scripts/publish-skills.sh publish",
+    "skill:skills-sh:dry-run": "bash ./scripts/publish-skills-sh.sh dry-run",
+    "skill:skills-sh:publish": "bash ./scripts/publish-skills-sh.sh publish",
     "skillhub:tencent:stage": "bash ./scripts/publish-tencent-skillhub.sh stage",
     "skillhub:tencent:dry-run": "bash ./scripts/publish-tencent-skillhub.sh dry-run",
     "skillhub:tencent:publish": "bash ./scripts/publish-tencent-skillhub.sh publish",
