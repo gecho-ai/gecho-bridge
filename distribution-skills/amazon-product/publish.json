@@ -23,8 +23,8 @@
     },
     "workbuddy": {
       "slug": "gecho-amazon-product-en",
-      "displayName": "Amazon Product Details by Gecho",
-      "displayNameEn": "Amazon Product Details by Gecho",
+      "displayName": "Amazon Product Details",
+      "displayNameEn": "Amazon Product Details",
       "author": "Gecho AI"
     }
   }

@@ -8,7 +8,8 @@ const {
   buildTargets,
   packageSkills,
   stageSkills,
-  upsertWorkbuddyFrontmatter
+  upsertWorkbuddyFrontmatter,
+  validateWorkbuddyFields
 } = require("../scripts/publish-workbuddy-skills.js");
 
 test("WorkBuddy target keeps a distinct stable identity and bilingual metadata", () => {
@@ -34,12 +35,28 @@ test("WorkBuddy target keeps a distinct stable identity and bilingual metadata",
       sourceSlug: "tiktok-video-search",
       locale: "zh-CN",
       publishedSlug: "gecho-tiktok-video-search",
-      displayName: "TikTok 爆款视频搜索、数据采集与达人发现【Gecho 官方】",
+      displayName: "TikTok 爆款视频搜索与达人发现【Gecho】",
       displayNameEn: "TikTok Video Search by Gecho",
       author: "Gecho AI",
       category: undefined,
       version: "1.1.37"
     }
+  );
+});
+
+test("WorkBuddy staging rejects display names longer than 30 characters", () => {
+  assert.throws(
+    () => validateWorkbuddyFields({
+      name: "demo",
+      display_name: "a".repeat(31),
+      display_name_en: "Demo Skill",
+      description: "Description",
+      description_zh: "说明",
+      description_en: "Description",
+      version: "1.1.37",
+      author: "Gecho AI"
+    }, "SKILL.md"),
+    /display_name.*30/
   );
 });
 

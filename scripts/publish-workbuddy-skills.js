@@ -13,6 +13,7 @@ const {
 const platformName = "workbuddy";
 const defaultStageDir = path.join(projectRoot, "tmp", "workbuddy-publish");
 const maxArchiveBytes = 3 * 1024 * 1024;
+const maxDisplayNameCharacters = 30;
 const stageMarkerFile = ".workbuddy-stage.json";
 const stageMarker = {
   schemaVersion: 1,
@@ -294,6 +295,12 @@ function validateWorkbuddyFields(fields, filePath) {
   for (const required of ["name", "display_name", "display_name_en", "description", "description_zh", "description_en", "version", "author"]) {
     if (!fields[required]) throw new Error(`WorkBuddy package is missing ${required}: ${filePath}`);
   }
+  for (const field of ["display_name", "display_name_en"]) {
+    const length = [...String(fields[field])].length;
+    if (length > maxDisplayNameCharacters) {
+      throw new Error(`WorkBuddy ${field} exceeds ${maxDisplayNameCharacters} characters (${length}): ${filePath}`);
+    }
+  }
 }
 
 function stageSkills(options = {}) {
@@ -315,7 +322,7 @@ function stageSkills(options = {}) {
     });
 
     const stagedSkillFile = getSkillFile(stagedDirectory);
-    const sourceText = fs.readFileSync(stagedSkillFile, "utf8");
+  const sourceText = fs.readFileSync(stagedSkillFile, "utf8");
     const stagedText = upsertWorkbuddyFrontmatter(sourceText, {
       name: target.publishedSlug,
       display_name: target.displayName,
@@ -426,5 +433,6 @@ module.exports = {
   buildTargets,
   packageSkills,
   stageSkills,
-  upsertWorkbuddyFrontmatter
+  upsertWorkbuddyFrontmatter,
+  validateWorkbuddyFields
 };

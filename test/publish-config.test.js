@@ -61,7 +61,7 @@ test("WorkBuddy has an independent bilingual Skill identity", () => {
 
   assert.equal(chinese.slug, "gecho-tiktok-video-search");
   assert.equal(english.slug, "gecho-tiktok-video-search-en");
-  assert.equal(chinese.displayName, "TikTok 爆款视频搜索、数据采集与达人发现【Gecho 官方】");
+  assert.equal(chinese.displayName, "TikTok 爆款视频搜索与达人发现【Gecho】");
   assert.equal(english.displayNameEn, "TikTok Video Search by Gecho");
   assert.equal(chinese.author, "Gecho AI");
 });
