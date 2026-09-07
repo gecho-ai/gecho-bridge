@@ -1,10 +1,10 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 
 const {
+  assertSafeStageDir,
   buildTargets,
   packageSkills,
   stageSkills,
@@ -74,6 +74,51 @@ test("WorkBuddy frontmatter adds required bilingual fields without changing the 
   assert.equal(source.includes("display_name:"), false);
 });
 
+test("WorkBuddy staging only allows dedicated temporary directories", () => {
+  const projectRoot = path.resolve(__dirname, "..");
+
+  assert.equal(
+    assertSafeStageDir("tmp/workbuddy-publish"),
+    path.join(projectRoot, "tmp/workbuddy-publish")
+  );
+  assert.equal(
+    assertSafeStageDir("tmp/workbuddy-publish-test/stage"),
+    path.join(projectRoot, "tmp/workbuddy-publish-test/stage")
+  );
+
+  for (const unsafePath of [
+    "tmp",
+    "tmp/manual-skill-packages",
+    "docs",
+    ".git",
+    "tmp/workbuddy-publish/../../.git"
+  ]) {
+    assert.throws(() => assertSafeStageDir(unsafePath), /dedicated temporary directory/);
+  }
+});
+
+test("WorkBuddy staging refuses to clear an unowned existing directory", () => {
+  const projectRoot = path.resolve(__dirname, "..");
+  const stageDir = fs.mkdtempSync(path.join(projectRoot, "tmp/workbuddy-publish-owned-test-"));
+  const sentinelPath = path.join(stageDir, "keep-me.txt");
+  fs.writeFileSync(sentinelPath, "do not delete");
+
+  try {
+    assert.throws(
+      () => stageSkills({
+        stageDir,
+        skill: "tiktok-video-search",
+        locale: "zh-CN",
+        version: "1.1.37"
+      }),
+      /not owned by the WorkBuddy publisher/
+    );
+    assert.equal(fs.readFileSync(sentinelPath, "utf8"), "do not delete");
+  } finally {
+    fs.rmSync(stageDir, { recursive: true, force: true });
+  }
+});
+
 test("WorkBuddy staging excludes platform metadata and leaves source unchanged", () => {
   const projectRoot = path.resolve(__dirname, "..");
   const tempRoot = fs.mkdtempSync(path.join(projectRoot, "tmp/workbuddy-publish-test-"));
@@ -90,6 +135,7 @@ test("WorkBuddy staging excludes platform metadata and leaves source unchanged",
     const stagedPath = path.join(tempRoot, "stage/zh-CN/skills/gecho-tiktok-video-search/SKILL.md");
 
     assert.equal(result.targets.length, 1);
+    assert.equal(fs.existsSync(path.join(tempRoot, "stage/.workbuddy-stage.json")), true);
     assert.equal(fs.existsSync(stagedPath), true);
     assert.equal(fs.existsSync(path.join(tempRoot, "stage/zh-CN/skills/gecho-tiktok-video-search/publish.json")), false);
     assert.equal(fs.existsSync(path.join(tempRoot, "stage/zh-CN/skills/gecho-tiktok-video-search/_meta.json")), false);
@@ -102,7 +148,7 @@ test("WorkBuddy staging excludes platform metadata and leaves source unchanged",
 
 test("WorkBuddy packaging follows skills/<skill-name>/SKILL.md", () => {
   const projectRoot = path.resolve(__dirname, "..");
-  const tempRoot = fs.mkdtempSync(path.join(projectRoot, "tmp/workbuddy-package-test-"));
+  const tempRoot = fs.mkdtempSync(path.join(projectRoot, "tmp/workbuddy-publish-package-test-"));
 
   try {
     const result = packageSkills({

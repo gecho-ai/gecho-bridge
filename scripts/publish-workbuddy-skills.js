@@ -13,6 +13,12 @@ const {
 const platformName = "workbuddy";
 const defaultStageDir = path.join(projectRoot, "tmp", "workbuddy-publish");
 const maxArchiveBytes = 3 * 1024 * 1024;
+const stageMarkerFile = ".workbuddy-stage.json";
+const stageMarker = {
+  schemaVersion: 1,
+  platform: platformName,
+  managedBy: "publish-workbuddy-skills.js"
+};
 
 function usage() {
   return `Usage:
@@ -26,7 +32,7 @@ Modes:
 Options:
   --skill <slug>          Only process one source slug.
   --locale <all|en|zh-CN> Process English, Chinese, or both (default: all).
-  --stage-dir <path>      Generated directory (must be inside this project).
+  --stage-dir <path>      Generated directory (must be a tmp/workbuddy-publish* path).
   --version <version>     Override the version from package.json.
   -h, --help              Show this help.
 
@@ -142,9 +148,16 @@ function parseArgs(argv) {
 
 function assertSafeStageDir(stageDir) {
   const resolved = path.resolve(projectRoot, stageDir);
-  const projectPrefix = `${projectRoot}${path.sep}`;
-  if (!resolved.startsWith(projectPrefix) || resolved === projectRoot) {
-    throw new Error(`stage directory must be a non-root path inside the project: ${resolved}`);
+  const temporaryRoot = path.join(projectRoot, "tmp");
+  const relativeToTemporaryRoot = path.relative(temporaryRoot, resolved);
+  const topLevelDirectory = relativeToTemporaryRoot.split(path.sep)[0];
+  const isDedicatedTemporaryDirectory = relativeToTemporaryRoot
+    && !relativeToTemporaryRoot.startsWith("..")
+    && !path.isAbsolute(relativeToTemporaryRoot)
+    && /^workbuddy-publish(?:$|-)/.test(topLevelDirectory);
+
+  if (!isDedicatedTemporaryDirectory) {
+    throw new Error(`stage directory must be inside a dedicated temporary directory under tmp/workbuddy-publish*: ${resolved}`);
   }
   for (const definition of distributionRoots) {
     const sourceRoot = path.join(projectRoot, definition.root);
@@ -153,6 +166,43 @@ function assertSafeStageDir(stageDir) {
     }
   }
   return resolved;
+}
+
+function isOwnedStageDir(stageDir) {
+  const markerPath = path.join(stageDir, stageMarkerFile);
+  if (fs.existsSync(markerPath)) {
+    try {
+      const marker = JSON.parse(fs.readFileSync(markerPath, "utf8"));
+      return marker.schemaVersion === stageMarker.schemaVersion
+        && marker.platform === stageMarker.platform
+        && marker.managedBy === stageMarker.managedBy;
+    } catch {
+      return false;
+    }
+  }
+
+  // Accept a directory produced by the previous version of this script so the
+  // first safe rerun can migrate it to the marker-based ownership check.
+  const manifestPath = path.join(stageDir, "manifest.json");
+  if (!fs.existsSync(manifestPath)) return false;
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    return manifest.schemaVersion === 1 && manifest.platform === platformName;
+  } catch {
+    return false;
+  }
+}
+
+function assertOwnedStageDir(stageDir) {
+  if (!fs.existsSync(stageDir)) return;
+  const stats = fs.lstatSync(stageDir);
+  if (!stats.isDirectory() || stats.isSymbolicLink() || !isOwnedStageDir(stageDir)) {
+    throw new Error(`stage directory is not owned by the WorkBuddy publisher: ${stageDir}`);
+  }
+}
+
+function writeStageMarker(stageDir) {
+  fs.writeFileSync(path.join(stageDir, stageMarkerFile), `${JSON.stringify(stageMarker, null, 2)}\n`);
 }
 
 function loadSourceDescription(sourceDirectory) {
@@ -251,8 +301,10 @@ function stageSkills(options = {}) {
   const targets = buildTargets(options);
   if (targets.length === 0) throw new Error("no publishable WorkBuddy Skills found");
 
+  assertOwnedStageDir(stageDir);
   fs.rmSync(stageDir, { recursive: true, force: true });
   fs.mkdirSync(stageDir, { recursive: true });
+  writeStageMarker(stageDir);
 
   for (const target of targets) {
     const stagedDirectory = path.join(stageDir, target.locale, "skills", target.publishedSlug);
@@ -371,6 +423,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  assertSafeStageDir,
   buildTargets,
   packageSkills,
   stageSkills,
