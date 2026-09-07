@@ -20,6 +20,12 @@
       "slug": "tiktok-product",
       "displayName": "TikTok Shop 商品详情【Gecho 官方】",
       "mode": "update-or-create"
+    },
+    "workbuddy": {
+      "slug": "gecho-tiktok-product",
+      "displayName": "TikTok Shop 商品详情【Gecho 官方】",
+      "displayNameEn": "TikTok Shop Product Details by Gecho",
+      "author": "Gecho AI"
     }
   }
 }

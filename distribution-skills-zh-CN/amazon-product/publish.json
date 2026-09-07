@@ -20,6 +20,12 @@
       "slug": "amazon-product",
       "displayName": "Amazon 商品详情【Gecho 官方】",
       "mode": "update-or-create"
+    },
+    "workbuddy": {
+      "slug": "gecho-amazon-product",
+      "displayName": "Amazon 商品详情【Gecho 官方】",
+      "displayNameEn": "Amazon Product Details by Gecho",
+      "author": "Gecho AI"
     }
   }
 }

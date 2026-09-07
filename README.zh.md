@@ -125,6 +125,29 @@ npm run skillhub:tencent:publish -- \
 
 官方文档：[CLI 安装](https://skillhub.cn/install/skillhub.md)、[公共发布](https://skillhub.cn/ai/release.md)、[企业发布控制台](https://skillhub.cn/enterprise/dashboard/publish)、[企业 API Key](https://skillhub.cn/enterprise/dashboard/keys)。
 
+### WorkBuddy Skill 发布准备
+
+WorkBuddy 使用独立的 Skill 包格式，不能直接上传腾讯 SkillHub 副本。项目会从源 Skill 创建被 Git 忽略的
+`tmp/workbuddy-publish/` 副本，补齐 `display_name`、`display_name_en`、`description_zh`、
+`description_en`、`version` 和 `author`，并按 WorkBuddy 官方要求使用
+`skills/<skill-name>/SKILL.md` 目录结构打包。
+
+```bash
+# 只生成 WorkBuddy 临时副本
+npm run skillhub:workbuddy:stage
+
+# 生成全部中英文 ZIP，并进行本地结构校验
+npm run skillhub:workbuddy:dry-run
+
+# 只准备一个中文 Skill
+npm run skillhub:workbuddy:dry-run -- \
+  --skill tiktok-video-search --locale zh-CN
+```
+
+输出的 ZIP 位于 `tmp/workbuddy-publish/archives/`（单个不超过 3MB），可在 [WorkBuddy 开放平台](https://open.workbuddy.cn/)
+手动上传。脚本没有登录或自动提交功能，不会使用腾讯 SkillHub 的 `skh_...` 或 `sk-ent-...` Key。
+WorkBuddy 官方格式参考：[Skill 文档](https://open.workbuddy.cn/docs/skill)。
+
 ### Aily SkillHub 发布
 
 Aily 当前通过网页上传 Skill 压缩包。项目提供了浏览器自动化脚本，复用已登录的 Edge，

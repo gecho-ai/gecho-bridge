@@ -20,6 +20,12 @@
       "slug": "amazon-en",
       "displayName": "Amazon Research by Gecho",
       "mode": "create"
+    },
+    "workbuddy": {
+      "slug": "gecho-amazon-en",
+      "displayName": "Amazon Research by Gecho",
+      "displayNameEn": "Amazon Research by Gecho",
+      "author": "Gecho AI"
     }
   }
 }

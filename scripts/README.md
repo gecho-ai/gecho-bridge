@@ -250,6 +250,35 @@ npm run skill:package:manual
 ./scripts/package-manual-skills.sh tmp/aily-skillhub-packages
 ```
 
+### `publish-workbuddy-skills.js`
+
+作用：
+
+- 按 WorkBuddy 官方 Skill frontmatter 要求创建独立副本。
+- 为每个中英文 Skill 补齐双语名称、双语描述、版本和作者。
+- 按 WorkBuddy 官方要求生成 `skills/<skill-name>/SKILL.md` 结构的 ZIP，避免上传后文件列表为空。
+- 不提供登录或自动提交，输出仅用于 WorkBuddy 开放平台手动上传。
+
+默认输出目录：
+
+```text
+tmp/workbuddy-publish/
+├── manifest.json
+├── archives/
+└── <locale>/skills/<workbuddy-slug>/SKILL.md
+```
+
+执行：
+
+```bash
+npm run skillhub:workbuddy:stage
+npm run skillhub:workbuddy:dry-run
+npm run skillhub:workbuddy:dry-run -- --skill tiktok-video-search --locale zh-CN
+```
+
+WorkBuddy 的平台身份单独维护在每个 Skill 的 `publish.json` 的
+`platforms.workbuddy` 中，不会复用腾讯 SkillHub 的 Key 或发布接口。
+
 ### `publish-skills-sh.sh`
 
 作用：

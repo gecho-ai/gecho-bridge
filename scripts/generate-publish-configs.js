@@ -27,6 +27,19 @@ function existingChineseDisplayName(skillDirectory) {
     : null;
 }
 
+function englishDisplayName(sourceSlug, fallback) {
+  const englishDirectory = path.join(projectRoot, "distribution-skills", sourceSlug);
+  const configPath = path.join(englishDirectory, "publish.json");
+  if (fs.existsSync(configPath)) {
+    const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    const displayName = config.platforms?.["tencent-skillhub"]?.displayName;
+    if (typeof displayName === "string" && displayName.trim()) return displayName.trim();
+  }
+  return fs.existsSync(path.join(englishDirectory, "SKILL.md"))
+    ? firstHeading(englishDirectory)
+    : fallback;
+}
+
 function writeMissingConfigs() {
   let created = 0;
   for (const skill of listDistributionSkills()) {
@@ -38,6 +51,7 @@ function writeMissingConfigs() {
       : firstHeading(skill.directory);
     const sourceSlug = skill.sourceSlug;
     const isChinese = skill.locale === "zh-CN";
+    const displayNameEn = isChinese ? englishDisplayName(sourceSlug, displayName) : displayName;
 
     const tencentTarget = {
       slug: isChinese ? sourceSlug : `${sourceSlug}-en`,
@@ -56,6 +70,12 @@ function writeMissingConfigs() {
         },
         "tencent-skillhub": tencentTarget,
         "aily-skillhub": { ...tencentTarget },
+        workbuddy: {
+          slug: isChinese ? `gecho-${sourceSlug}` : `gecho-${sourceSlug}-en`,
+          displayName: displayName,
+          displayNameEn,
+          author: "Gecho AI"
+        },
         modelscope: {
           slug: isChinese ? `${sourceSlug}-gecho` : sourceSlug,
           displayName
@@ -72,7 +92,7 @@ function writeMissingConfigs() {
 
 function checkConfigs() {
   const skills = listDistributionSkills();
-    const platforms = ["clawhub", "tencent-skillhub", "aily-skillhub", "modelscope"];
+  const platforms = ["clawhub", "tencent-skillhub", "aily-skillhub", "workbuddy", "modelscope"];
   const seen = new Map(platforms.map((platform) => [platform, new Set()]));
   for (const skill of skills) {
     for (const platform of platforms) {

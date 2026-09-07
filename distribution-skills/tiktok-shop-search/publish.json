@@ -20,6 +20,12 @@
       "slug": "tiktok-shop-search-en",
       "displayName": "TikTok Shop Product Search by Gecho",
       "mode": "create"
+    },
+    "workbuddy": {
+      "slug": "gecho-tiktok-shop-search-en",
+      "displayName": "TikTok Shop Product Search by Gecho",
+      "displayNameEn": "TikTok Shop Product Search by Gecho",
+      "author": "Gecho AI"
     }
   }
 }

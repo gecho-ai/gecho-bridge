@@ -20,6 +20,12 @@
       "slug": "amazon-reviews",
       "displayName": "Amazon 商品评论【Gecho 官方】",
       "mode": "update-or-create"
+    },
+    "workbuddy": {
+      "slug": "gecho-amazon-reviews",
+      "displayName": "Amazon 商品评论【Gecho 官方】",
+      "displayNameEn": "Amazon Product Reviews by Gecho",
+      "author": "Gecho AI"
     }
   }
 }

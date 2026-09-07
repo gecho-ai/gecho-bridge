@@ -20,6 +20,12 @@
       "slug": "x-en",
       "displayName": "X Research by Gecho",
       "mode": "create"
+    },
+    "workbuddy": {
+      "slug": "gecho-x-en",
+      "displayName": "X Research by Gecho",
+      "displayNameEn": "X Research by Gecho",
+      "author": "Gecho AI"
     }
   }
 }

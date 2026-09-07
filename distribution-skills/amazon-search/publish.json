@@ -20,6 +20,12 @@
       "slug": "amazon-search-en",
       "displayName": "Amazon Product Search by Gecho",
       "mode": "create"
+    },
+    "workbuddy": {
+      "slug": "gecho-amazon-search-en",
+      "displayName": "Amazon Product Search by Gecho",
+      "displayNameEn": "Amazon Product Search by Gecho",
+      "author": "Gecho AI"
     }
   }
 }

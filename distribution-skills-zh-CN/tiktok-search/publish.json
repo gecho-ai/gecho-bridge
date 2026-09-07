@@ -20,6 +20,12 @@
       "slug": "gecho-tiktok-search",
       "displayName": "TikTok 全链路调研：爆款视频搜索、达人采集、选品、趋势、竞品与内容洞察【Gecho 官方】",
       "mode": "update"
+    },
+    "workbuddy": {
+      "slug": "gecho-tiktok-search",
+      "displayName": "TikTok 全链路调研：爆款视频搜索、达人采集、选品、趋势、竞品与内容洞察【Gecho 官方】",
+      "displayNameEn": "TikTok Search & Insight by Gecho",
+      "author": "Gecho AI"
     }
   }
 }

@@ -20,6 +20,12 @@
       "slug": "tiktok-video-search-en",
       "displayName": "TikTok Video Search by Gecho",
       "mode": "create"
+    },
+    "workbuddy": {
+      "slug": "gecho-tiktok-video-search-en",
+      "displayName": "TikTok Video Search by Gecho",
+      "displayNameEn": "TikTok Video Search by Gecho",
+      "author": "Gecho AI"
     }
   }
 }

@@ -20,6 +20,12 @@
       "slug": "tiktok-shop-en",
       "displayName": "TikTok Shop Research by Gecho",
       "mode": "create"
+    },
+    "workbuddy": {
+      "slug": "gecho-tiktok-shop-en",
+      "displayName": "TikTok Shop Research by Gecho",
+      "displayNameEn": "TikTok Shop Research by Gecho",
+      "author": "Gecho AI"
     }
   }
 }

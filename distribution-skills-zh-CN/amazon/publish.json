@@ -20,6 +20,12 @@
       "slug": "amazon",
       "displayName": "Amazon 全链路调研：搜索、商品详情与评论分析【Gecho 官方】",
       "mode": "update-or-create"
+    },
+    "workbuddy": {
+      "slug": "gecho-amazon",
+      "displayName": "Amazon 全链路调研：搜索、商品详情与评论分析【Gecho 官方】",
+      "displayNameEn": "Amazon Research by Gecho",
+      "author": "Gecho AI"
     }
   }
 }

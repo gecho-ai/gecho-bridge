@@ -20,6 +20,12 @@
       "slug": "x-search",
       "displayName": "X 帖子搜索【Gecho 官方】",
       "mode": "update-or-create"
+    },
+    "workbuddy": {
+      "slug": "gecho-x-search",
+      "displayName": "X 帖子搜索【Gecho 官方】",
+      "displayNameEn": "X Post Search by Gecho",
+      "author": "Gecho AI"
     }
   }
 }

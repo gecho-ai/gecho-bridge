@@ -20,6 +20,12 @@
       "slug": "tiktok-video-en",
       "displayName": "TikTok Video Detail and Comments by Gecho",
       "mode": "create"
+    },
+    "workbuddy": {
+      "slug": "gecho-tiktok-video-en",
+      "displayName": "TikTok Video Detail and Comments by Gecho",
+      "displayNameEn": "TikTok Video Detail and Comments by Gecho",
+      "author": "Gecho AI"
     }
   }
 }

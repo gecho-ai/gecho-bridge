@@ -125,6 +125,29 @@ A new team Skill also requires at least one team category ID. For an existing Sk
 
 Official documentation: [CLI installation](https://skillhub.cn/install/skillhub.md), [community publishing](https://skillhub.cn/ai/release.md), [enterprise publishing](https://skillhub.cn/enterprise/dashboard/publish), and [enterprise API keys](https://skillhub.cn/enterprise/dashboard/keys).
 
+### WorkBuddy Skill Packaging
+
+WorkBuddy uses a separate Skill package format, so a Tencent SkillHub staging copy must not be uploaded directly.
+The repository creates Git-ignored copies under `tmp/workbuddy-publish/`, adds
+`display_name`, `display_name_en`, `description_zh`, `description_en`, `version`, and `author`, and packages
+each Skill using WorkBuddy's official `skills/<skill-name>/SKILL.md` layout.
+
+```bash
+# Create WorkBuddy-only staging copies
+npm run skillhub:workbuddy:stage
+
+# Build all English and Chinese ZIPs and validate their structure
+npm run skillhub:workbuddy:dry-run
+
+# Prepare one Chinese Skill
+npm run skillhub:workbuddy:dry-run -- \
+  --skill tiktok-video-search --locale zh-CN
+```
+
+ZIP files are written to `tmp/workbuddy-publish/archives/` (each must be no larger than 3MB) for manual upload to the
+[WorkBuddy Open Platform](https://open.workbuddy.cn/). The script has no login or submit command and never uses
+Tencent SkillHub `skh_...` or `sk-ent-...` credentials. See the official [WorkBuddy Skill documentation](https://open.workbuddy.cn/docs/skill).
+
 ### Option 2: One-Click Setup in Hermes (Hermes Skill Hub)
 You can quickly add the service to Hermes and restart it with the following commands:
 ```bash

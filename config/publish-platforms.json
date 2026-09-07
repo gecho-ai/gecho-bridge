@@ -17,6 +17,13 @@
       "mode": "manual",
       "docs": "https://aily.feishu.cn/hc/1u7kleqg/gprkq9za"
     },
+    "workbuddy": {
+      "kind": "skill-registry",
+      "mode": "manual",
+      "package": "zip",
+      "author": "Gecho AI",
+      "docs": "https://open.workbuddy.cn/docs/skill"
+    },
     "modelscope": {
       "kind": "skill-registry",
       "host": "https://modelscope.cn",

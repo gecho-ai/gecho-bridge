@@ -20,6 +20,12 @@
       "slug": "amazon-reviews-en",
       "displayName": "Amazon Product Reviews by Gecho",
       "mode": "create"
+    },
+    "workbuddy": {
+      "slug": "gecho-amazon-reviews-en",
+      "displayName": "Amazon Product Reviews by Gecho",
+      "displayNameEn": "Amazon Product Reviews by Gecho",
+      "author": "Gecho AI"
     }
   }
 }

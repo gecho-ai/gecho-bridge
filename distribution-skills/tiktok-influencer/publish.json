@@ -20,6 +20,12 @@
       "slug": "tiktok-influencer-en",
       "displayName": "TikTok Influencer Videos by Gecho",
       "mode": "create"
+    },
+    "workbuddy": {
+      "slug": "gecho-tiktok-influencer-en",
+      "displayName": "TikTok Influencer Videos by Gecho",
+      "displayNameEn": "TikTok Influencer Videos by Gecho",
+      "author": "Gecho AI"
     }
   }
 }

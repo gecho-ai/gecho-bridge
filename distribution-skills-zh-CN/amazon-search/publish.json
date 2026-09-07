@@ -20,6 +20,12 @@
       "slug": "amazon-search",
       "displayName": "Amazon 商品搜索【Gecho 官方】",
       "mode": "update-or-create"
+    },
+    "workbuddy": {
+      "slug": "gecho-amazon-search",
+      "displayName": "Amazon 商品搜索【Gecho 官方】",
+      "displayNameEn": "Amazon Product Search by Gecho",
+      "author": "Gecho AI"
     }
   }
 }

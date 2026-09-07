@@ -9,7 +9,7 @@ const {
 
 test("every distribution Skill has platform-specific publish identity", () => {
   const skills = listDistributionSkills();
-  const platforms = ["clawhub", "tencent-skillhub", "aily-skillhub", "modelscope"];
+  const platforms = ["clawhub", "tencent-skillhub", "aily-skillhub", "workbuddy", "modelscope"];
   const registry = loadPlatformRegistry();
 
   assert.equal(skills.length, 30);
@@ -47,6 +47,23 @@ test("Aily SkillHub mirrors Tencent SkillHub identity configuration", () => {
       { slug: tencent.slug, displayName: tencent.displayName, mode: tencent.mode }
     );
   }
+});
+
+test("WorkBuddy has an independent bilingual Skill identity", () => {
+  const chinese = resolvePlatformTarget(
+    "distribution-skills-zh-CN/tiktok-video-search",
+    "workbuddy"
+  );
+  const english = resolvePlatformTarget(
+    "distribution-skills/tiktok-video-search",
+    "workbuddy"
+  );
+
+  assert.equal(chinese.slug, "gecho-tiktok-video-search");
+  assert.equal(english.slug, "gecho-tiktok-video-search-en");
+  assert.equal(chinese.displayName, "TikTok 爆款视频搜索、数据采集与达人发现【Gecho 官方】");
+  assert.equal(english.displayNameEn, "TikTok Video Search by Gecho");
+  assert.equal(chinese.author, "Gecho AI");
 });
 
 test("ModelScope uses the public owner namespace and Chinese suffix", () => {

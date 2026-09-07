@@ -20,6 +20,12 @@
       "slug": "gecho-tiktok-insight",
       "displayName": "TikTok 选品、趋势、竞品与内容洞察【Gecho 官方】",
       "mode": "update"
+    },
+    "workbuddy": {
+      "slug": "gecho-tiktok-insight",
+      "displayName": "TikTok 选品、趋势、竞品与内容洞察【Gecho 官方】",
+      "displayNameEn": "TikTok Insight by Gecho",
+      "author": "Gecho AI"
     }
   }
 }

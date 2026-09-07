@@ -44,6 +44,9 @@
     "skillhub:tencent:publish": "bash ./scripts/publish-tencent-skillhub.sh publish",
     "skillhub:aily:dry-run": "bash ./scripts/publish-aily-browser.sh dry-run",
     "skillhub:aily:publish": "bash ./scripts/publish-aily-browser.sh publish",
+    "skillhub:workbuddy:stage": "node ./scripts/publish-workbuddy-skills.js stage",
+    "skillhub:workbuddy:package": "node ./scripts/publish-workbuddy-skills.js package",
+    "skillhub:workbuddy:dry-run": "node ./scripts/publish-workbuddy-skills.js dry-run",
     "skillhub:modelscope:stage": "bash ./scripts/publish-modelscope-skills.sh stage",
     "skillhub:modelscope:dry-run": "bash ./scripts/publish-modelscope-skills.sh dry-run",
     "skillhub:modelscope:publish": "bash ./scripts/publish-modelscope-skills.sh publish",
@@ -51,6 +54,7 @@
     "publish:config:generate": "node ./scripts/generate-publish-configs.js",
     "publish:config:check": "node ./scripts/generate-publish-configs.js --check",
     "test:skillhub:tencent": "node --test ./test/publish-config.test.js ./test/tencent-skillhub-publish.test.js",
+    "test:workbuddy": "node --test ./test/publish-config.test.js ./test/workbuddy-publish.test.js",
     "test:skillhub:modelscope": "node --test ./test/modelscope-publish.test.js"
   },
   "keywords": [

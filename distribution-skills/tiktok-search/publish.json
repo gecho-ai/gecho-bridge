@@ -20,6 +20,12 @@
       "slug": "tiktok-search-en",
       "displayName": "TikTok Search & Insight by Gecho",
       "mode": "create"
+    },
+    "workbuddy": {
+      "slug": "gecho-tiktok-search-en",
+      "displayName": "TikTok Search & Insight by Gecho",
+      "displayNameEn": "TikTok Search & Insight by Gecho",
+      "author": "Gecho AI"
     }
   }
 }

@@ -20,6 +20,12 @@
       "slug": "gecho-tiktok-video-search",
       "displayName": "TikTok 爆款视频搜索、数据采集与达人发现【Gecho 官方】",
       "mode": "update"
+    },
+    "workbuddy": {
+      "slug": "gecho-tiktok-video-search",
+      "displayName": "TikTok 爆款视频搜索、数据采集与达人发现【Gecho 官方】",
+      "displayNameEn": "TikTok Video Search by Gecho",
+      "author": "Gecho AI"
     }
   }
 }

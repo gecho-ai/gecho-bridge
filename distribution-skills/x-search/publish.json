@@ -20,6 +20,12 @@
       "slug": "x-search-en",
       "displayName": "X Post Search by Gecho",
       "mode": "create"
+    },
+    "workbuddy": {
+      "slug": "gecho-x-search-en",
+      "displayName": "X Post Search by Gecho",
+      "displayNameEn": "X Post Search by Gecho",
+      "author": "Gecho AI"
     }
   }
 }
