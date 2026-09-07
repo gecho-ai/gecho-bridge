@@ -370,16 +370,15 @@ function packageSkills(options = {}) {
   for (const target of staged.targets) {
     const archiveName = `${target.sourceSlug}-${target.locale}-v${target.version}.zip`;
     const archivePath = path.join(archiveDirectory, archiveName);
-    const packageRoot = path.join(staged.stageDir, target.locale);
-    const archiveEntry = path.posix.join("skills", target.publishedSlug);
-    runChecked("zip", ["-q", "-X", "-r", archivePath, archiveEntry], { cwd: packageRoot });
+    const packageRoot = path.join(staged.stageDir, target.locale, "skills", target.publishedSlug);
+    runChecked("zip", ["-q", "-X", "-r", archivePath, "."], { cwd: packageRoot });
     runChecked("unzip", ["-t", archivePath], { stdio: "ignore" });
     const archiveSize = fs.statSync(archivePath).size;
     if (archiveSize > maxArchiveBytes) {
       throw new Error(`WorkBuddy ZIP exceeds 3MB (${archiveSize} bytes): ${archivePath}`);
     }
     const listing = runChecked("unzip", ["-Z1", archivePath]).stdout.split(/\r?\n/).filter(Boolean);
-    const expectedEntry = `${archiveEntry}/SKILL.md`;
+    const expectedEntry = "SKILL.md";
     if (!listing.includes(expectedEntry)) {
       throw new Error(`WorkBuddy entry ${expectedEntry} is missing from ZIP: ${archivePath}`);
     }

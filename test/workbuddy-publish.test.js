@@ -146,7 +146,7 @@ test("WorkBuddy staging excludes platform metadata and leaves source unchanged",
   }
 });
 
-test("WorkBuddy packaging follows skills/<skill-name>/SKILL.md", () => {
+test("WorkBuddy packaging puts SKILL.md at the ZIP root", () => {
   const projectRoot = path.resolve(__dirname, "..");
   const tempRoot = fs.mkdtempSync(path.join(projectRoot, "tmp/workbuddy-publish-package-test-"));
 
@@ -165,8 +165,8 @@ test("WorkBuddy packaging follows skills/<skill-name>/SKILL.md", () => {
 
     assert.equal(result.targets.length, 1);
     assert.equal(fs.existsSync(archivePath), true);
-    assert.ok(listing.includes("skills/gecho-tiktok-video-search/SKILL.md"));
-    assert.equal(listing.includes("SKILL.md"), false);
+    assert.ok(listing.includes("SKILL.md"));
+    assert.equal(listing.includes("skills/gecho-tiktok-video-search/SKILL.md"), false);
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }
