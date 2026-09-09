@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "source": "gecho-ai-bridge",
+  "type": "mcp",
+  "name": "Gecho Bridge",
+  "name_zh": "Gecho Bridge",
+  "name_en": "Gecho Bridge",
+  "description": "通过 Gecho Bridge MCP 和浏览器扩展执行 TikTok、X 和 Amazon 数据采集与分析任务。",
+  "description_zh": "通过 Gecho Bridge MCP 和浏览器扩展执行 TikTok、X 和 Amazon 数据采集与分析任务。",
+  "description_en": "Run TikTok, X, and Amazon data collection and insight workflows through Gecho Bridge MCP and the Gecho browser extension.",
+  "examples_zh": [
+    "在 TikTok 搜索便携式榨汁杯，返回视频和创作者数据。",
+    "分析 TikTok 上户外野餐垫的趋势和竞品。",
+    "采集这个 TikTok 达人的视频数据。"
+  ],
+  "examples_en": [
+    "Search TikTok for portable blenders and return video and creator data.",
+    "Analyze trends and competitors for outdoor picnic mats on TikTok.",
+    "Collect video data from this TikTok creator."
+  ],
+  "minWorkbuddyVersion": "5.0.0",
+  "serverName": "gecho-bridge",
+  "npmRegistry": "https://registry.npmmirror.com",
+  "timeout": 600000,
+  "skillPath": "connectors/workbuddy/gecho-bridge/SKILL.md",
+  "iconPath": "connectors/workbuddy/gecho-bridge/icon.png"
+}

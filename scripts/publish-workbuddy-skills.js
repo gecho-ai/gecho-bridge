@@ -106,6 +106,17 @@ function upsertWorkbuddyFrontmatter(text, fields, filePath = "SKILL.md") {
   return `---${eol}${lines.join(eol)}${eol}---${match[3]}${text.slice(match[0].length)}`;
 }
 
+function addWorkbuddyPromptSection(text, locale, filePath = "SKILL.md") {
+  const heading = locale === "zh-CN" ? "## 试试这样问我" : "## Try asking me";
+  const promptHeading = locale === "zh-CN"
+    ? /^适用(?:的)?提示词：\s*$/m
+    : /^Best-fit prompts:\s*$/m;
+  if (!promptHeading.test(text)) {
+    throw new Error(`missing prompt examples in ${filePath}`);
+  }
+  return text.replace(promptHeading, heading);
+}
+
 function parseArgs(argv) {
   const args = [...argv];
   let mode = "stage";
@@ -323,7 +334,7 @@ function stageSkills(options = {}) {
 
     const stagedSkillFile = getSkillFile(stagedDirectory);
   const sourceText = fs.readFileSync(stagedSkillFile, "utf8");
-    const stagedText = upsertWorkbuddyFrontmatter(sourceText, {
+    const stagedText = addWorkbuddyPromptSection(upsertWorkbuddyFrontmatter(sourceText, {
       name: target.publishedSlug,
       display_name: target.displayName,
       display_name_en: target.displayNameEn,
@@ -333,7 +344,7 @@ function stageSkills(options = {}) {
       category: target.category,
       version: target.version,
       author: target.author
-    }, stagedSkillFile);
+    }, stagedSkillFile), target.locale, stagedSkillFile);
     fs.writeFileSync(stagedSkillFile, stagedText);
     validateWorkbuddyFields(readFrontmatterFields(stagedText, stagedSkillFile), stagedSkillFile);
     target.stagePath = path.relative(projectRoot, stagedDirectory);
@@ -430,6 +441,7 @@ if (require.main === module) {
 
 module.exports = {
   assertSafeStageDir,
+  addWorkbuddyPromptSection,
   buildTargets,
   packageSkills,
   stageSkills,

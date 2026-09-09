@@ -148,6 +148,26 @@ ZIP files are written to `tmp/workbuddy-publish/archives/` (each must be no larg
 [WorkBuddy Open Platform](https://open.workbuddy.cn/). The script has no login or submit command and never uses
 Tencent SkillHub `skh_...` or `sk-ent-...` credentials. See the official [WorkBuddy Skill documentation](https://open.workbuddy.cn/docs/skill).
 
+### WorkBuddy Open Platform Connector
+
+WorkBuddy's open platform Connector publication is separate from Skill publication. The Connector ZIP contains the
+platform metadata and the MCP startup configuration; it is not one of the Skill ZIPs above.
+
+```bash
+# Build and validate the Connector ZIP for the current package version
+npm run skillhub:workbuddy:connector:dry-run
+```
+
+The uploadable file is generated at:
+
+```text
+tmp/workbuddy-connector/gecho-bridge-workbuddy-v1.1.37.zip
+```
+
+It uses the public `@gecho-ai/gecho-bridge@1.1.37` npm package as a local Stdio MCP server. The generated ZIP contains
+`connector-meta.json`, `mcp.json`, `icon.svg`, and a concise Connector Skill. It is only staged locally; this command
+does not upload or submit a review request. See the official [WorkBuddy Connector documentation](https://open.workbuddy.cn/docs/connector).
+
 ### Option 2: One-Click Setup in Hermes (Hermes Skill Hub)
 You can quickly add the service to Hermes and restart it with the following commands:
 ```bash

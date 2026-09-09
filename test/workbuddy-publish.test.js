@@ -5,6 +5,7 @@ const test = require("node:test");
 
 const {
   assertSafeStageDir,
+  addWorkbuddyPromptSection,
   buildTargets,
   packageSkills,
   stageSkills,
@@ -89,6 +90,20 @@ test("WorkBuddy frontmatter adds required bilingual fields without changing the 
   assert.match(staged, /^description_en: "English description"\n/m);
   assert.ok(staged.endsWith("# Demo\n\nBody\n"));
   assert.equal(source.includes("display_name:"), false);
+});
+
+test("WorkBuddy staging labels existing localized prompt examples without changing source content", () => {
+  const english = "# Skill\n\nBest-fit prompts:\n\n- \"Search TikTok\"\n";
+  const chinese = "# 技能\n\n适用的提示词：\n\n- “搜索 TikTok”\n";
+
+  assert.match(addWorkbuddyPromptSection(english, "en"), /^## Try asking me$/m);
+  assert.match(addWorkbuddyPromptSection(chinese, "zh-CN"), /^## 试试这样问我$/m);
+  assert.match(english, /^Best-fit prompts:$/m);
+  assert.match(chinese, /^适用的提示词：$/m);
+  assert.throws(
+    () => addWorkbuddyPromptSection("# Skill\n", "en"),
+    /missing prompt examples/
+  );
 });
 
 test("WorkBuddy staging only allows dedicated temporary directories", () => {

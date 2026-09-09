@@ -47,6 +47,8 @@
     "skillhub:workbuddy:stage": "node ./scripts/publish-workbuddy-skills.js stage",
     "skillhub:workbuddy:package": "node ./scripts/publish-workbuddy-skills.js package",
     "skillhub:workbuddy:dry-run": "node ./scripts/publish-workbuddy-skills.js dry-run",
+    "skillhub:workbuddy:connector": "node ./scripts/package-workbuddy-connector.js",
+    "skillhub:workbuddy:connector:dry-run": "node ./scripts/package-workbuddy-connector.js dry-run",
     "skillhub:modelscope:stage": "bash ./scripts/publish-modelscope-skills.sh stage",
     "skillhub:modelscope:dry-run": "bash ./scripts/publish-modelscope-skills.sh dry-run",
     "skillhub:modelscope:publish": "bash ./scripts/publish-modelscope-skills.sh publish",

@@ -277,7 +277,43 @@ npm run skillhub:workbuddy:dry-run -- --skill tiktok-video-search --locale zh-CN
 ```
 
 WorkBuddy 的平台身份单独维护在每个 Skill 的 `publish.json` 的
-`platforms.workbuddy` 中，不会复用腾讯 SkillHub 的 Key 或发布接口。
+`platforms.workbuddy` 中，不会复用腾讯 SkillHub 的 Key 或发布接口。源 Skill 已有的
+`Best-fit prompts` / `适用提示词` 会在 WorkBuddy 临时副本中标为 `Try asking me` /
+`试试这样问我`，源文件和其他平台的包不会被改动。
+
+### `package-workbuddy-connector.js`
+
+作用：
+
+- 生成 WorkBuddy 开放平台“发布连接器”页面需要的 Connector ZIP。
+- 在 ZIP 根目录放置 `connector-meta.json`、`mcp.json`、`icon.svg` 和 Connector Skill。配置里的 `iconPath` 可以指向 512×512 PNG，打包器会将其嵌入为平台要求的根目录 `icon.svg`。
+- 使用固定版本的公开 npm 包启动现有 Bridge Stdio MCP。
+- 只写入 `tmp/workbuddy-connector/`，不登录、不上传、不提交审核。
+
+配置源：
+
+- `config/workbuddy-connector.json`：Connector 名称、描述、自然语言示例和运行参数。
+- `connectors/workbuddy/gecho-bridge/`：图标和 Connector Skill 模板。
+
+执行：
+
+```bash
+npm run skillhub:workbuddy:connector:dry-run
+```
+
+默认产物：
+
+```text
+tmp/workbuddy-connector/gecho-bridge-workbuddy-v<version>.zip
+```
+
+上传时选择这个 ZIP，不要选择 `tmp/workbuddy-publish/` 下的 Skill ZIP。
+如果需要指定版本或输出目录：
+
+```bash
+npm run skillhub:workbuddy:connector -- --version 1.1.37
+npm run skillhub:workbuddy:connector -- --output-dir tmp/workbuddy-connector-test
+```
 
 ### `publish-skills-sh.sh`
 
