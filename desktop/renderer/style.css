@@ -1,0 +1,24 @@
+:root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; color: #1b1d28; background: #f7f8fc; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 620px; }
+.page { max-width: 760px; margin: 0 auto; padding: 34px 42px 26px; }
+.header, footer, .status-row, .settings { display: flex; align-items: center; justify-content: space-between; }
+.brand { display: flex; align-items: center; gap: 11px; }
+.brand strong { display: block; font-size: 20px; letter-spacing: -.4px; }
+.brand small { display: block; color: #85899a; font-size: 11px; margin-top: 2px; }
+.mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; color: white; font-size: 19px; font-weight: 800; background: linear-gradient(135deg, #36d9ed, #7959f6); box-shadow: 0 8px 18px #7959f633; }
+.badge { padding: 7px 11px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.badge.ready { color: #167b50; background: #dcf6e9; }.badge.pending { color: #6655b4; background: #e9e6ff; }.badge.error { color: #a13e4a; background: #fde4e8; }
+.hero { display: grid; grid-template-columns: 1fr 260px; gap: 30px; align-items: center; padding: 64px 0 48px; }
+.eyebrow { color: #7057e8; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+h1 { margin: 12px 0 14px; font-size: 32px; line-height: 1.2; letter-spacing: -1.2px; }
+.lead, .settings p { color: #737789; font-size: 14px; line-height: 1.7; }
+.actions { display: flex; gap: 11px; margin-top: 26px; }
+button { border: 0; border-radius: 10px; padding: 11px 15px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.primary { color: white; background: #20212a; box-shadow: 0 8px 18px #20212a22; }.secondary { color: #4f5362; background: white; border: 1px solid #e5e6ee; }
+.status-card, .settings { border: 1px solid #e6e7ef; border-radius: 16px; background: white; box-shadow: 0 12px 34px #3032490a; }
+.status-card { padding: 10px 17px; }.status-row { padding: 12px 0; border-bottom: 1px solid #f0f1f5; font-size: 13px; }.status-row:last-child { border-bottom: 0; }.status-row span { color: #85899a; }.status-row strong { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings { gap: 20px; padding: 19px 21px; }.settings h2 { margin: 0 0 4px; font-size: 15px; }.settings p { margin: 0; font-size: 12px; }
+.toggle input { display: none; }.toggle span { display: block; position: relative; width: 43px; height: 25px; border-radius: 20px; background: #d9dbe5; cursor: pointer; transition: .2s; }.toggle span:after { content: ""; position: absolute; width: 19px; height: 19px; top: 3px; left: 3px; border-radius: 50%; background: white; box-shadow: 0 2px 5px #0002; transition: .2s; }.toggle input:checked + span { background: #7158e8; }.toggle input:checked + span:after { transform: translateX(18px); }
+footer { margin-top: 28px; color: #9a9dac; font-size: 11px; }.footer-actions { display: flex; gap: 14px; }.text-button { padding: 0; color: #727687; background: transparent; font-size: 12px; }.text-button.danger { color: #bd4c5a; }
+@media (max-width: 700px) { body { min-width: 0; }.page { padding: 28px 24px; }.hero { grid-template-columns: 1fr; padding: 48px 0 32px; }.status-card { max-width: none; }.actions { flex-wrap: wrap; } }

@@ -22,6 +22,9 @@
   "scripts": {
     "start": "node mcp-client.js",
     "server": "node server.js",
+    "desktop:dev": "electron desktop/main.js",
+    "desktop:pack": "electron-builder --dir",
+    "desktop:dist": "electron-builder",
     "setup": "openclaw plugins install -l .",
     "sync:version": "node ./scripts/sync-version.js",
     "build:bundle": "node ./scripts/build-bundle.js",
@@ -75,8 +78,44 @@
     "ws": "^8.21.3"
   },
   "devDependencies": {
+    "electron": "^38.8.6",
+    "electron-builder": "^26.15.3",
     "esbuild": "^0.25.4",
     "playwright-core": "^1.62.1"
+  },
+  "build": {
+    "appId": "ai.gecho.desktop",
+    "productName": "Gecho",
+    "artifactName": "Gecho-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "release",
+      "buildResources": "desktop/assets"
+    },
+    "files": [
+      "desktop/**/*",
+      "server.js",
+      "data-dir.js",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "desktop/main.js"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.productivity"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ]
+    }
   },
   "publishConfig": {
     "access": "public"
