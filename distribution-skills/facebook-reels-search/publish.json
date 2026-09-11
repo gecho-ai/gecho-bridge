@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "facebook-reels-search",
+  "locale": "en",
+  "platforms": {
+    "clawhub": {
+      "slug": "facebook-reels-search",
+      "displayName": "Facebook Reels Search by Gecho"
+    },
+    "tencent-skillhub": {
+      "slug": "facebook-reels-search-en",
+      "displayName": "Facebook Reels Search by Gecho",
+      "mode": "create"
+    },
+    "modelscope": {
+      "slug": "facebook-reels-search",
+      "displayName": "Facebook Reels Search by Gecho"
+    },
+    "aily-skillhub": {
+      "slug": "facebook-reels-search-en",
+      "displayName": "Facebook Reels Search by Gecho",
+      "mode": "create"
+    },
+    "workbuddy": {
+      "slug": "gecho-facebook-reels-search-en",
+      "displayName": "Facebook Reels Search by Gecho",
+      "displayNameEn": "Facebook Reels Search by Gecho",
+      "author": "Gecho AI"
+    }
+  }
+}

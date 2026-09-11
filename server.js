@@ -15,6 +15,12 @@ const path = require("path");
 const { spawn, spawnSync } = require("child_process");
 const packageJson = require("./package.json");
 const { getDefaultDataDir } = require("./data-dir");
+const {
+  createActionResultEnvelope,
+  getActionResultMetadata,
+  isHardActionResultFailure,
+  normalizeActionResult
+} = require("./action-result");
 
 const WS_PORT = Number(process["env"].GECHO_WS_PORT || 18792);
 const HTTP_PORT = Number(process["env"].GECHO_HTTP_PORT || 18793);
@@ -445,6 +451,12 @@ function getBrowserTargetUrl(action) {
   }
   if (normalizedAction.includes("x_") || normalizedAction === "x_search") {
     return "https://x.com/";
+  }
+  if (normalizedAction === "youtube_shorts_search") {
+    return "https://www.youtube.com/";
+  }
+  if (normalizedAction === "facebook_reels_search") {
+    return "https://www.facebook.com/";
   }
   return "about:blank";
 }
@@ -1166,42 +1178,61 @@ function finalizeAsyncJobResult(jobId, result, attempt = 0) {
   if (!job) return;
 
   appendJobEvent(jobId, "attempt_result_received", { attempt });
+  const actionResult = normalizeActionResult(result);
+  const resultData = actionResult.data;
+  const resultMetadata = getActionResultMetadata(actionResult);
+  const hardFailure = isHardActionResultFailure(actionResult);
 
   const completeWith = (savePath = "", saveWarning = "") => {
-    if (Array.isArray(result)) {
-      updateJob(jobId, {
-        status: "completed",
-        stage: "completed",
-        data: result,
-        savePath,
-        saveWarning,
-        completedAt: Date.now()
-      });
-      appendJobEvent(jobId, "job_completed", { count: result.length, savePath: savePath || "" });
-    } else if (result && typeof result === "object" && result.error) {
+    if (hardFailure) {
+      const error = actionResult.errorMessage || actionResult.errorCode || "Plugin action failed";
       updateJob(jobId, {
         status: "error",
         stage: "business_error",
-        error: result.error
+        error,
+        ...resultMetadata
       });
-      appendJobEvent(jobId, "job_error", { error: String(result.error) });
+      appendJobEvent(jobId, "job_error", {
+        error: String(error),
+        errorCode: actionResult.errorCode || ""
+      });
+    } else if (Array.isArray(resultData)) {
+      updateJob(jobId, {
+        status: "completed",
+        stage: "completed",
+        data: resultData,
+        savePath,
+        saveWarning,
+        completedAt: Date.now(),
+        ...resultMetadata
+      });
+      appendJobEvent(jobId, "job_completed", { count: resultData.length, savePath: savePath || "" });
+    } else if (resultData && typeof resultData === "object" && resultData.error) {
+      updateJob(jobId, {
+        status: "error",
+        stage: "business_error",
+        error: resultData.error,
+        ...resultMetadata
+      });
+      appendJobEvent(jobId, "job_error", { error: String(resultData.error) });
     } else {
       updateJob(jobId, {
         status: "error",
         stage: "invalid_result",
-        error: "Plugin returned non-array result for async insight"
+        error: "Plugin returned non-array result for async insight",
+        ...resultMetadata
       });
       appendJobEvent(jobId, "job_error", { error: "non_array_result" });
     }
   };
 
-  if (Array.isArray(result) && result.length > 0) {
+  if (!hardFailure && Array.isArray(resultData) && resultData.length > 0) {
     const fixedPath = getTargetSavePathFromJob(job);
     enqueueWrite(
       async () => {
         try {
           await fs.promises.mkdir(path.dirname(fixedPath), { recursive: true });
-          await fs.promises.writeFile(fixedPath, JSON.stringify(result, null, 2), "utf8");
+          await fs.promises.writeFile(fixedPath, JSON.stringify(resultData, null, 2), "utf8");
           completeWith(fixedPath, "");
         } catch (e) {
           completeWith("", e.message || "failed_to_write_result_file");
@@ -1282,11 +1313,11 @@ function resolveMissingActionResultRequestId(parsed) {
   return "";
 }
 
-function resolveActionResultByRequestId(requestId, data, sourceLabel) {
+function resolveActionResultByRequestId(requestId, result, sourceLabel) {
   const pending = pendingRequests.get(requestId);
   if (pending) {
     clearTimeout(pending.timeoutId);
-    pending.resolve(data);
+    pending.resolve(result);
     pendingRequests.delete(requestId);
     return true;
   }
@@ -1294,7 +1325,7 @@ function resolveActionResultByRequestId(requestId, data, sourceLabel) {
   const parsedRef = resolveJobRefByRequestId(requestId);
   if (parsedRef.jobId) {
     console.warn(`WARN action_result ${sourceLabel} recovered by request ref: requestId=${requestId}, jobId=${parsedRef.jobId}`);
-    finalizeAsyncJobResult(parsedRef.jobId, data, parsedRef.attempt);
+    finalizeAsyncJobResult(parsedRef.jobId, result, parsedRef.attempt);
     return true;
   }
 
@@ -1494,11 +1525,12 @@ wss.on("connection", (ws, request) => {
       if (parsed.method === "action_result" && parsed.requestId) {
         traceBridgeEvent("extension_result", { requestId: parsed.requestId });
         console.log(`📩 Received result from extension (ID: ${parsed.requestId})`);
+        const actionResult = createActionResultEnvelope(parsed);
         const pending = pendingRequests.get(parsed.requestId);
         if (pending) {
-          resolveActionResultByRequestId(parsed.requestId, parsed.data, "with explicit requestId");
+          resolveActionResultByRequestId(parsed.requestId, actionResult, "with explicit requestId");
         } else {
-          const recovered = resolveActionResultByRequestId(parsed.requestId, parsed.data, "missed pending");
+          const recovered = resolveActionResultByRequestId(parsed.requestId, actionResult, "missed pending");
           if (recovered) return;
           const keys = Array.from(pendingRequests.keys());
           console.warn(`WARN action_result requestId not found in pendingRequests: ${parsed.requestId}`);
@@ -1509,7 +1541,11 @@ wss.on("connection", (ws, request) => {
         const recoveredRequestId = resolveMissingActionResultRequestId(parsed);
         if (recoveredRequestId) {
           console.warn(`WARN action_result missing requestId; recovered as: ${recoveredRequestId}`);
-          const recovered = resolveActionResultByRequestId(recoveredRequestId, parsed.data, "missing requestId");
+          const recovered = resolveActionResultByRequestId(
+            recoveredRequestId,
+            createActionResultEnvelope(parsed),
+            "missing requestId"
+          );
           if (!recovered) {
             console.warn(`WARN action_result missing requestId recovery target was stale: ${recoveredRequestId}`);
           }
@@ -2025,10 +2061,18 @@ const server = http.createServer(async (req, res) => {
           }));
         });
 
+        const actionResult = normalizeActionResult(result);
+        const resultData = actionResult.data;
+        const resultMetadata = getActionResultMetadata(actionResult);
+        const businessError = resultData && typeof resultData === "object" && !Array.isArray(resultData)
+          ? resultData.error
+          : "";
+        const hardFailure = isHardActionResultFailure(actionResult) || !!businessError;
+
         // 持久化存储
         let savePath = "";
         let saveWarning = "";
-        if (Array.isArray(result) && result.length > 0) {
+        if (Array.isArray(resultData) && resultData.length > 0) {
           let dataDir = payload.save_dir || process["env"].GECHO_DATA_DIR || JOBS_DIR;
           let fixedPath;
           if (dataDir.toLowerCase().endsWith(".json") || dataDir.toLowerCase().endsWith(".csv")) {
@@ -2047,13 +2091,23 @@ const server = http.createServer(async (req, res) => {
           if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
           
           try {
-            fs.writeFileSync(fixedPath, JSON.stringify(result, null, 2), "utf8");
+            fs.writeFileSync(fixedPath, JSON.stringify(resultData, null, 2), "utf8");
             savePath = fixedPath;
           } catch (e) {
             saveWarning = e.message;
           }
         }
-        res.end(JSON.stringify({ success: true, data: result, savePath, saveWarning }));
+        const response = {
+          success: !hardFailure,
+          data: resultData,
+          ...resultMetadata,
+          savePath,
+          saveWarning
+        };
+        if (hardFailure) {
+          response.error = actionResult.errorMessage || actionResult.errorCode || businessError || "Bridge action failed";
+        }
+        res.end(JSON.stringify(response));
         releaseBridgeOwnedBrowser(bridgeBrowserSessionId, "sync_action_finished");
       } catch (e) {
         releaseBridgeOwnedBrowser(bridgeBrowserSessionId, "sync_action_failed");

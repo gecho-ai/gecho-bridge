@@ -263,7 +263,7 @@ test("Tencent SkillHub target slugs are unique across English and Chinese skills
   const targets = buildTargets();
   const publishedSlugs = targets.map((target) => target.publishedSlug);
 
-  assert.equal(targets.length, 30);
+  assert.equal(targets.length, 34);
   assert.equal(new Set(publishedSlugs).size, publishedSlugs.length);
   assert.equal(
     targets.find((target) => target.locale === "en" && target.sourceSlug === "tiktok-insight").publishedSlug,

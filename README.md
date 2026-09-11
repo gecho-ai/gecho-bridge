@@ -1,16 +1,16 @@
 # Gecho Bridge 🚀
 
-**Gecho Bridge connects AI clients such as OpenClaw, Hermes, Trae, and Claude Code to a live Chrome browser through MCP and the Gecho Chrome extension.** Use it to search TikTok videos, collect structured metadata, save JSON results, and run async product, trend, competitor, and content insight workflows.
+**Gecho Bridge connects AI clients such as OpenClaw, Hermes, Trae, and Claude Code to a live Chrome browser through MCP and the Gecho Chrome extension.** Use it to search TikTok videos, YouTube Shorts, Facebook Reels, X posts, and Amazon products, collect structured metadata, save JSON results, and run async product, trend, competitor, and content insight workflows.
 
 ## ⚠️ Critical Prerequisite: Read Before Use
 
-Gecho Bridge cannot work from the README, Skill page, or MCP config alone. Before the first TikTok search or insight job, all 3 items below are required:
+Gecho Bridge cannot work from the README, Skill page, or MCP config alone. Before the first platform search or insight job, all 3 items below are required:
 
 1. **Configure Gecho Bridge MCP** in your AI client.
 2. **Install the Gecho Chrome extension** and log in to your Gecho account.
-3. **Log in to TikTok web in Chrome** and keep the logged-in TikTok tab open.
+3. **Log in to the target platform in Chrome** and keep the logged-in platform tab open.
 
-If any of these are missing, TikTok search and insight tools may fail even if the Skill or plugin is installed.
+If any of these are missing, the selected platform tool may fail even if the Skill or plugin is installed.
 
 ## 🚀 3-Step Quick Start
 
@@ -210,7 +210,7 @@ After the environment is configured and your AI client has restarted, you can di
 ### ✅ Self-Check Before First Use
 1. `gecho-bridge` MCP is configured, or the `@gecho-ai/gecho-bridge-bundle` plugin is installed.
 2. The [Gecho browser extension](https://chromewebstore.google.com/detail/pjkaeenpekolahdbccjfenjcmanemlbj?utm_source=item-share-cb) is installed.
-3. TikTok is open in Chrome and the account is logged in.
+3. The target platform is open in Chrome and the account is logged in (TikTok, YouTube, Facebook, X, or Amazon as applicable).
 4. The Gecho extension is logged in to a Gecho account and online.
 5. The TikTok page is not stuck or left on a CAPTCHA page.
 
@@ -228,8 +228,9 @@ Focused single-tool Skills are also available:
 - **Amazon**: `amazon-search`, `amazon-product`, `amazon-reviews`.
 - **TikTok**: `tiktok-video-search` for keyword-based video search; `tiktok-video` for a specific video’s detail, comments, and replies; `tiktok-influencer`, `tiktok-insight`, `tiktok-product`, and `tiktok-shop-search` for focused workflows.
 - **X**: `x-search` and `x-post-detail`.
+- **Short-form video**: `youtube-shorts-search` for YouTube Shorts and `facebook-reels-search` for Facebook Reels.
 
-Use `tiktok-video-search` when you want to discover videos by keyword. Use `tiktok-video` when you already have a video URL and need its detail data. If you want the full TikTok research workflow, use `tiktok-search`.
+Use `tiktok-video-search`, `youtube-shorts-search`, or `facebook-reels-search` when you want to discover short-form videos by keyword. Use `tiktok-video` when you already have a video URL and need its detail data. If you want the full TikTok research workflow, use `tiktok-search`.
 
 ### 🔍 Basic Search (`tiktok_search`)
 Suitable for quickly retrieving and collecting video data.

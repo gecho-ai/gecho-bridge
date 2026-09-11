@@ -10,9 +10,9 @@ const {
 test("skills.sh publisher lists both distribution locales", () => {
   const targets = buildTargets();
 
-  assert.equal(targets.length, 30);
-  assert.equal(targets.filter((target) => target.locale === "en").length, 15);
-  assert.equal(targets.filter((target) => target.locale === "zh-CN").length, 15);
+  assert.equal(targets.length, 34);
+  assert.equal(targets.filter((target) => target.locale === "en").length, 17);
+  assert.equal(targets.filter((target) => target.locale === "zh-CN").length, 17);
   assert.ok(targets.every((target) => target.sourceUrl.startsWith("https://github.com/")));
   assert.ok(targets.every((target) => !target.sourceUrl.endsWith("/SKILL.md")));
 });

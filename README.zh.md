@@ -1,16 +1,16 @@
 # Gecho Bridge 🚀
 
-**Gecho Bridge 通过 MCP 和 Gecho Chrome 扩展，把 OpenClaw、Hermes、Trae、Claude Code 等 AI 客户端连接到真实 Chrome 浏览器。** 你可以用它搜索 TikTok 视频、采集结构化元数据、保存 JSON 结果，并运行异步的产品、趋势、竞品和内容洞察工作流。
+**Gecho Bridge 通过 MCP 和 Gecho Chrome 扩展，把 OpenClaw、Hermes、Trae、Claude Code 等 AI 客户端连接到真实 Chrome 浏览器。** 你可以用它搜索 TikTok 视频、YouTube Shorts、Facebook Reels、X 帖子和 Amazon 商品，采集结构化元数据、保存 JSON 结果，并运行异步的产品、趋势、竞品和内容洞察工作流。
 
 ## ⚠️ 重要前置：使用前必看
 
-Gecho Bridge 不能只靠 README、Skill 页面或 MCP 配置单独运行。首次搜索 TikTok 或运行洞察任务前，必须同时满足下面 3 个条件：
+Gecho Bridge 不能只靠 README、Skill 页面或 MCP 配置单独运行。首次搜索平台内容或运行洞察任务前，必须同时满足下面 3 个条件：
 
 1. **在 AI 客户端中配置 Gecho Bridge MCP**。
 2. **安装 Gecho Chrome 扩展**，并在扩展中登录 Gecho 账号。
-3. **在 Chrome 中登录 TikTok 网页版**，并保持已登录的 TikTok 标签页打开。
+3. **在 Chrome 中登录目标平台**，并保持已登录的平台标签页打开。
 
-如果任一条件缺失，即使 Skill 或 Plugin 已安装，TikTok 搜索和洞察功能也可能无法正常运行。
+如果任一条件缺失，即使 Skill 或 Plugin 已安装，所选平台的搜索功能也可能无法正常运行。
 
 ## 🚀 3 步快速上手
 
@@ -215,7 +215,7 @@ claude mcp add gecho-bridge -- npx -y @gecho-ai/gecho-bridge@latest
 ### ✅ 首次使用前自检
 1. 已配置 `gecho-bridge` MCP，或已安装 `@gecho-ai/gecho-bridge-bundle` Plugin。
 2. 已安装 [Gecho 浏览器扩展](https://chromewebstore.google.com/detail/pjkaeenpekolahdbccjfenjcmanemlbj?utm_source=item-share-cb)。
-3. Chrome 中已打开 TikTok 并登录账号。
+3. Chrome 中已打开目标平台并登录账号（按任务选择 TikTok、YouTube、Facebook、X 或 Amazon）。
 4. Gecho 扩展已登录 Gecho 账号并处于在线状态。
 5. TikTok 页面未卡住或未停在验证码页面。
 
@@ -233,8 +233,9 @@ Gecho 提供四个聚合 Skill：
 - **Amazon**：`amazon-search`、`amazon-product`、`amazon-reviews`。
 - **TikTok**：`tiktok-video-search` 用于按关键词搜索视频；`tiktok-video` 用于指定视频的详情、评论和回复；另有 `tiktok-influencer`、`tiktok-insight`、`tiktok-product` 和 `tiktok-shop-search`。
 - **X**：`x-search` 和 `x-post-detail`。
+- **短视频**：`youtube-shorts-search` 用于 YouTube Shorts，`facebook-reels-search` 用于 Facebook Reels。
 
-需要按关键词发现视频时使用 `tiktok-video-search`；已有视频 URL、需要获取视频详情时使用 `tiktok-video`。需要完整 TikTok 研究工作流时，使用 `tiktok-search`。
+需要按关键词发现短视频时使用 `tiktok-video-search`、`youtube-shorts-search` 或 `facebook-reels-search`；已有视频 URL、需要获取视频详情时使用 `tiktok-video`。需要完整 TikTok 研究工作流时，使用 `tiktok-search`。
 
 ### 🔍 基础搜索 (`tiktok_search`)
 适用于快速检索和收集视频数据。

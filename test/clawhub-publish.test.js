@@ -14,7 +14,7 @@ test("ClawHub targets include distinct English and Chinese identities", () => {
   const targets = buildTargets();
   const publishedSlugs = targets.map((target) => target.publishedSlug);
 
-  assert.equal(targets.length, 30);
+  assert.equal(targets.length, 34);
   assert.equal(new Set(publishedSlugs).size, publishedSlugs.length);
 
   const english = targets.find(

@@ -12,7 +12,7 @@ test("every distribution Skill has platform-specific publish identity", () => {
   const platforms = ["clawhub", "tencent-skillhub", "aily-skillhub", "workbuddy", "modelscope"];
   const registry = loadPlatformRegistry();
 
-  assert.equal(skills.length, 30);
+  assert.equal(skills.length, 34);
   for (const platform of platforms) {
     assert.ok(registry.platforms[platform]);
     const slugs = new Set();

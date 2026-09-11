@@ -20,6 +20,7 @@ const expectedDistributionSkills = [
   "amazon-product",
   "amazon-reviews",
   "amazon-search",
+  "facebook-reels-search",
   "tiktok-influencer",
   "tiktok-insight",
   "tiktok-product",
@@ -30,7 +31,8 @@ const expectedDistributionSkills = [
   "tiktok-video-search",
   "x",
   "x-post-detail",
-  "x-search"
+  "x-search",
+  "youtube-shorts-search"
 ];
 
 const expectedToolsBySkill = {
@@ -54,7 +56,9 @@ const expectedToolsBySkill = {
   "tiktok-video-search": ["tiktok_search"],
   x: ["x_search", "x_post_detail"],
   "x-post-detail": ["x_post_detail"],
-  "x-search": ["x_search"]
+  "x-search": ["x_search"],
+  "youtube-shorts-search": ["youtube_shorts_search"],
+  "facebook-reels-search": ["facebook_reels_search"]
 };
 
 const expectedParameters = {
@@ -69,7 +73,9 @@ const expectedParameters = {
   x_post_detail: ["url", "targetCount", "save_dir"],
   amazon_search: ["query", "marketplace", "targetPages", "save_dir"],
   amazon_product: ["product_url", "marketplace", "save_dir"],
-  amazon_reviews: ["product_url", "marketplace", "targetCount", "save_dir"]
+  amazon_reviews: ["product_url", "marketplace", "targetCount", "save_dir"],
+  youtube_shorts_search: ["query", "targetCount", "save_dir"],
+  facebook_reels_search: ["query", "targetCount", "save_dir"]
 };
 
 const toolInvariants = {
@@ -83,7 +89,9 @@ const toolInvariants = {
   x_post_detail: [/100/, /repl(y|ies)|回复/i],
   amazon_search: [/US/i, /5/],
   amazon_product: [/US/i, /ASIN/i],
-  amazon_reviews: [/US/i, /100/, /ASIN/i]
+  amazon_reviews: [/US/i, /100/, /ASIN/i],
+  youtube_shorts_search: [/200/, /20/, /like|点赞/i],
+  facebook_reels_search: [/200/, /20/, /like|点赞/i]
 };
 
 const errors = [];

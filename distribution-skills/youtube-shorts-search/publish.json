@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "youtube-shorts-search",
+  "locale": "en",
+  "platforms": {
+    "clawhub": {
+      "slug": "youtube-shorts-search",
+      "displayName": "YouTube Shorts Search by Gecho"
+    },
+    "tencent-skillhub": {
+      "slug": "youtube-shorts-search-en",
+      "displayName": "YouTube Shorts Search by Gecho",
+      "mode": "create"
+    },
+    "modelscope": {
+      "slug": "youtube-shorts-search",
+      "displayName": "YouTube Shorts Search by Gecho"
+    },
+    "aily-skillhub": {
+      "slug": "youtube-shorts-search-en",
+      "displayName": "YouTube Shorts Search by Gecho",
+      "mode": "create"
+    },
+    "workbuddy": {
+      "slug": "gecho-youtube-shorts-search-en",
+      "displayName": "YouTube Shorts Search by Gecho",
+      "displayNameEn": "YouTube Shorts Search by Gecho",
+      "author": "Gecho AI"
+    }
+  }
+}

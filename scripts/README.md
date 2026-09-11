@@ -124,13 +124,14 @@ npm run build:bundle
 - `.git/`
 - `data/`
 - `node_modules/`
+- `tmp/` 生成的本地发布与测试产物
 - `.openclaw/`
 - `.DS_Store`
 - `.idea/`
 - `.codex-plugin/`
 - `.skillatlas-*` 探测文件
 
-Bundle 暂存前默认会运行 `npm run skill:validate` 对全部 38 个中英文 Skill 做验收。
+Bundle 暂存前默认会运行 `npm run skill:validate` 对全部 42 个中英文 Skill 做验收。
 如需在已完成外部校验后跳过，可显式设置 `SKILL_VALIDATE=0`。
 
 ### 3. 重写 staged `.mcp.json`
@@ -240,7 +241,7 @@ tmp/manual-skill-packages/
 npm run skill:package:manual
 ```
 
-脚本每次执行都会清空并重新生成该目录，当前会生成中英文共 30 个 ZIP，并输出
+脚本每次执行都会清空并重新生成该目录，当前会生成中英文共 34 个 ZIP，并输出
 `manifest.tsv` 记录来源目录、语言、版本和压缩包名称。
 
 也可以直接执行脚本或指定输出目录：
@@ -327,7 +328,7 @@ npm run skillhub:workbuddy:connector -- --output-dir tmp/workbuddy-connector-tes
 注意：skills.sh 没有传统的 Skill 发布 API。这里的“发布”实际是通过 CLI
 安装行为触发目录采集和匿名安装统计；执行成功不等于网页搜索结果会立即刷新。
 
-默认处理英文和中文 Skill 共 30 个：
+默认处理英文和中文 Skill 共 34 个：
 
 ```bash
 npm run skill:skills-sh:dry-run

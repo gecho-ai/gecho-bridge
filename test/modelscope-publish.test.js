@@ -25,7 +25,7 @@ test("ModelScope targets use the configured owner and unique skill names", () =>
   const targets = buildTargets();
   const skillNames = targets.map((target) => target.skillName);
 
-  assert.equal(targets.length, 30);
+  assert.equal(targets.length, 34);
   assert.equal(new Set(skillNames).size, skillNames.length);
   assert.ok(targets.every((target) => target.owner === "Gecho"));
 

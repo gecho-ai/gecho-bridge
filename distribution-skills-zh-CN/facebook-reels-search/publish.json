@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "sourceSlug": "facebook-reels-search",
+  "locale": "zh-CN",
+  "platforms": {
+    "clawhub": {
+      "slug": "facebook-reels-search-zh-cn",
+      "displayName": "Facebook Reels 搜索【Gecho 官方】"
+    },
+    "tencent-skillhub": {
+      "slug": "facebook-reels-search",
+      "displayName": "Facebook Reels 搜索【Gecho 官方】",
+      "mode": "update-or-create"
+    },
+    "modelscope": {
+      "slug": "facebook-reels-search-gecho",
+      "displayName": "Facebook Reels 搜索【Gecho 官方】"
+    },
+    "aily-skillhub": {
+      "slug": "facebook-reels-search",
+      "displayName": "Facebook Reels 搜索【Gecho 官方】",
+      "mode": "update-or-create"
+    },
+    "workbuddy": {
+      "slug": "gecho-facebook-reels-search",
+      "displayName": "Facebook Reels 搜索【Gecho 官方】",
+      "displayNameEn": "Facebook Reels Search by Gecho",
+      "author": "Gecho AI"
+    }
+  }
+}

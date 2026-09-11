@@ -22,6 +22,7 @@ const { spawn } = require(cpModule);
 const path = require("path");
 const packageJson = require("./package.json");
 const { getDefaultDataDir } = require("./data-dir");
+const { isHardActionResultFailure, normalizeActionResult } = require("./action-result");
 
 const SERVICE_BASE_URL = "http://127.0.0.1:18793";
 const HTTP_SERVICE_URL = `${SERVICE_BASE_URL}/search`;
@@ -41,6 +42,8 @@ const SUPPORTED_TOOL_NAMES = new Set([
   "tiktok_video",
   "x_search",
   "x_post_detail",
+  "youtube_shorts_search",
+  "facebook_reels_search",
   "amazon_search",
   "amazon_product",
   "amazon_reviews"
@@ -336,6 +339,32 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         }
       },
       {
+        name: "youtube_shorts_search",
+        description: "在 YouTube Shorts 上搜索关键词，采集候选视频并按点赞数返回前 20 条，同时补充视频详情和评论。需要在浏览器中登录 YouTube。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: "搜索关键词 (例如: 'portable blender')" },
+            targetCount: { type: "number", description: "候选采集数量，默认 200，范围 20-200", default: 200, minimum: 20, maximum: 200 },
+            save_dir: { type: "string", description: "可选的保存目录绝对路径" }
+          },
+          required: ["query"]
+        }
+      },
+      {
+        name: "facebook_reels_search",
+        description: "在 Facebook Reels 上搜索关键词，采集候选视频并按点赞数返回前 20 条，同时补充视频详情和评论。需要在浏览器中登录 Facebook。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: "搜索关键词 (例如: 'portable blender')" },
+            targetCount: { type: "number", description: "候选采集数量，默认 200，范围 20-200", default: 200, minimum: 20, maximum: 200 },
+            save_dir: { type: "string", description: "可选的保存目录绝对路径" }
+          },
+          required: ["query"]
+        }
+      },
+      {
         name: "amazon_search",
         description: "在 Amazon 上搜索关键词，自动采集多页商品信息（支持自动翻页）。marketplace 可选，未传时默认 US。",
         inputSchema: {
@@ -422,7 +451,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         throw lastError || new Error("Status request failed");
       };
-      
+
       let statusResponse;
       try {
         statusResponse = await requestStatusWithRetry();
@@ -468,16 +497,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const retries = typeof statusResponse.retryCount === "number"
           ? `, retries=${statusResponse.retryCount}`
           : "";
+        const errorCode = statusResponse.errorCode ? ` [${statusResponse.errorCode}]` : "";
         return {
           content: [{
             type: "text",
-            text: `❌ 任务 [${jobId}] 执行失败${stage}${retries}: ${statusResponse.error}`
+            text: `❌ 任务 [${jobId}] 执行失败${stage}${retries}${errorCode}: ${statusResponse.error || statusResponse.errorMessage || "未知错误"}`
           }],
           isError: true
         };
       }
 
-      const result = statusResponse.data;
+      const statusResult = normalizeActionResult(statusResponse);
+      const result = statusResult.data;
+      if (isHardActionResultFailure(statusResult)) {
+        const errorCode = statusResult.errorCode ? ` [${statusResult.errorCode}]` : "";
+        return {
+          content: [{
+            type: "text",
+            text: `❌ 任务 [${jobId}] 执行失败${errorCode}: ${statusResult.errorMessage || "未知错误"}`
+          }],
+          isError: true
+        };
+      }
       if (typeof result === 'object' && result !== null && result.error) {
         return { content: [{ type: "text", text: `❌ 业务错误: ${result.error}` }], isError: true };
       }
@@ -488,14 +529,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const savePath = statusResponse.savePath || "";
       const saveLine = savePath ? `📂 数据已存: ${savePath}\n\n` : "";
+      const statusMetaLine = statusResult.meta
+        ? `📊 采集状态: ${statusResult.meta.status || "unknown"}${statusResult.meta.reason ? ` (${statusResult.meta.reason})` : ""}\n`
+        : "";
       const top20 = result.slice(0, 20);
 
       return {
         content: [
           { 
-            type: "text", 
-            text: `✅ 任务 [${jobId}] 执行成功！共获取 ${result.length} 条数据。\n` +
+              type: "text",
+              text: `✅ 任务 [${jobId}] 执行成功！共获取 ${result.length} 条数据。\n` +
                   saveLine +
+                  statusMetaLine +
                   `以下是部分结果展示：\n` +
                   JSON.stringify(top20, null, 2) 
           }
@@ -603,8 +648,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
+      const actionResult = normalizeActionResult(serviceResponse);
+      const actionResultMeta = actionResult.meta || {};
+      const actionResultMetaLine = actionResult.meta
+        ? `\n📊 采集状态: ${actionResultMeta.status || "unknown"}${actionResultMeta.reason ? ` (${actionResultMeta.reason})` : ""}\n`
+        : "";
+
       if (serviceResponse.error) {
-        return { content: [{ type: "text", text: `❌ 错误: ${serviceResponse.error}` }], isError: true };
+        const errorCode = serviceResponse.errorCode ? ` [${serviceResponse.errorCode}]` : "";
+        return {
+          content: [{
+            type: "text",
+            text: `❌ 错误${errorCode}: ${serviceResponse.error}${actionResultMetaLine}`
+          }],
+          isError: true
+        };
+      }
+
+      if (isHardActionResultFailure(actionResult) || serviceResponse.success === false) {
+        const errorCode = actionResult.errorCode ? ` [${actionResult.errorCode}]` : "";
+        return {
+          content: [{
+            type: "text",
+            text: `❌ 业务错误${errorCode}: ${actionResult.errorMessage || "Bridge 未完成该任务"}${actionResultMetaLine}`
+          }],
+          isError: true
+        };
       }
 
       // 鲁棒性修复：只要 serviceResponse 中包含 jobId，不论什么工具都按异步处理返回给 MCP
@@ -625,7 +694,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       // 如果不是异步启动，且响应成功，则校验数据
-      const result = serviceResponse.data;
+      const result = actionResult.data;
       if (serviceResponse.success && result === undefined) {
          // 针对某些同步接口可能只返回 success: true 的情况 (虽然目前 search 接口通常返回 data)
          return { content: [{ type: "text", text: "✅ 操作执行成功。" }] };
@@ -666,6 +735,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               type: "text",
               text: `✅ [${toolName}] 视频详情与评论获取成功，共采集 ${comments.length} 条评论及回复。\n` +
                     saveLine +
+                    actionResultMetaLine +
                     `以下仅展示前 ${preview.commentsPreviewed} 条评论，完整数据请查看保存文件：\n` +
                     JSON.stringify(preview, null, 2)
             }
@@ -680,6 +750,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               type: "text",
               text: `✅ [${toolName}] 商品详情获取成功！\n` +
                     saveLine +
+                    actionResultMetaLine +
                     JSON.stringify(result[0], null, 2)
             }
           ]
@@ -693,6 +764,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             type: "text", 
             text: `✅ [${toolName}] 执行成功，共 ${result.length} 条数据。\n` +
                   saveLine +
+                  actionResultMetaLine +
                   `以下是部分结果展示：\n` +
                   JSON.stringify(top20, null, 2) 
           }

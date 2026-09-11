@@ -96,6 +96,7 @@ rsync -a \
   --exclude '.git/' \
   --exclude 'data/' \
   --exclude 'node_modules/' \
+  --exclude 'tmp/' \
   --exclude '.openclaw/' \
   --exclude '.DS_Store' \
   --exclude '.idea/' \
