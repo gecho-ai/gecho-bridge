@@ -183,6 +183,9 @@ class ScheduledTaskScheduler {
         completedAt
       });
       const current = this.store.get(task.id);
+      if (!current) {
+        return { task: null, run: completedRun?.lastRun || null, deleted: true };
+      }
       const finalStatus = advanceSchedule
         ? (task.schedule.type === "once" ? "dispatched" : (current.enabled ? "scheduled" : "paused"))
         : current.status;
@@ -208,6 +211,9 @@ class ScheduledTaskScheduler {
         completedAt: failedAt
       });
       const current = this.store.get(task.id);
+      if (!current) {
+        return { task: null, run: failedRun?.lastRun || null, deleted: true };
+      }
       const finalStatus = advanceSchedule
         ? (task.schedule.type === "once" ? "failed" : (current.enabled ? "scheduled" : "paused"))
         : current.status;
