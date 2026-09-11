@@ -1,6 +1,6 @@
 {
   "name": "@gecho-ai/gecho-bridge",
-  "version": "1.1.37",
+  "version": "1.1.38",
   "description": "Browser research tools for OpenClaw, connecting LLMs to TikTok, YouTube Shorts, Facebook Reels, X, and Amazon via the Gecho Chrome Extension.",
   "main": "mcp-client.js",
   "bin": {

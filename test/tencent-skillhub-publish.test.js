@@ -298,7 +298,8 @@ test("staging writes unique copies and leaves the source frontmatter unchanged",
     const result = stageSkills({
       stageDir: path.join(tempRoot, "stage"),
       skill: "tiktok-insight",
-      locale: "zh-CN"
+      locale: "zh-CN",
+      version: "1.1.37"
     });
     const stagedPath = path.join(tempRoot, "stage/zh-CN/gecho-tiktok-insight/SKILL.md");
     const staged = fs.readFileSync(stagedPath, "utf8");
