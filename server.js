@@ -21,6 +21,8 @@ const {
   isHardActionResultFailure,
   normalizeActionResult
 } = require("./action-result");
+const { ScheduledTaskStore, getPublicScheduledTask } = require("./scheduled-task-store");
+const { ScheduledTaskScheduler } = require("./scheduled-task-scheduler");
 
 const WS_PORT = Number(process["env"].GECHO_WS_PORT || 18792);
 const HTTP_PORT = Number(process["env"].GECHO_HTTP_PORT || 18793);
@@ -32,6 +34,7 @@ const JOBS_DIR = process["env"].GECHO_DATA_DIR || DEFAULT_DATA_DIR;
 const JOBS_STORE_PATH = path.join(JOBS_DIR, ".async_jobs.json");
 const JOB_DETAILS_DIR = path.join(JOBS_DIR, "jobs");
 const REQUEST_INDEX_PATH = path.join(JOBS_DIR, ".async_request_index.json");
+const SCHEDULED_TASKS_STORE_PATH = path.join(JOBS_DIR, ".scheduled_tasks.json");
 const BROWSER_CONNECTION_PATH = path.join(JOBS_DIR, ".browser_connection.json");
 const ONBOARDING_STATE_PATH = path.join(JOBS_DIR, ".extension_onboarding.json");
 const GECHO_EXTENSION_ID = "pjkaeenpekolahdbccjfenjcmanemlbj";
@@ -67,6 +70,9 @@ const EXTENSION_RECONNECT_PROBE_TIMEOUT_MS = Math.max(1000, Number(process["env"
 const EXTENSION_ONBOARDING_TIMEOUT_MS = Math.max(5000, Number(process["env"].GECHO_EXTENSION_ONBOARDING_TIMEOUT_MS || 120000));
 const EXTENSION_CONNECT_POLL_MS = 500;
 const EXTENSION_READY_GRACE_MS = Math.max(0, Number(process["env"].GECHO_EXTENSION_READY_GRACE_MS || 1500));
+const SCHEDULED_MAX_RUNS_PER_TASK = Math.max(10, Number(process["env"].GECHO_SCHEDULED_MAX_RUNS_PER_TASK || 100));
+const SCHEDULED_MISFIRE_GRACE_MS = Math.max(0, Number(process["env"].GECHO_SCHEDULED_MISFIRE_GRACE_MS || 30000));
+const SCHEDULED_TRIGGER_TIMEOUT_MS = Math.max(1000, Number(process["env"].GECHO_SCHEDULED_TRIGGER_TIMEOUT_MS || 30000));
 const AUTO_LAUNCH_BROWSER = process["env"].GECHO_AUTO_LAUNCH_BROWSER !== "0";
 const AUTO_OPEN_ONBOARDING_ON_FIRST_START = process["env"].GECHO_AUTO_OPEN_ONBOARDING_ON_FIRST_START !== "0";
 const AUTO_CLOSE_LAUNCHED_BROWSER = process["env"].GECHO_AUTO_CLOSE_LAUNCHED_BROWSER !== "0";
@@ -91,6 +97,8 @@ const pendingRequests = new Map();
 let requestIdCounter = 1;
 let shuttingDown = false;
 let lastDispatchedRequestId = "";
+let scheduledTaskStore = null;
+let scheduledTaskScheduler = null;
 const BRIDGE_TRACE_LIMIT = 100;
 const bridgeTrace = [];
 
@@ -1266,6 +1274,92 @@ function getServiceSourceMtimeMs() {
   }
 }
 
+function getScheduledApiAllowedOrigins() {
+  const origins = new Set();
+  try {
+    origins.add(new URL(GECHO_WEBSITE_URL).origin);
+  } catch (_e) {
+    origins.add("https://gecho.ai");
+  }
+  const configured = String(process["env"].GECHO_SCHEDULED_ALLOWED_ORIGINS || "");
+  for (const origin of configured.split(",").map((value) => value.trim()).filter(Boolean)) {
+    origins.add(origin.replace(/\/$/, ""));
+  }
+  if (process["env"].GECHO_SCHEDULED_ALLOW_LOCALHOST === "1") {
+    origins.add("http://localhost:3000");
+    origins.add("http://127.0.0.1:3000");
+  }
+  return origins;
+}
+
+function getScheduledApiToken(req) {
+  const authorization = String(req.headers.authorization || "");
+  if (/^Bearer\s+/i.test(authorization)) return authorization.replace(/^Bearer\s+/i, "").trim();
+  return String(req.headers["x-gecho-bridge-token"] || "").trim();
+}
+
+function isScheduledApiAuthorized(req) {
+  const origin = String(req.headers.origin || "").trim().replace(/\/$/, "");
+  const origins = getScheduledApiAllowedOrigins();
+  if (origin && !origins.has(origin)) return false;
+
+  const expectedToken = String(process["env"].GECHO_BRIDGE_API_TOKEN || "").trim();
+  if (expectedToken && getScheduledApiToken(req) !== expectedToken) return false;
+  return true;
+}
+
+function applyScheduledApiCors(req, res) {
+  const origin = String(req.headers.origin || "").trim().replace(/\/$/, "");
+  if (origin && getScheduledApiAllowedOrigins().has(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,PUT,DELETE,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Gecho-Bridge-Token");
+  }
+}
+
+function readJsonBody(req, maxBytes = 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    let size = 0;
+    req.on("data", (chunk) => {
+      size += Buffer.byteLength(chunk);
+      if (size > maxBytes) {
+        const error = new Error("Request body is too large");
+        error.code = "REQUEST_BODY_TOO_LARGE";
+        reject(error);
+        req.destroy();
+        return;
+      }
+      body += chunk;
+    });
+    req.on("end", () => {
+      if (!body.trim()) return resolve({});
+      try {
+        resolve(JSON.parse(body));
+      } catch (_error) {
+        const error = new Error("Request body must be valid JSON");
+        error.code = "INVALID_JSON";
+        reject(error);
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+function sendJson(res, payload, statusCode = 200) {
+  res.statusCode = statusCode;
+  return res.end(JSON.stringify(payload));
+}
+
+function requireScheduledApiAccess(req, res) {
+  if (isScheduledApiAuthorized(req)) return true;
+  sendJson(res, {
+    error: "Scheduled task API access is not allowed for this origin or token"
+  }, 403);
+  return false;
+}
+
 function resolveMissingActionResultRequestId(parsed) {
   const embeddedRequestId = String(
     parsed?.data?.requestId ||
@@ -1412,6 +1506,136 @@ async function runAsyncAttempt({ jobId, action, params, payload, attempt }) {
   }));
 }
 
+async function dispatchScheduledTaskToExtension(task, run) {
+  const action = String(task.triggerAction || "start_flywheel_task");
+  const connection = await ensureExtensionConnection(action);
+  if (!connection.connected) {
+    const error = new Error(extensionConnectionError(connection));
+    error.code = "EXTENSION_DISCONNECTED";
+    throw error;
+  }
+
+  const bridgeBrowserSessionId = retainBridgeOwnedBrowser(
+    connection.launch?.bridgeBrowserSessionId,
+    connection.browser
+  );
+  const requestId = `scheduled-${Date.now()}-${requestIdCounter++}`;
+  const payload = run?.payload || { action, params: {} };
+  const params = payload.params && typeof payload.params === "object" ? payload.params : {};
+  lastDispatchedRequestId = requestId;
+  traceBridgeEvent("scheduled_trigger_sent", {
+    action,
+    requestId,
+    taskRef: task.taskRef,
+    triggerId: run.triggerId
+  });
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      pendingRequests.delete(requestId);
+      releaseBridgeOwnedBrowser(bridgeBrowserSessionId, "scheduled_trigger_finished");
+      callback(value);
+    };
+    const timeoutId = setTimeout(() => {
+      const error = new Error(`Scheduled trigger acknowledgement timed out after ${Math.floor(SCHEDULED_TRIGGER_TIMEOUT_MS / 1000)}s`);
+      error.code = "TRIGGER_ACK_TIMEOUT";
+      traceBridgeEvent("scheduled_trigger_timeout", { requestId, taskRef: task.taskRef });
+      finish(reject, error);
+    }, SCHEDULED_TRIGGER_TIMEOUT_MS);
+    timeoutId.unref?.();
+
+    pendingRequests.set(requestId, {
+      timeoutId,
+      action,
+      startedAt: Date.now(),
+      resolve: (result) => {
+        const actionResult = normalizeActionResult(result);
+        const resultData = actionResult.data;
+        const businessError = resultData && typeof resultData === "object" && !Array.isArray(resultData)
+          ? resultData.error
+          : "";
+        if (isHardActionResultFailure(actionResult) || businessError || resultData?.accepted === false) {
+          const error = new Error(
+            actionResult.errorMessage || actionResult.errorCode || businessError || "Extension rejected scheduled trigger"
+          );
+          error.code = actionResult.errorCode || "TRIGGER_REJECTED";
+          traceBridgeEvent("scheduled_trigger_rejected", {
+            requestId,
+            taskRef: task.taskRef,
+            errorCode: error.code
+          });
+          finish(reject, error);
+          return;
+        }
+
+        traceBridgeEvent("scheduled_trigger_acknowledged", {
+          requestId,
+          taskRef: task.taskRef,
+          triggerId: run.triggerId
+        });
+        finish(resolve, {
+          requestId,
+          accepted: true,
+          browser: connection.browser || "",
+          meta: actionResult.meta || null
+        });
+      }
+    });
+
+    try {
+      if (!connection.socket || connection.socket.readyState !== 1) {
+        const error = new Error("Extension socket is not open");
+        error.code = "EXTENSION_SOCKET_NOT_OPEN";
+        throw error;
+      }
+      connection.socket.send(JSON.stringify({
+        method: "execute_action",
+        params: { action, params },
+        requestId
+      }));
+    } catch (error) {
+      clearTimeout(timeoutId);
+      finish(reject, error);
+    }
+  });
+}
+
+function initializeScheduledTaskRuntime() {
+  try {
+    scheduledTaskStore = new ScheduledTaskStore({
+      filePath: SCHEDULED_TASKS_STORE_PATH,
+      maxRuns: SCHEDULED_MAX_RUNS_PER_TASK
+    });
+  } catch (error) {
+    console.error(`Failed to load scheduled task store: ${error.message}`);
+    try {
+      if (fs.existsSync(SCHEDULED_TASKS_STORE_PATH)) {
+        const backupPath = `${SCHEDULED_TASKS_STORE_PATH}.corrupt-${Date.now()}`;
+        fs.renameSync(SCHEDULED_TASKS_STORE_PATH, backupPath);
+        console.error(`Corrupted scheduled task file moved to: ${backupPath}`);
+      }
+    } catch (backupError) {
+      console.error(`Failed to back up scheduled task store: ${backupError.message}`);
+    }
+    scheduledTaskStore = new ScheduledTaskStore({
+      filePath: SCHEDULED_TASKS_STORE_PATH,
+      maxRuns: SCHEDULED_MAX_RUNS_PER_TASK
+    });
+  }
+
+  scheduledTaskScheduler = new ScheduledTaskScheduler({
+    store: scheduledTaskStore,
+    dispatchTask: dispatchScheduledTaskToExtension,
+    misfireGraceMs: SCHEDULED_MISFIRE_GRACE_MS,
+    onError: (error) => console.error(`Scheduled task scheduler failed: ${error.message}`)
+  });
+  scheduledTaskScheduler.start();
+  console.log(`♻️ Restored scheduled flywheel tasks: ${scheduledTaskStore.list().length}`);
+}
+
 function gracefulShutdown(reason) {
   if (shuttingDown) return;
   shuttingDown = true;
@@ -1436,6 +1660,7 @@ function gracefulShutdown(reason) {
     clearInterval(cleanupTimer);
     cleanupTimer = null;
   }
+  scheduledTaskScheduler?.stop();
 
   try {
     if (extensionSocket && extensionSocket.readyState === 1) {
@@ -1577,6 +1802,7 @@ wss.on("connection", (ws, request) => {
 loadAsyncJobsFromDisk();
 loadRequestIndexFromDisk();
 checkJobsStoreWritable();
+initializeScheduledTaskRuntime();
 runJobCleanup();
 cleanupTimer = setInterval(runJobCleanup, CLEANUP_INTERVAL_MS);
 
@@ -1812,6 +2038,16 @@ function applyOnboardingLocale(html, locale) {
 // --- HTTP Server (供 Client 层调用) ---
 const server = http.createServer(async (req, res) => {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
+  applyScheduledApiCors(req, res);
+
+  if (req.method === "OPTIONS") {
+    const origin = String(req.headers.origin || "").trim().replace(/\/$/, "");
+    if (origin && !getScheduledApiAllowedOrigins().has(origin)) {
+      return sendJson(res, { error: "Origin is not allowed" }, 403);
+    }
+    res.statusCode = 204;
+    return res.end();
+  }
 
   if (req.method === "GET" && req.url === ONBOARDING_PATH) {
     res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -1890,8 +2126,119 @@ const server = http.createServer(async (req, res) => {
         enabled: AUTO_LAUNCH_BROWSER,
         browser: getBrowserToLaunch() || null
       },
+      scheduler: {
+        total: scheduledTaskStore?.list().length || 0,
+        enabled: scheduledTaskStore?.list().filter((task) => task.enabled).length || 0,
+        nextRunAt: scheduledTaskScheduler?.getNextRunAt() || null,
+        triggerAction: "start_flywheel_task"
+      },
       bridgeTrace: bridgeTrace.slice(-30)
     }));
+  }
+
+  const requestUrl = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
+  const scheduledPath = requestUrl.pathname;
+  const isScheduledApi = scheduledPath === "/scheduled-jobs"
+    || scheduledPath.startsWith("/scheduled-jobs/");
+  if (isScheduledApi && !requireScheduledApiAccess(req, res)) return;
+
+  if (req.method === "GET" && scheduledPath === "/scheduled-jobs") {
+    const jobs = scheduledTaskStore
+      .list()
+      .sort((a, b) => (Date.parse(a.nextRunAt || "") || Number.MAX_SAFE_INTEGER)
+        - (Date.parse(b.nextRunAt || "") || Number.MAX_SAFE_INTEGER))
+      .map(getPublicScheduledTask);
+    return sendJson(res, { jobs });
+  }
+
+  const scheduledUpsertPath = scheduledPath.match(/^\/scheduled-jobs\/task-ref\/([^/]+)$/);
+  if (req.method === "PUT" && scheduledUpsertPath) {
+    try {
+      const payload = await readJsonBody(req);
+      const taskRef = decodeURIComponent(scheduledUpsertPath[1]);
+      if (payload.taskRef !== undefined && String(payload.taskRef) !== taskRef) {
+        return sendJson(res, { error: "taskRef in path and body must match" }, 400);
+      }
+      const result = scheduledTaskStore.upsert({ ...payload, taskRef });
+      scheduledTaskScheduler.arm();
+      return sendJson(res, {
+        success: true,
+        created: result.created,
+        job: getPublicScheduledTask(result.job)
+      }, result.created ? 201 : 200);
+    } catch (error) {
+      const statusCode = error.code === "SCHEDULED_TASK_EXISTS" ? 409 : 400;
+      return sendJson(res, { error: error.message, code: error.code || "INVALID_SCHEDULED_TASK" }, statusCode);
+    }
+  }
+
+  if (req.method === "POST" && scheduledPath === "/scheduled-jobs") {
+    try {
+      const job = scheduledTaskStore.create(await readJsonBody(req));
+      scheduledTaskScheduler.arm();
+      return sendJson(res, { success: true, job: getPublicScheduledTask(job) }, 201);
+    } catch (error) {
+      const statusCode = error.code === "SCHEDULED_TASK_EXISTS" ? 409 : 400;
+      return sendJson(res, { error: error.message, code: error.code || "INVALID_SCHEDULED_TASK" }, statusCode);
+    }
+  }
+
+  const scheduledRunsPath = scheduledPath.match(/^\/scheduled-jobs\/([^/]+)\/runs$/);
+  if (req.method === "GET" && scheduledRunsPath) {
+    const job = scheduledTaskStore.get(decodeURIComponent(scheduledRunsPath[1]));
+    if (!job) return sendJson(res, { error: "Scheduled task not found" }, 404);
+    return sendJson(res, { runs: Array.isArray(job.runs) ? job.runs.slice().reverse() : [] });
+  }
+
+  const scheduledRunNowPath = scheduledPath.match(/^\/scheduled-jobs\/([^/]+)\/run$/);
+  if (req.method === "POST" && scheduledRunNowPath) {
+    const id = decodeURIComponent(scheduledRunNowPath[1]);
+    try {
+      const result = await scheduledTaskScheduler.runNow(id);
+      const failed = result?.run?.status === "failed";
+      return sendJson(res, {
+        success: !failed,
+        job: getPublicScheduledTask(result.task),
+        run: result.run
+      }, failed ? 502 : 200);
+    } catch (error) {
+      const statusCode = error.code === "SCHEDULED_TASK_NOT_FOUND" ? 404
+        : error.code === "SCHEDULED_TASK_RUNNING" ? 409
+          : 400;
+      return sendJson(res, { error: error.message, code: error.code || "SCHEDULED_RUN_FAILED" }, statusCode);
+    }
+  }
+
+  const scheduledJobPath = scheduledPath.match(/^\/scheduled-jobs\/([^/]+)$/);
+  if (req.method === "GET" && scheduledJobPath) {
+    const job = scheduledTaskStore.get(decodeURIComponent(scheduledJobPath[1]));
+    if (!job) return sendJson(res, { error: "Scheduled task not found" }, 404);
+    return sendJson(res, getPublicScheduledTask(job));
+  }
+
+  if (req.method === "PATCH" && scheduledJobPath) {
+    const id = decodeURIComponent(scheduledJobPath[1]);
+    try {
+      const job = scheduledTaskStore.update(id, await readJsonBody(req));
+      if (!job) return sendJson(res, { error: "Scheduled task not found" }, 404);
+      scheduledTaskScheduler.arm();
+      return sendJson(res, { success: true, job: getPublicScheduledTask(job) });
+    } catch (error) {
+      const statusCode = error.code === "SCHEDULED_TASK_EXISTS" ? 409 : 400;
+      return sendJson(res, { error: error.message, code: error.code || "INVALID_SCHEDULED_TASK" }, statusCode);
+    }
+  }
+
+  if (req.method === "DELETE" && scheduledJobPath) {
+    const id = decodeURIComponent(scheduledJobPath[1]);
+    try {
+      const removed = scheduledTaskStore.remove(id);
+      if (!removed) return sendJson(res, { error: "Scheduled task not found" }, 404);
+      scheduledTaskScheduler.arm();
+      return sendJson(res, { success: true, id });
+    } catch (error) {
+      return sendJson(res, { error: error.message, code: "SCHEDULED_TASK_DELETE_FAILED" }, 500);
+    }
   }
 
   if (req.method === "POST" && req.url === "/shutdown") {
