@@ -1,6 +1,6 @@
 # 自动飞轮：Bridge 定时触发接口
 
-状态：Bridge 第一阶段已开发并通过本地集成测试。
+状态：Bridge 定时触发链路、独立运行和用户级开机启动已开发，并通过本地集成测试。
 
 ## 1. Bridge 负责什么
 
@@ -108,9 +108,38 @@ Bridge 向插件发送：
 - 运行记录默认保留最近 100 次。
 - 官网跨域请求只允许 `GECHO_WEBSITE_URL` 的 Origin，可通过 `GECHO_SCHEDULED_ALLOWED_ORIGINS` 增加开发环境地址。
 - 如果配置 `GECHO_BRIDGE_API_TOKEN`，官网请求还必须携带 Bearer Token 或 `X-Gecho-Bridge-Token`。
-- 当前不包含系统睡眠唤醒、Bridge 桌面安装器、开机启动和最终视频/脚本结果回传。
+- 当前不包含系统睡眠唤醒、Bridge 桌面安装器和最终视频/脚本结果回传。
 
-## 6. 已验证
+## 6. Bridge 独立运行与开机启动
+
+Bridge 不再必须依赖 MCP 进程才能运行。可以直接使用独立服务命令：
+
+```bash
+npm run server:start       # 启动本机 Bridge 服务
+npm run server:status      # 查看服务和定时任务状态
+npm run server:restart     # 重启服务
+npm run server:stop        # 停止服务
+```
+
+如果需要用户登录系统后自动运行，可以显式安装用户级启动项：
+
+```bash
+npx gecho-bridge-server install
+npx gecho-bridge-server startup-status
+npx gecho-bridge-server uninstall
+```
+
+各系统对应的实现是：
+
+- macOS：用户 `LaunchAgent`，登录后启动并保持 Bridge 运行；
+- Linux：用户级 `systemd` service，不需要 root 权限；
+- Windows：当前用户的登录启动任务（Task Scheduler）。
+
+安装命令会根据当前 Node 可执行文件和当前 Bridge 安装路径生成配置；升级 Node 或迁移安装目录后，应重新执行 `install`。生成的启动配置只写入非敏感运行参数，不会把 `GECHO_BRIDGE_API_TOKEN` 写入 plist、systemd unit 或 Windows 任务参数。需要 API Token 时，应由外部安全运行环境注入。
+
+这部分只保证 Bridge 在用户登录后持续运行，不负责唤醒已经睡眠的电脑，也不包含桌面助手 UI、安装器和系统级守护进程。
+
+## 7. 已验证
 
 本地集成测试已验证：
 
@@ -120,3 +149,6 @@ Bridge 向插件发送：
 - 手动触发记录为 `dispatched`；
 - Bridge 重启后任务、版本和运行记录仍可查询；
 - 时间规则、时区、错过执行、暂停和并发保护测试通过。
+- 独立服务可以启动、查看状态、重启和停止；
+- macOS LaunchAgent、Linux systemd user unit、Windows 登录任务的配置生成通过测试；
+- 启动配置文件使用用户权限写入，且不会写入 API Token。

@@ -4,4 +4,6 @@
 - [x] 本地持久化与管理接口
 - [x] `start_flywheel_task` 触发协议
 - [x] 重启恢复与边界测试
-- [x] 接口和能力边界文档
+- [x] 不依赖 MCP 的 Bridge 独立服务命令
+- [x] macOS/Linux/Windows 用户级开机启动配置
+- [x] 接口、服务生命周期和能力边界文档

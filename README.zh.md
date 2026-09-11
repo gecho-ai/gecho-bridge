@@ -286,6 +286,8 @@ openclaw plugins info @gecho-ai/gecho-bridge-bundle
 ### 2. 关于本地后台服务的说明
 - Gecho Bridge 会在需要时自动拉起本地服务，用来让 MCP 客户端和浏览器扩展通信。
 - 这个服务只监听 `127.0.0.1`，在你使用插件期间保持可用属于正常行为。
+- 也可以独立管理服务：`npm run server:start`、`npm run server:status`、`npm run server:stop`。
+- 如需用户登录后自动运行，可执行 `npx gecho-bridge-server install`；卸载启动项执行 `npx gecho-bridge-server uninstall`。
 - 如果你重启了 Chrome 或扩展，随后请求开始失败，先执行一次 `openclaw gateway restart`，再重试。
 
 ### 3. 报错：提示扩展未连接
@@ -333,6 +335,8 @@ npm run server
 **双层架构说明：**
 - **Client 层** (`mcp-client.js`)：标准 MCP STDIO 接入层，负责与 OpenClaw/Hermes/Trae 等客户端通信，并声明 Tools 规范。
 - **Service 层** (`server.js`)：本地常驻服务层，负责与浏览器扩展通过 WebSocket 通信，执行实际抓取与落盘。（支持 Lazy Start 机制，仅在需要时自动拉起）。
+
+自动飞轮的定时任务接口、Bridge 独立运行和用户级开机启动说明见 [`docs/scheduled-flywheel-bridge.md`](docs/scheduled-flywheel-bridge.md)。
 
 ## License
 

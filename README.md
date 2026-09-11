@@ -281,6 +281,8 @@ If installation is successful, you should see `Status: loaded` and `MCP servers:
 ### 2. Note about the local background service
 - Gecho Bridge automatically starts a local service on demand so the MCP client can talk to the browser extension.
 - This service only listens on `127.0.0.1` and is expected to stay available while you use the plugin.
+- You can also manage it independently with `npm run server:start`, `npm run server:status`, and `npm run server:stop`.
+- To run it after user login, use `npx gecho-bridge-server install`; remove the startup entry with `npx gecho-bridge-server uninstall`.
 - If Chrome or the extension was restarted and requests start failing, first run `openclaw gateway restart`, then try again.
 
 ### 3. Error: Extension not connected
@@ -328,6 +330,8 @@ npm run server
 **Two-layer architecture description:**
 - **Client layer** (`mcp-client.js`): The standard MCP STDIO integration layer, responsible for communicating with clients such as OpenClaw, Hermes, and Trae, and declaring the Tools specification.
 - **Service layer** (`server.js`): The local resident service layer, responsible for communicating with the browser extension via WebSocket and executing the actual scraping and persistence. (Supports a Lazy Start mechanism and launches only when needed.)
+
+See [`docs/scheduled-flywheel-bridge.md`](docs/scheduled-flywheel-bridge.md) for scheduled flywheel APIs, standalone Bridge operation, and user-level login startup.
 
 ## License
 

@@ -7,6 +7,11 @@ const path = require("node:path");
 const { spawn } = require("node:child_process");
 const packageJson = require("./package.json");
 const { getDefaultDataDir } = require("./data-dir");
+const {
+  getStartupStatus,
+  installStartup,
+  uninstallStartup
+} = require("./bridge-startup");
 
 const HTTP_PORT = Number(process.env.GECHO_HTTP_PORT || 18793);
 const SERVICE_BASE_URL = `http://127.0.0.1:${HTTP_PORT}`;
@@ -115,12 +120,15 @@ async function printStatus() {
 
 function printUsage() {
   process.stdout.write([
-    "Usage: gecho-bridge-server <start|status|stop|restart>",
+    "Usage: gecho-bridge-server <start|status|stop|restart|install|uninstall|startup-status>",
     "",
     "  start    Start the standalone local Bridge service",
     "  status   Print Bridge health and scheduler status",
     "  stop     Stop the local Bridge service",
     "  restart  Restart the local Bridge service",
+    "  install  Install a user-level login startup entry",
+    "  uninstall Remove the user-level login startup entry",
+    "  startup-status  Print login startup configuration status",
     ""
   ].join("\n"));
 }
@@ -143,6 +151,20 @@ async function main(argv = process.argv.slice(2)) {
   if (command === "restart") {
     await stopService();
     process.stdout.write(`${JSON.stringify(await startService())}\n`);
+    return;
+  }
+  if (command === "install") {
+    process.stdout.write(`${JSON.stringify(installStartup())}\n`);
+    return;
+  }
+  if (command === "uninstall") {
+    process.stdout.write(`${JSON.stringify(uninstallStartup())}\n`);
+    return;
+  }
+  if (command === "startup-status") {
+    const status = getStartupStatus();
+    process.stdout.write(`${JSON.stringify(status)}\n`);
+    process.exitCode = status.configured ? 0 : 1;
     return;
   }
   printUsage();
