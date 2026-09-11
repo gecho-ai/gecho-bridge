@@ -140,9 +140,15 @@ class ScheduledTaskStore {
     }
 
     const now = this.now();
+    const id = String(input.id || this.idFactory());
+    if (this.jobs.has(id)) {
+      const error = new Error("A scheduled task with this id already exists");
+      error.code = "SCHEDULED_TASK_ID_EXISTS";
+      throw error;
+    }
     const job = {
       ...normalized,
-      id: String(input.id || this.idFactory()),
+      id,
       runs: [],
       lastRun: null,
       lastError: "",

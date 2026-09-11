@@ -2167,7 +2167,7 @@ const server = http.createServer(async (req, res) => {
         job: getPublicScheduledTask(result.job)
       }, result.created ? 201 : 200);
     } catch (error) {
-      const statusCode = error.code === "SCHEDULED_TASK_EXISTS" ? 409 : 400;
+      const statusCode = ["SCHEDULED_TASK_EXISTS", "SCHEDULED_TASK_ID_EXISTS"].includes(error.code) ? 409 : 400;
       return sendJson(res, { error: error.message, code: error.code || "INVALID_SCHEDULED_TASK" }, statusCode);
     }
   }
@@ -2178,7 +2178,7 @@ const server = http.createServer(async (req, res) => {
       scheduledTaskScheduler.arm();
       return sendJson(res, { success: true, job: getPublicScheduledTask(job) }, 201);
     } catch (error) {
-      const statusCode = error.code === "SCHEDULED_TASK_EXISTS" ? 409 : 400;
+      const statusCode = ["SCHEDULED_TASK_EXISTS", "SCHEDULED_TASK_ID_EXISTS"].includes(error.code) ? 409 : 400;
       return sendJson(res, { error: error.message, code: error.code || "INVALID_SCHEDULED_TASK" }, statusCode);
     }
   }

@@ -235,3 +235,60 @@ test("scheduled HTTP API supports website upsert, CORS protection, manual trigge
     fs.rmSync(dataDir, { recursive: true, force: true });
   }
 });
+
+test("Bridge automatically dispatches a one-time task at its scheduled time", async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "gecho-scheduled-auto-"));
+  const httpPort = await getFreePort();
+  const wsPort = await getFreePort();
+  let bridge;
+  let extension;
+
+  try {
+    bridge = await startBridge(dataDir, httpPort, wsPort);
+    extension = new WebSocket(`ws://127.0.0.1:${wsPort}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 Chrome/140.0.0.0 Safari/537.36"
+      }
+    });
+    const trigger = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("scheduled trigger was not sent")), 4000);
+      extension.on("message", (raw) => {
+        const message = JSON.parse(raw.toString());
+        if (message.method !== "execute_action") return;
+        if (message.params?.params?.taskRef !== "flywheel-auto-123") return;
+        clearTimeout(timer);
+        extension.send(JSON.stringify({
+          method: "action_result",
+          requestId: message.requestId,
+          data: { accepted: true }
+        }));
+        resolve(message);
+      });
+      extension.on("error", reject);
+    });
+    await new Promise((resolve, reject) => {
+      extension.once("open", resolve);
+      extension.once("error", reject);
+    });
+
+    const response = await requestJson(
+      httpPort,
+      "PUT",
+      "/scheduled-jobs/task-ref/flywheel-auto-123",
+      createTask({
+        taskRef: "flywheel-auto-123",
+        entryUrl: "https://gecho.ai/flywheel/tasks/flywheel-auto-123",
+        schedule: { type: "once", runAt: new Date(Date.now() + 700).toISOString() }
+      }),
+      { Origin: "https://gecho.ai" }
+    );
+    assert.equal(response.statusCode, 201);
+    const message = await trigger;
+    assert.equal(message.params.action, "start_flywheel_task");
+    assert.equal(message.params.params.taskRef, "flywheel-auto-123");
+  } finally {
+    extension?.close();
+    if (bridge) await stopBridge(bridge.child, httpPort);
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
