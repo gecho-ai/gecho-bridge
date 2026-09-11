@@ -4,7 +4,8 @@
   "description": "Browser research tools for OpenClaw, connecting LLMs to TikTok, YouTube Shorts, Facebook Reels, X, and Amazon via the Gecho Chrome Extension.",
   "main": "mcp-client.js",
   "bin": {
-    "gecho-bridge": "mcp-client.js"
+    "gecho-bridge": "mcp-client.js",
+    "gecho-bridge-server": "bridge-service.js"
   },
   "files": [
     "*.js",
@@ -23,6 +24,10 @@
   "scripts": {
     "start": "node mcp-client.js",
     "server": "node server.js",
+    "server:start": "node bridge-service.js start",
+    "server:status": "node bridge-service.js status",
+    "server:stop": "node bridge-service.js stop",
+    "server:restart": "node bridge-service.js restart",
     "setup": "openclaw plugins install -l .",
     "sync:version": "node ./scripts/sync-version.js",
     "build:bundle": "node ./scripts/build-bundle.js",
