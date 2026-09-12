@@ -351,8 +351,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             collectionMode: { type: "string", enum: ["list", "ranked"], default: "list", description: "普通列表采集选 list；扩大候选池并按点赞分析选 ranked。" },
             resultLimit: { type: "integer", minimum: 1, maximum: 200, default: 20, description: "期望返回的内容条数。用户要求 10/50 条时传 10/50。" },
             candidateLimit: { type: "integer", minimum: 1, maximum: 200, description: "排名分析的候选数；列表采集通常省略，实际值不得小于 resultLimit。" },
-            includeComments: { type: "boolean", default: false, description: "仅在用户明确需要评论时开启；动态评论可能无法补全，会返回 partial。" },
-            timeBudgetMs: { type: "integer", minimum: 1, maximum: 50000, description: "扩展执行的剩余预算（含启动、候选、详情），最多 50000。" },
+            includeComments: { type: "boolean", description: "是否补全评论。list 默认 false，ranked/旧调用默认 true；动态评论可能无法补全，会返回 partial。" },
+            timeBudgetMs: { type: "integer", minimum: 1, maximum: 50000, description: "扩展执行的剩余预算（含启动、候选、详情），最多 50000；未传时默认 50000。" },
             targetCount: { type: "number", description: "旧参数：候选采集数量，默认 200，范围 20-200（最终仍按点赞返回前 20）。新调用请改用 collectionMode/resultLimit。", default: 200, minimum: 20, maximum: 200 },
             save_dir: { type: "string", description: "可选的保存目录绝对路径" }
           },
@@ -369,8 +369,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             collectionMode: { type: "string", enum: ["list", "ranked"], default: "list", description: "普通列表采集选 list；扩大候选池并按点赞分析选 ranked。" },
             resultLimit: { type: "integer", minimum: 1, maximum: 200, default: 20, description: "期望返回的内容条数。用户要求 10/50 条时传 10/50。" },
             candidateLimit: { type: "integer", minimum: 1, maximum: 200, description: "排名分析的候选数；列表采集通常省略，实际值不得小于 resultLimit。" },
-            includeComments: { type: "boolean", default: false, description: "仅在用户明确需要评论时开启；动态评论可能无法补全，会返回 partial。" },
-            timeBudgetMs: { type: "integer", minimum: 1, maximum: 50000, description: "扩展执行的剩余预算（含启动、候选、详情），最多 50000。" },
+            includeComments: { type: "boolean", description: "是否补全评论。list 默认 false，ranked/旧调用默认 true；动态评论可能无法补全，会返回 partial。" },
+            timeBudgetMs: { type: "integer", minimum: 1, maximum: 50000, description: "扩展执行的剩余预算（含启动、候选、详情），最多 50000；未传时默认 50000。" },
             targetCount: { type: "number", description: "旧参数：候选采集数量，默认 200，范围 20-200（最终仍按点赞返回前 20）。新调用请改用 collectionMode/resultLimit。", default: 200, minimum: 20, maximum: 200 },
             save_dir: { type: "string", description: "可选的保存目录绝对路径" }
           },
@@ -421,6 +421,28 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     ]
   };
 });
+
+const SOCIAL_SEARCH_TOOLS = new Set(["youtube_shorts_search", "facebook_reels_search"]);
+
+// JSON Schema 的 default 只是注解，宿主不保证回填；这里在转发前显式补齐默认，
+// 使省略参数的调用与工具 schema 声明的行为一致。旧调用只传 targetCount 时保持
+// ranked 契约不变。
+function applySocialSearchDefaults(toolName, args) {
+  if (!SOCIAL_SEARCH_TOOLS.has(toolName) || !args || typeof args !== "object") return args;
+
+  const next = { ...args };
+  const hasMode = next.collectionMode === "list" || next.collectionMode === "ranked";
+  const hasResultLimit = Number.isFinite(Number(next.resultLimit));
+  const hasCandidateLimit = Number.isFinite(Number(next.candidateLimit));
+  const hasTargetCount = Number.isFinite(Number(next.targetCount));
+  const isLegacyRanked = !hasMode && !hasResultLimit && !hasCandidateLimit && hasTargetCount;
+
+  if (!hasMode && !isLegacyRanked) next.collectionMode = "list";
+  if (next.collectionMode === "list" && !hasResultLimit) next.resultLimit = 20;
+  const effectiveMode = next.collectionMode || (isLegacyRanked ? "ranked" : "list");
+  if (typeof next.includeComments !== "boolean") next.includeComments = effectiveMode === "ranked";
+  return next;
+}
 
 // 2. 转发工具请求到 Service 层
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -636,10 +658,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           reject(new Error("Service Layer request timed out (600s)"));
         });
         
-        // 【核心改动】：直接将工具名作为 action，所有参数作为 payload 透传
+        // 【核心改动】：直接将工具名作为 action，社交搜索参数补齐默认后作为 payload 透传
+        const normalizedArgs = applySocialSearchDefaults(toolName, args);
         req.write(JSON.stringify({ 
           action: toolName, 
-          ...args 
+          ...normalizedArgs 
         }));
         req.end();
       });
