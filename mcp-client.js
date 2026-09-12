@@ -53,7 +53,10 @@ const CLIENT_VERSION = packageJson.version;
 
 const server = new Server(
   { name: "tiktok-bridge-client", version: CLIENT_VERSION },
-  { capabilities: { tools: {} } }
+  {
+    capabilities: { tools: {} },
+    instructions: "用户明确要求在 YouTube Shorts 或 Facebook Reels 搜索、采集内容时，优先调用对应的 Gecho bridge 工具。普通列表采集使用 collectionMode=list，并把用户要的条数写入 resultLimit（例如“采集 50 条”传 resultLimit: 50），不要用 targetCount 表示输出条数；只有需要扩大候选池并按点赞分析时才用 collectionMode=ranked。仅当用户明确需要评论时才设置 includeComments=true。返回 partial 时说明已获得数量和原因，不要自动重开整单。"
+  }
 );
 
 /**
@@ -340,12 +343,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "youtube_shorts_search",
-        description: "在 YouTube Shorts 上搜索关键词，采集候选视频并按点赞数返回前 20 条，同时补充视频详情和评论。需要在浏览器中登录 YouTube。",
+        description: "在用户浏览器的 YouTube Shorts 搜索关键词，采集结构化短视频列表。支持明确返回数量（resultLimit）、候选排名（ranked）和可选评论；数据不足或达到预算时返回已有内容和 partial 原因。需要在浏览器中登录 YouTube。",
         inputSchema: {
           type: "object",
           properties: {
             query: { type: "string", description: "搜索关键词 (例如: 'portable blender')" },
-            targetCount: { type: "number", description: "候选采集数量，默认 200，范围 20-200", default: 200, minimum: 20, maximum: 200 },
+            collectionMode: { type: "string", enum: ["list", "ranked"], default: "list", description: "普通列表采集选 list；扩大候选池并按点赞分析选 ranked。" },
+            resultLimit: { type: "integer", minimum: 1, maximum: 200, default: 20, description: "期望返回的内容条数。用户要求 10/50 条时传 10/50。" },
+            candidateLimit: { type: "integer", minimum: 1, maximum: 200, description: "排名分析的候选数；列表采集通常省略，实际值不得小于 resultLimit。" },
+            includeComments: { type: "boolean", default: false, description: "仅在用户明确需要评论时开启；动态评论可能无法补全，会返回 partial。" },
+            timeBudgetMs: { type: "integer", minimum: 1, maximum: 50000, description: "扩展执行的剩余预算（含启动、候选、详情），最多 50000。" },
+            targetCount: { type: "number", description: "旧参数：候选采集数量，默认 200，范围 20-200（最终仍按点赞返回前 20）。新调用请改用 collectionMode/resultLimit。", default: 200, minimum: 20, maximum: 200 },
             save_dir: { type: "string", description: "可选的保存目录绝对路径" }
           },
           required: ["query"]
@@ -353,12 +361,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "facebook_reels_search",
-        description: "在 Facebook Reels 上搜索关键词，采集候选视频并按点赞数返回前 20 条，同时补充视频详情和评论。需要在浏览器中登录 Facebook。",
+        description: "在用户浏览器的 Facebook Reels 搜索关键词，采集结构化短视频列表。支持明确返回数量（resultLimit）、候选排名（ranked）和可选评论；数据不足或达到预算时返回已有内容和 partial 原因。需要在浏览器中登录 Facebook。",
         inputSchema: {
           type: "object",
           properties: {
             query: { type: "string", description: "搜索关键词 (例如: 'portable blender')" },
-            targetCount: { type: "number", description: "候选采集数量，默认 200，范围 20-200", default: 200, minimum: 20, maximum: 200 },
+            collectionMode: { type: "string", enum: ["list", "ranked"], default: "list", description: "普通列表采集选 list；扩大候选池并按点赞分析选 ranked。" },
+            resultLimit: { type: "integer", minimum: 1, maximum: 200, default: 20, description: "期望返回的内容条数。用户要求 10/50 条时传 10/50。" },
+            candidateLimit: { type: "integer", minimum: 1, maximum: 200, description: "排名分析的候选数；列表采集通常省略，实际值不得小于 resultLimit。" },
+            includeComments: { type: "boolean", default: false, description: "仅在用户明确需要评论时开启；动态评论可能无法补全，会返回 partial。" },
+            timeBudgetMs: { type: "integer", minimum: 1, maximum: 50000, description: "扩展执行的剩余预算（含启动、候选、详情），最多 50000。" },
+            targetCount: { type: "number", description: "旧参数：候选采集数量，默认 200，范围 20-200（最终仍按点赞返回前 20）。新调用请改用 collectionMode/resultLimit。", default: 200, minimum: 20, maximum: 200 },
             save_dir: { type: "string", description: "可选的保存目录绝对路径" }
           },
           required: ["query"]
