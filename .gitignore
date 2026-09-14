@@ -1,5 +1,6 @@
 node_modules/
 release/
+desktop/macos-tray/GechoTray.app/
 dist/
 data/
 .DS_Store
