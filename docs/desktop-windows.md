@@ -23,6 +23,8 @@ Mac 打包前会自动执行 `npm run desktop:build-native`，原生小组件会
 
 纯托盘改动验证：桌面相关 5 个测试通过；在隔离端口启动真实 Electron，确认窗口数为 0、`app.dock.isVisible()` 为 false；生成的 Mac app 的 `LSUIElement` 为 true。Windows 的菜单和登录启动仍需真机验收。
 
+最新人工复测的已知问题：`GechoTray` 进程和 `NSStatusItem` 都已创建，但当前机器上状态栏图标没有出现在可见菜单栏；Accessibility 读取到该菜单栏项目的位置为 `x=-1, y=981`。这部分仍需继续排查状态栏项目定位/系统恢复位置，不能把“进程存在”当作“用户能看到图标”。
+
 数据默认放在 `%LOCALAPPDATA%\Gecho\Bridge`。卸载不主动删除任务和采集数据。当前验证版未配置 Windows 代码签名证书，安装包可能显示未知发布者，应用图标暂用 Electron 默认图标；托盘已提供可辨识的 G 图标。
 
 ## 构建
