@@ -23,7 +23,7 @@ Mac 打包前会自动执行 `npm run desktop:build-native`，原生小组件会
 
 纯托盘改动验证：桌面相关 5 个测试通过；在隔离端口启动真实 Electron，确认窗口数为 0、`app.dock.isVisible()` 为 false；生成的 Mac app 的 `LSUIElement` 为 true。Windows 的菜单和登录启动仍需真机验收。
 
-最新人工复测的已知问题：`GechoTray` 进程和 `NSStatusItem` 都已创建，但当前机器上状态栏图标没有出现在可见菜单栏；Accessibility 读取到该菜单栏项目的位置为 `x=-1, y=981`。这部分仍需继续排查状态栏项目定位/系统恢复位置，不能把“进程存在”当作“用户能看到图标”。
+macOS 状态栏图标可见性修复：此前人工复测发现 `GechoTray` 进程与 `NSStatusItem` 均已创建，但 Accessibility 读取到菜单栏项目位置为异常坐标 `x=-1, y=981`，导致用户在可见菜单栏无法看到图标。经排查，根本原因为代码中设置了 `statusItem.autosaveName`，在系统曾经历菜单栏挤占或溢出时，macOS 将其持久化记录为隐藏坐标 `x=-1`，并在后续每次启动时强制恢复该失效坐标。本次修复已彻底移除 `autosaveName`，改由系统动态分配可见位置；在启动时自动清理历史遗留偏好缓存；将 activation policy（`.accessory`）前置到主循环 `app.run()` 之前执行；并对 delegate 增加全局强引用。修复后，状态栏项目正常显示且可响应点击。
 
 数据默认放在 `%LOCALAPPDATA%\Gecho\Bridge`。卸载不主动删除任务和采集数据。当前验证版未配置 Windows 代码签名证书，安装包可能显示未知发布者，应用图标暂用 Electron 默认图标；托盘已提供可辨识的 G 图标。
 
@@ -40,7 +40,7 @@ npm run desktop:dist:win
 
 ## 验证记录与验收
 
-2026-09-14：在 macOS 26.6.2 arm64 主机验证原生状态栏组件。桌面端无主窗口、无 Dock 图标，状态栏菜单可打开，并真实显示 `Bridge：运行中`、`浏览器插件：已连接`、`浏览器：edge`。当前分支全量 `node --test test/*.test.js` 为 53 passed。新增测试覆盖含中文及空格的 Windows 安装路径、登录启动参数、托盘像素可见性。已修正桌面端关闭自动引导页面时使用的环境变量名称。
+2026-09-14：在 macOS 26.6.2 arm64 主机验证原生状态栏组件。桌面端无主窗口、无 Dock 图标，状态栏菜单可打开，并真实显示 `Bridge：运行中`、`浏览器插件：已连接`、`浏览器：edge`。当前分支全量 `node --test test/*.test.js` 为 55 passed。新增测试覆盖含中文及空格的 Windows 安装路径、登录启动参数、托盘像素可见性、macOS 状态栏配置源码校验与原生小组件进程通信。已修正桌面端关闭自动引导页面时使用的环境变量名称。
 
 这些测试不等于 Windows 真机验收。交付后应在 Windows 10/11 检查：
 

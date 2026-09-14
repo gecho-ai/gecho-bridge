@@ -9,18 +9,30 @@ final class GechoTrayDelegate: NSObject, NSApplicationDelegate {
     private var status: [String: Any] = [:]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.accessory)
+        purgeLegacyAutosavePositions()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.autosaveName = "GechoStatusItemV4"
         statusItem.isVisible = true
-        statusItem.button?.image = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "Gecho")
+        let config = NSImage.SymbolConfiguration(pointSize: 15, weight: .medium)
+        let image = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "Gecho")?.withSymbolConfiguration(config)
+        image?.isTemplate = true
+        statusItem.button?.image = image
         statusItem.button?.imagePosition = .imageOnly
-        statusItem.button?.image?.isTemplate = true
         statusItem.button?.toolTip = "Gecho"
         statusItem.menu = menu
         rebuildMenu()
         configureInput()
         send(["type": "ready"])
+    }
+
+    private func purgeLegacyAutosavePositions() {
+        let defaults = UserDefaults.standard
+        let dictionary = defaults.dictionaryRepresentation()
+        for key in dictionary.keys {
+            if key.contains("GechoStatusItem") || (key.hasPrefix("NSStatusItem") && key.contains("Gecho")) {
+                defaults.removeObject(forKey: key)
+            }
+        }
+        defaults.synchronize()
     }
 
     private func configureInput() {
@@ -141,7 +153,11 @@ final class GechoTrayDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+private var strongDelegate: GechoTrayDelegate?
+
 let app = NSApplication.shared
+app.setActivationPolicy(.accessory)
 let delegate = GechoTrayDelegate()
+strongDelegate = delegate
 app.delegate = delegate
 app.run()
