@@ -28,9 +28,12 @@
     "server:status": "node bridge-service.js status",
     "server:stop": "node bridge-service.js stop",
     "server:restart": "node bridge-service.js restart",
-    "desktop:dev": "electron desktop/main.js",
-    "desktop:pack": "electron-builder --dir",
-    "desktop:dist": "electron-builder",
+    "desktop:build-native": "node desktop/build-macos-tray.js",
+    "desktop:dev": "npm run desktop:build-native && electron desktop/main.js",
+    "desktop:pack": "npm run desktop:build-native && electron-builder --dir",
+    "desktop:dist": "npm run desktop:build-native && electron-builder",
+    "desktop:dist:win": "npm run desktop:build-native && electron-builder --win nsis --x64 --publish never",
+    "desktop:pack:win": "npm run desktop:build-native && electron-builder --win --x64 --dir --publish never",
     "setup": "openclaw plugins install -l .",
     "sync:version": "node ./scripts/sync-version.js",
     "build:bundle": "node ./scripts/build-bundle.js",
@@ -106,16 +109,28 @@
     "extraMetadata": {
       "main": "desktop/main.js"
     },
+    "asarUnpack": [
+      "desktop/macos-tray/**"
+    ],
     "mac": {
       "target": [
         "dmg"
       ],
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "extendInfo": { "LSUIElement": true }
     },
     "win": {
+      "executableName": "Gecho",
       "target": [
         "nsis"
       ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false
     },
     "linux": {
       "target": [
