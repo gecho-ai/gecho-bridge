@@ -12,20 +12,39 @@ final class GechoTrayDelegate: NSObject, NSApplicationDelegate {
         purgeLegacyAutosavePositions()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.isVisible = true
-        let config = NSImage.SymbolConfiguration(pointSize: 15, weight: .medium)
-        let image = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "Gecho")?.withSymbolConfiguration(config)
-        image?.isTemplate = true
-        statusItem.button?.image = image
-        statusItem.button?.imagePosition = .imageOnly
-        statusItem.button?.toolTip = "Gecho"
+        setupStatusItemImage()
         statusItem.menu = menu
         rebuildMenu()
         configureInput()
         send(["type": "ready"])
     }
 
+    private func setupStatusItemImage() {
+        let bundle = Bundle.main
+        var trayImage: NSImage?
+        if let templatePath = bundle.path(forResource: "tray-iconTemplate", ofType: "png") {
+            trayImage = NSImage(contentsOfFile: templatePath)
+            trayImage?.isTemplate = true
+        } else if let colorPath = bundle.path(forResource: "tray-icon", ofType: "png") {
+            trayImage = NSImage(contentsOfFile: colorPath)
+        }
+
+        if let image = trayImage {
+            image.size = NSSize(width: 18, height: 18)
+            statusItem.button?.image = image
+        } else {
+            let config = NSImage.SymbolConfiguration(pointSize: 15, weight: .medium)
+            let image = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "Gecho")?.withSymbolConfiguration(config)
+            image?.isTemplate = true
+            statusItem.button?.image = image
+        }
+        statusItem.button?.imagePosition = .imageOnly
+        statusItem.button?.toolTip = "Gecho"
+    }
+
     private func purgeLegacyAutosavePositions() {
         let defaults = UserDefaults.standard
+        defaults.removePersistentDomain(forName: "ai.gecho.desktop.tray")
         let dictionary = defaults.dictionaryRepresentation()
         for key in dictionary.keys {
             if key.contains("GechoStatusItem") || (key.hasPrefix("NSStatusItem") && key.contains("Gecho")) {
@@ -48,13 +67,17 @@ final class GechoTrayDelegate: NSObject, NSApplicationDelegate {
                 guard Darwin.poll(&descriptor, 1, -1) > 0 else { continue }
                 if descriptor.revents & Int16(POLLHUP) != 0,
                    descriptor.revents & Int16(POLLIN) == 0 {
+                    DispatchQueue.main.async { NSApp.terminate(nil) }
                     break
                 }
 
                 let count = buffer.withUnsafeMutableBytes { bytes in
                     Darwin.read(fileDescriptor, bytes.baseAddress, bytes.count)
                 }
-                guard count > 0 else { break }
+                guard count > 0 else {
+                    DispatchQueue.main.async { NSApp.terminate(nil) }
+                    break
+                }
                 let text = String(decoding: buffer.prefix(count), as: UTF8.self)
                 DispatchQueue.main.async { [weak self] in
                     self?.inputBuffer.append(text)

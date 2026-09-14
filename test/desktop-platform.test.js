@@ -30,11 +30,27 @@ test("macOS GechoTray source code avoids autosaveName and sets accessory policy 
   assert.equal(swiftSource.includes("autosaveName"), false, "Must not set autosaveName to avoid restoring offscreen coordinates");
   assert.ok(swiftSource.includes("setActivationPolicy(.accessory)"), "Must set accessory policy");
   assert.ok(swiftSource.includes("purgeLegacyAutosavePositions"), "Must purge legacy autosave coordinates");
+  assert.ok(swiftSource.includes("removePersistentDomain"), "Must remove legacy bundle ID persistent domain");
   assert.ok(swiftSource.includes("strongDelegate"), "Must hold strong reference to delegate");
 });
 
-test("macOS GechoTray binary launches, emits ready and responds to shutdown", async () => {
-  if (process.platform !== "darwin") return;
+test("desktop application and tray icon assets exist and are valid", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const assetsDir = path.join(__dirname, "..", "desktop", "assets");
+  assert.ok(fs.existsSync(path.join(assetsDir, "icon.png")), "App icon PNG exists");
+  assert.ok(fs.existsSync(path.join(assetsDir, "icon.icns")), "macOS App icon ICNS exists");
+  assert.ok(fs.existsSync(path.join(assetsDir, "icon.ico")), "Windows App icon ICO exists");
+  assert.ok(fs.existsSync(path.join(assetsDir, "tray-iconTemplate.png")), "macOS Tray template icon exists");
+  assert.ok(fs.existsSync(path.join(assetsDir, "tray-iconTemplate@2x.png")), "macOS Tray template @2x icon exists");
+  assert.ok(fs.existsSync(path.join(assetsDir, "tray-win-16.png")), "Windows Tray icon exists");
+});
+
+test("macOS GechoTray binary launches, emits ready and responds to shutdown", async (t) => {
+  if (process.platform !== "darwin") {
+    t.skip("Test only runs on macOS");
+    return;
+  }
   const { spawn } = require("node:child_process");
   const fs = require("node:fs");
   const path = require("node:path");
@@ -48,7 +64,10 @@ test("macOS GechoTray binary launches, emits ready and responds to shutdown", as
     "MacOS",
     "GechoTray"
   );
-  if (!fs.existsSync(binaryPath)) return;
+  if (!fs.existsSync(binaryPath)) {
+    t.skip("GechoTray binary not built yet. Run npm run desktop:build-native first.");
+    return;
+  }
 
   const child = spawn(binaryPath, [], { stdio: ["pipe", "pipe", "ignore"] });
   try {
@@ -82,6 +101,64 @@ test("macOS GechoTray binary launches, emits ready and responds to shutdown", as
     const exitCode = await new Promise((resolve) => {
       child.on("exit", (code) => resolve(code));
       child.stdin.write(JSON.stringify({ type: "shutdown" }) + "\n");
+    });
+    assert.equal(exitCode, 0);
+  } finally {
+    if (!child.killed) child.kill();
+  }
+});
+
+test("macOS GechoTray automatically terminates when parent stdin pipe closes (P1 fix)", async (t) => {
+  if (process.platform !== "darwin") {
+    t.skip("Test only runs on macOS");
+    return;
+  }
+  const { spawn } = require("node:child_process");
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const binaryPath = path.join(
+    __dirname,
+    "..",
+    "desktop",
+    "macos-tray",
+    "GechoTray.app",
+    "Contents",
+    "MacOS",
+    "GechoTray"
+  );
+  if (!fs.existsSync(binaryPath)) {
+    t.skip("GechoTray binary not built yet");
+    return;
+  }
+
+  const child = spawn(binaryPath, [], { stdio: ["pipe", "pipe", "ignore"] });
+  try {
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("Timeout waiting for ready")), 3000);
+      let output = "";
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", (chunk) => {
+        output += chunk;
+        if (output.includes('"type":"ready"')) {
+          clearTimeout(timeout);
+          resolve(true);
+        }
+      });
+      child.on("error", (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      });
+    });
+
+    // Abruptly close stdin to simulate parent death
+    child.stdin.end();
+
+    const exitCode = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("GechoTray did not exit after stdin closed")), 3000);
+      child.on("exit", (code) => {
+        clearTimeout(timer);
+        resolve(code);
+      });
     });
     assert.equal(exitCode, 0);
   } finally {

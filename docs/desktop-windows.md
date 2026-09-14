@@ -23,9 +23,11 @@ Mac 打包前会自动执行 `npm run desktop:build-native`，原生小组件会
 
 纯托盘改动验证：桌面相关 5 个测试通过；在隔离端口启动真实 Electron，确认窗口数为 0、`app.dock.isVisible()` 为 false；生成的 Mac app 的 `LSUIElement` 为 true。Windows 的菜单和登录启动仍需真机验收。
 
-macOS 状态栏图标可见性修复：此前人工复测发现 `GechoTray` 进程与 `NSStatusItem` 均已创建，但 Accessibility 读取到菜单栏项目位置为异常坐标 `x=-1, y=981`，导致用户在可见菜单栏无法看到图标。经排查，根本原因为代码中设置了 `statusItem.autosaveName`，在系统曾经历菜单栏挤占或溢出时，macOS 将其持久化记录为隐藏坐标 `x=-1`，并在后续每次启动时强制恢复该失效坐标。本次修复已彻底移除 `autosaveName`，改由系统动态分配可见位置；在启动时自动清理历史遗留偏好缓存；将 activation policy（`.accessory`）前置到主循环 `app.run()` 之前执行；并对 delegate 增加全局强引用。修复后，状态栏项目正常显示且可响应点击。
+macOS 状态栏图标可见性修复：此前人工复测发现 `GechoTray` 进程与 `NSStatusItem` 均已创建，但 Accessibility 读取到菜单栏项目位置为异常坐标 `x=-1, y=981`，导致用户在可见菜单栏无法看到图标。经排查，根本原因为代码中设置了 `statusItem.autosaveName`，在系统曾经历菜单栏挤占或溢出时，macOS 将其持久化记录为隐藏坐标 `x=-1`，并在后续每次启动时强制恢复该失效坐标。本次修复彻底移除了 `autosaveName`，改由系统动态分配可见位置；将 Bundle Identifier 升级为未被旧系统偏好污染的 `ai.gecho.desktop.menubar`，并在启动时显式清理旧域 `ai.gecho.desktop.tray`；将 activation policy（`.accessory`）前置到主循环 `app.run()` 之前执行；并对 delegate 增加全局强引用。此外，修复了 stdin 管道断开（HUP/EOF）时托盘子进程自动退出（P1 修复），杜绝了父进程异常退出时留下孤儿托盘的隐患。修复后，状态栏项目正常显示且可响应点击。
 
-数据默认放在 `%LOCALAPPDATA%\Gecho\Bridge`。卸载不主动删除任务和采集数据。当前验证版未配置 Windows 代码签名证书，安装包可能显示未知发布者，应用图标暂用 Electron 默认图标；托盘已提供可辨识的 G 图标。
+应用图标与状态栏图标：已基于品牌 Logo 在 `desktop/assets/` 生成标准规格的应用图标（macOS `icon.icns`、Windows `icon.ico`、高分辨率 `icon.png`）和状态栏图标（`tray-iconTemplate.png`、`tray-iconTemplate@2x.png` 及原色版）。macOS 状态栏小组件已改为优先加载品牌模板图标并支持系统浅色/深色自适应，Windows 托盘同步采用透明背景的高清品牌图标。
+
+数据默认放在 `%LOCALAPPDATA%\Gecho\Bridge`。卸载不主动删除任务和采集数据。当前验证版未配置 Windows 代码签名证书，安装包可能显示未知发布者；应用图标与托盘图标已完整升级为 Gecho 官方品牌视觉。
 
 ## 构建
 
@@ -40,7 +42,7 @@ npm run desktop:dist:win
 
 ## 验证记录与验收
 
-2026-09-14：在 macOS 26.6.2 arm64 主机验证原生状态栏组件。桌面端无主窗口、无 Dock 图标，状态栏菜单可打开，并真实显示 `Bridge：运行中`、`浏览器插件：已连接`、`浏览器：edge`。当前分支全量 `node --test test/*.test.js` 为 55 passed。新增测试覆盖含中文及空格的 Windows 安装路径、登录启动参数、托盘像素可见性、macOS 状态栏配置源码校验与原生小组件进程通信。已修正桌面端关闭自动引导页面时使用的环境变量名称。
+2026-09-14：在 macOS 26.6.2 arm64 主机验证原生状态栏组件。桌面端无主窗口、无 Dock 图标，状态栏菜单可打开，并真实显示 `Bridge：运行中`、`浏览器插件：已连接`、`浏览器：edge`。当前分支全量 `node --test test/*.test.js` 为 57 passed。新增测试覆盖含中文及空格的 Windows 安装路径、登录启动参数、托盘像素可见性、应用与托盘图标资源有效性、macOS 状态栏配置源码校验、原生小组件进程通信与父进程退出联动。已修正桌面端关闭自动引导页面时使用的环境变量名称。
 
 这些测试不等于 Windows 真机验收。交付后应在 Windows 10/11 检查：
 

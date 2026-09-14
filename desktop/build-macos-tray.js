@@ -27,5 +27,15 @@ if (result.error) throw result.error;
 if (result.status !== 0) process.exit(result.status || 1);
 
 fs.copyFileSync(path.join(root, "Info.plist"), path.join(contents, "Info.plist"));
+
+const assetsDir = path.join(__dirname, "assets");
+if (fs.existsSync(assetsDir)) {
+  for (const file of fs.readdirSync(assetsDir)) {
+    if (file.startsWith("tray-icon")) {
+      fs.copyFileSync(path.join(assetsDir, file), path.join(contents, "Resources", file));
+    }
+  }
+}
+
 fs.chmodSync(binary, 0o755);
 console.log(`Built ${path.relative(process.cwd(), appRoot)}`);

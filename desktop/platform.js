@@ -27,8 +27,17 @@ function pngChunk(type, data) {
   return output;
 }
 
-// Generate the small tray icon without relying on a platform-specific asset.
+const fs = require("node:fs");
+const path = require("node:path");
+
+// Return the branded small tray icon, falling back to a generated icon.
 function createTrayPng(platform = process.platform) {
+  const assetName = platform === "win32" ? "tray-win-16.png" : "tray-iconTemplate.png";
+  const assetPath = path.join(__dirname, "assets", assetName);
+  if (fs.existsSync(assetPath)) {
+    return fs.readFileSync(assetPath);
+  }
+
   const raw = Buffer.alloc(16 * (1 + 16 * 4));
   for (let y = 0; y < 16; y += 1) {
     raw[y * 65] = 0;
