@@ -7,7 +7,7 @@
   <key>CFBundleExecutable</key>
   <string>GechoTray</string>
 	<key>CFBundleIdentifier</key>
-	<string>ai.gecho.desktop.tray</string>
+	<string>ai.gecho.desktop.menubar</string>
   <key>CFBundleName</key>
   <string>Gecho</string>
   <key>CFBundlePackageType</key>
