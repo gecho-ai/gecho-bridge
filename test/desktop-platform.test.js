@@ -34,6 +34,27 @@ test("macOS GechoTray source code avoids autosaveName and sets accessory policy 
   assert.ok(swiftSource.includes("strongDelegate"), "Must hold strong reference to delegate");
 });
 
+test("desktop platform includes open dashboard menu and scheduled tasks panel", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const swiftSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "macos-tray", "GechoTray.swift"), "utf8");
+  assert.ok(swiftSource.includes("打开面板"), "GechoTray must include '打开面板' menu item");
+  assert.ok(swiftSource.includes("open-dashboard"), "GechoTray must send 'open-dashboard' command");
+
+  const mainSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "main.js"), "utf8");
+  assert.ok(mainSource.includes("openDashboardWindow"), "main.js must define openDashboardWindow");
+  assert.ok(mainSource.includes("get-scheduled-tasks"), "main.js must support get-scheduled-tasks IPC");
+  assert.ok(mainSource.includes("mockScheduledTasks"), "main.js must provide mockScheduledTasks");
+  assert.ok(mainSource.includes("icon.png"), "main.js must set brand icon on window");
+
+  const preloadSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "preload.js"), "utf8");
+  assert.ok(preloadSource.includes("getScheduledTasks"), "preload.js must expose getScheduledTasks");
+
+  const htmlSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "renderer", "index.html"), "utf8");
+  assert.ok(htmlSource.includes("tasks-list"), "index.html must include tasks-list element");
+  assert.ok(htmlSource.includes("brand-logo"), "index.html must display brand logo");
+});
+
 test("desktop application and tray icon assets exist and are valid", () => {
   const fs = require("node:fs");
   const path = require("node:path");
