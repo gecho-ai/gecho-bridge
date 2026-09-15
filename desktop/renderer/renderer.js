@@ -172,6 +172,26 @@ async function init() {
     showToast("提示：可视化创建定时任务功能正在开发中");
   });
 
+  function updateNetworkBanner() {
+    const banner = $("network-banner");
+    if (!banner) return;
+    if (navigator.onLine === false) {
+      banner.classList.remove("hidden");
+    } else {
+      banner.classList.add("hidden");
+    }
+  }
+
+  window.addEventListener("online", () => {
+    updateNetworkBanner();
+    showToast("网络连接已恢复");
+  });
+  window.addEventListener("offline", () => {
+    updateNetworkBanner();
+    showToast("网络连接已断开");
+  });
+  updateNetworkBanner();
+
   window.gechoDesktop.onStatus(renderStatus);
   await refresh();
   await loadScheduledTasks();

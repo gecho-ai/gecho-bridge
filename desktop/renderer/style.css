@@ -37,7 +37,20 @@ body { margin: 0; min-width: 680px; }
 .badge { padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; }
 .badge.ready { color: #167b50; background: #dcf6e9; }
 .badge.pending { color: #6655b4; background: #e9e6ff; }
-.badge.error { color: #a13e4a; background: #fde4e8; }
+/* Network Banner */
+.network-banner {
+  background: #fdf2f2;
+  color: #9b1c1c;
+  border: 1px solid #f8b4b4;
+  border-radius: 9px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  margin-top: 14px;
+  transition: all .2s ease;
+}
+.network-banner.hidden { display: none; }
 
 /* Tasks Section */
 .tasks-section { margin-top: 24px; }

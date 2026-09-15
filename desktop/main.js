@@ -433,14 +433,20 @@ function createTray() {
   tray = new Tray(image);
   tray.setToolTip("Gecho");
   updateMenu();
-  if (process.platform === "win32") tray.on("click", () => tray.popUpContextMenu());
+  if (process.platform === "win32") {
+    tray.on("click", () => tray.popUpContextMenu());
+    tray.on("double-click", () => openDashboardWindow());
+  }
 }
 
 const hasSingleInstance = app.requestSingleInstanceLock();
 if (!hasSingleInstance) {
   app.quit();
 } else {
-  app.on("second-instance", () => tray?.popUpContextMenu());
+  app.on("second-instance", () => {
+    openDashboardWindow();
+    tray?.popUpContextMenu();
+  });
   app.whenReady().then(async () => {
     if (process.platform === "win32") app.setAppUserModelId("ai.gecho.desktop");
     registerIpc();

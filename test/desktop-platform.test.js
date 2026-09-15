@@ -105,6 +105,21 @@ test("desktop platform provides structured logger and export diagnostics capabil
   assert.ok(htmlSource.includes("export-logs-btn"), "index.html must have export-logs-btn");
 });
 
+test("desktop platform supports Windows double-click, second-instance window focus and network banner", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+
+  const mainSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "main.js"), "utf8");
+  assert.ok(mainSource.includes('tray.on("double-click"'), "main.js must listen for tray double-click on Windows");
+  assert.ok(mainSource.includes('app.on("second-instance"'), "main.js must handle second-instance event");
+
+  const htmlSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "renderer", "index.html"), "utf8");
+  assert.ok(htmlSource.includes("network-banner"), "index.html must include network-banner");
+
+  const cssSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "renderer", "style.css"), "utf8");
+  assert.ok(cssSource.includes(".network-banner"), "style.css must define .network-banner styles");
+});
+
 test("desktop application and tray icon assets exist and are valid", () => {
   const fs = require("node:fs");
   const path = require("node:path");
