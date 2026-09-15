@@ -16,6 +16,7 @@ const path = require("node:path");
 const { getDefaultDataDir } = require(path.join(__dirname, "..", "data-dir.js"));
 const logger = require("./logger");
 const i18n = require("./i18n");
+const updater = require("./updater");
 
 process.on("uncaughtException", (error) => {
   logger.error("Uncaught exception:", error);
@@ -187,6 +188,7 @@ function macTrayStatusPayload() {
     trayOpenOnboarding: t("trayOpenOnboarding"),
     trayOpenData: t("trayOpenData"),
     trayExportLogs: t("trayExportLogs"),
+    trayCheckUpdate: t("trayCheckUpdate"),
     trayAutoStart: t("trayAutoStart"),
     trayQuit: t("trayQuit"),
   };
@@ -274,6 +276,7 @@ function registerIpc() {
   ipcMain.handle("open-onboarding", () => shell.openExternal(ONBOARDING_URL));
   ipcMain.handle("open-data-dir", () => shell.openPath(lastStatus.dataDir || getDefaultDataDir()));
   ipcMain.handle("export-diagnostics", () => handleExportDiagnostics());
+  ipcMain.handle("check-for-updates", () => updater.checkForUpdates(false));
   ipcMain.handle("get-locale", () => i18n.getLocale());
   ipcMain.handle("set-locale", (_event, locale) => {
     const updated = i18n.setLocale(locale);
@@ -335,6 +338,9 @@ function handleMacTrayCommand(message) {
       break;
     case "export-diagnostics":
       handleExportDiagnostics();
+      break;
+    case "check-for-updates":
+      updater.checkForUpdates(true);
       break;
     case "toggle-autostart":
       app.setLoginItemSettings({
@@ -432,6 +438,7 @@ function updateMenu() {
     { label: t("trayOpenOnboarding"), click: () => shell.openExternal(ONBOARDING_URL) },
     { label: t("trayOpenData"), click: () => shell.openPath(lastStatus.dataDir || getDefaultDataDir()) },
     { label: t("trayExportLogs"), click: () => handleExportDiagnostics() },
+    { label: t("trayCheckUpdate"), click: () => updater.checkForUpdates(true) },
     { label: t("trayAutoStart"), type: "checkbox", checked: autoStart, click: (item) => {
       try {
         app.setLoginItemSettings({ ...loginItemOptions(process.platform, process.execPath), openAtLogin: item.checked });

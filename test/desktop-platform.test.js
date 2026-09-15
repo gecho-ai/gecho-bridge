@@ -293,3 +293,34 @@ test("desktop platform supports internationalization (i18n) across tray and dash
   assert.ok(swiftSource.includes("trayOpenDashboard"), "GechoTray must read trayOpenDashboard dynamically");
   assert.ok(swiftSource.includes("trayQuit"), "GechoTray must read trayQuit dynamically");
 });
+
+test("desktop platform supports version comparison and update checker", () => {
+  const { compareVersions, checkForUpdates } = require("../desktop/updater");
+  const fs = require("node:fs");
+  const path = require("node:path");
+
+  // Version comparisons
+  assert.equal(compareVersions("1.1.37", "1.1.38"), -1);
+  assert.equal(compareVersions("1.2.0", "1.1.38"), 1);
+  assert.equal(compareVersions("v2.0.0", "1.9.9"), 1);
+  assert.equal(compareVersions("1.1.37", "1.1.37"), 0);
+  assert.equal(compareVersions("1.1.37-beta", "1.1.37"), 0);
+
+  // Preload integration
+  const preloadSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "preload.js"), "utf8");
+  assert.ok(preloadSource.includes("checkForUpdates"), "preload.js must expose checkForUpdates");
+
+  // Main integration
+  const mainSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "main.js"), "utf8");
+  assert.ok(mainSource.includes("check-for-updates"), "main.js must handle check-for-updates IPC");
+  assert.ok(mainSource.includes("trayCheckUpdate"), "main.js must include trayCheckUpdate");
+
+  // macOS Tray integration
+  const swiftSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "macos-tray", "GechoTray.swift"), "utf8");
+  assert.ok(swiftSource.includes("trayCheckUpdate"), "GechoTray.swift must include trayCheckUpdate");
+  assert.ok(swiftSource.includes("check-for-updates"), "GechoTray.swift must send check-for-updates");
+
+  // HTML Dashboard integration
+  const htmlSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "renderer", "index.html"), "utf8");
+  assert.ok(htmlSource.includes("check-update-btn"), "index.html must include check-update-btn");
+});

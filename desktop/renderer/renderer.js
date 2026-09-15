@@ -229,6 +229,28 @@ async function init() {
   $("onboarding-btn")?.addEventListener("click", () => window.gechoDesktop.openOnboarding());
   $("data-dir-btn")?.addEventListener("click", () => window.gechoDesktop.openDataDir());
   $("export-logs-btn")?.addEventListener("click", () => window.gechoDesktop.exportDiagnostics());
+  $("check-update-btn")?.addEventListener("click", async () => {
+    const btn = $("check-update-btn");
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    const oldText = btn.textContent;
+    btn.textContent = t("checkingUpdate");
+    try {
+      const res = await window.gechoDesktop.checkForUpdates();
+      if (res && res.updateAvailable) {
+        showToast(t("updateAvailableTitle") + `: v${res.latestVersion}`);
+      } else if (res && res.success) {
+        showToast(t("updateLatestMsg", { version: res.currentVersion }));
+      } else {
+        showToast(res?.error || t("updateErrorMsg"));
+      }
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = oldText;
+    }
+  });
   $("hide")?.addEventListener("click", () => window.gechoDesktop.hideWindow());
   $("quit")?.addEventListener("click", () => window.gechoDesktop.quit());
   $("auto-start")?.addEventListener("change", (event) => window.gechoDesktop.setAutoStart(event.target.checked));

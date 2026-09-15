@@ -139,6 +139,10 @@ final class GechoTrayDelegate: NSObject, NSApplicationDelegate {
         exportLogs.target = self
         menu.addItem(exportLogs)
 
+        let checkUpdate = NSMenuItem(title: text("trayCheckUpdate", fallback: "检查更新..."), action: #selector(checkForUpdatesAction), keyEquivalent: "")
+        checkUpdate.target = self
+        menu.addItem(checkUpdate)
+
         let autoStart = NSMenuItem(title: text("trayAutoStart", fallback: "登录时自动启动"), action: #selector(toggleAutoStart(_:)), keyEquivalent: "")
         autoStart.target = self
         autoStart.state = bool("autoStart") ? .on : .off
@@ -170,6 +174,10 @@ final class GechoTrayDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func exportDiagnostics() {
         send(["type": "command", "command": "export-diagnostics"])
+    }
+
+    @objc private func checkForUpdatesAction() {
+        send(["type": "command", "command": "check-for-updates"])
     }
 
     @objc private func toggleAutoStart(_ item: NSMenuItem) {
