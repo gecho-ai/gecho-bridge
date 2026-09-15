@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld("gechoDesktop", {
   setLocale: (locale) => ipcRenderer.invoke("set-locale", locale),
   getTranslations: (locale) => ipcRenderer.invoke("get-translations", locale),
   checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
+  getLocalToken: () => ipcRenderer.invoke("get-local-token"),
   onStatus: (callback) => {
     const listener = (_event, status) => callback(status);
     ipcRenderer.on("bridge-status", listener);

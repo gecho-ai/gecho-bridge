@@ -85,8 +85,12 @@ function writeLog(level, ...args) {
   }
 
   try {
-    rotateLogsIfNeeded();
     if (currentLogFile) {
+      const logDir = path.dirname(currentLogFile);
+      if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir, { recursive: true });
+      }
+      rotateLogsIfNeeded();
       fs.appendFileSync(currentLogFile, formatted, "utf8");
     }
   } catch (err) {

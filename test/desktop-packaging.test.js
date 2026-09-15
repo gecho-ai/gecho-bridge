@@ -17,10 +17,24 @@ test("desktop runtime files are included", () => {
   for (const relativePath of [
     "desktop/main.js",
     "desktop/preload.js",
+    "desktop/logger.js",
+    "desktop/i18n.js",
+    "desktop/updater.js",
+    "desktop/security.js",
     "desktop/renderer/index.html",
     "desktop/renderer/renderer.js",
     "desktop/renderer/style.css",
   ]) {
     assert.equal(fs.existsSync(path.join(projectRoot, relativePath)), true, relativePath);
   }
+});
+
+test("desktop build configures NSIS clean uninstallation and user directory options", () => {
+  const nsis = packageJson.build.nsis;
+  assert.equal(nsis.oneClick, false, "NSIS should allow user-guided directory selection");
+  assert.equal(nsis.allowToChangeInstallationDirectory, true);
+  assert.equal(nsis.createDesktopShortcut, true);
+  assert.equal(nsis.createStartMenuShortcut, true);
+  assert.equal(nsis.deleteAppDataOnUninstall, false, "Must preserve user app data on uninstall");
+  assert.equal(nsis.shortcutName, "Gecho");
 });

@@ -87,6 +87,7 @@ test("desktop platform provides structured logger and export diagnostics capabil
     assert.ok(diagText.includes("Gecho Desktop Diagnostics Report"), "Must have title header");
     assert.ok(diagText.includes("1.1.37-test"), "Must include app version");
   } finally {
+    logger.init();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 
@@ -323,4 +324,42 @@ test("desktop platform supports version comparison and update checker", () => {
   // HTML Dashboard integration
   const htmlSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "renderer", "index.html"), "utf8");
   assert.ok(htmlSource.includes("check-update-btn"), "index.html must include check-update-btn");
+});
+
+test("desktop platform provides local security token generation, persistence and verification", () => {
+  const security = require("../desktop/security");
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const os = require("node:os");
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "gecho-sec-test-"));
+  try {
+    const token1 = security.getOrCreateLocalToken(tmpDir);
+    assert.equal(typeof token1, "string");
+    assert.equal(token1.length, 64, "Token should be 32 bytes hex encoded (64 chars)");
+
+    const tokenFile = path.join(tmpDir, security.TOKEN_FILENAME);
+    assert.ok(fs.existsSync(tokenFile), "local-token.json must exist");
+
+    // Reading again should return identical persisted token
+    const token2 = security.getOrCreateLocalToken(tmpDir);
+    assert.equal(token2, token1, "Token must be persisted and reused");
+
+    // Verification
+    assert.equal(security.verifyToken(token1, token1), true);
+    assert.equal(security.verifyToken(token1, "invalid-token-string"), false);
+    assert.equal(security.verifyToken("", token1), false);
+    assert.equal(security.verifyToken(token1, null), false);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+
+  // Preload integration
+  const preloadSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "preload.js"), "utf8");
+  assert.ok(preloadSource.includes("getLocalToken"), "preload.js must expose getLocalToken");
+
+  // Main integration
+  const mainSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "main.js"), "utf8");
+  assert.ok(mainSource.includes("get-local-token"), "main.js must handle get-local-token IPC");
+  assert.ok(mainSource.includes("GECHO_LOCAL_TOKEN"), "main.js must inject GECHO_LOCAL_TOKEN");
 });

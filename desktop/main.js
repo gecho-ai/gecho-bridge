@@ -17,6 +17,7 @@ const { getDefaultDataDir } = require(path.join(__dirname, "..", "data-dir.js"))
 const logger = require("./logger");
 const i18n = require("./i18n");
 const updater = require("./updater");
+const security = require("./security");
 
 process.on("uncaughtException", (error) => {
   logger.error("Uncaught exception:", error);
@@ -130,6 +131,9 @@ async function startBridge() {
 
   // 桌面助手直接承载 Bridge，不依赖 MCP/Agent，也不自动弹出 onboarding 页面。
   process.env.GECHO_AUTO_OPEN_ONBOARDING_ON_FIRST_START = "0";
+  const dataDir = lastStatus.dataDir || getDefaultDataDir();
+  const token = security.getOrCreateLocalToken(dataDir);
+  process.env.GECHO_LOCAL_TOKEN = token;
   require(path.join(__dirname, "..", "server.js"));
   bridgeMode = "embedded";
 
@@ -277,6 +281,7 @@ function registerIpc() {
   ipcMain.handle("open-data-dir", () => shell.openPath(lastStatus.dataDir || getDefaultDataDir()));
   ipcMain.handle("export-diagnostics", () => handleExportDiagnostics());
   ipcMain.handle("check-for-updates", () => updater.checkForUpdates(false));
+  ipcMain.handle("get-local-token", () => process.env.GECHO_LOCAL_TOKEN || "");
   ipcMain.handle("get-locale", () => i18n.getLocale());
   ipcMain.handle("set-locale", (_event, locale) => {
     const updated = i18n.setLocale(locale);
