@@ -118,34 +118,34 @@ final class GechoTrayDelegate: NSObject, NSApplicationDelegate {
         menu.removeAllItems()
 
         addDisabled("Gecho \(text("version", fallback: ""))")
-        addDisabled("Bridge：\(text("serviceLabel", fallback: "启动中"))")
-        addDisabled("浏览器插件：\(bool("extensionConnected") ? "已连接" : "未连接")")
-        addDisabled("浏览器：\(text("browser", fallback: "—"))")
+        addDisabled("\(text("serviceTitle", fallback: "Bridge"))：\(text("serviceLabel", fallback: "启动中"))")
+        addDisabled("\(text("extensionTitle", fallback: "浏览器插件"))：\(text("extensionStatusLabel", fallback: bool("extensionConnected") ? "已连接" : "未连接"))")
+        addDisabled("\(text("browserTitle", fallback: "浏览器"))：\(text("browser", fallback: "—"))")
         menu.addItem(.separator())
 
-        let openDashboard = NSMenuItem(title: "打开面板", action: #selector(openDashboardAction), keyEquivalent: "")
+        let openDashboard = NSMenuItem(title: text("trayOpenDashboard", fallback: "打开面板"), action: #selector(openDashboardAction), keyEquivalent: "")
         openDashboard.target = self
         menu.addItem(openDashboard)
 
-        let onboarding = NSMenuItem(title: "打开浏览器连接引导", action: #selector(openOnboarding), keyEquivalent: "")
+        let onboarding = NSMenuItem(title: text("trayOpenOnboarding", fallback: "打开浏览器连接引导"), action: #selector(openOnboarding), keyEquivalent: "")
         onboarding.target = self
         menu.addItem(onboarding)
 
-        let dataDir = NSMenuItem(title: "打开数据目录", action: #selector(openDataDirectory), keyEquivalent: "")
+        let dataDir = NSMenuItem(title: text("trayOpenData", fallback: "打开数据目录"), action: #selector(openDataDirectory), keyEquivalent: "")
         dataDir.target = self
         menu.addItem(dataDir)
 
-        let exportLogs = NSMenuItem(title: "导出诊断日志", action: #selector(exportDiagnostics), keyEquivalent: "")
+        let exportLogs = NSMenuItem(title: text("trayExportLogs", fallback: "导出诊断日志"), action: #selector(exportDiagnostics), keyEquivalent: "")
         exportLogs.target = self
         menu.addItem(exportLogs)
 
-        let autoStart = NSMenuItem(title: "登录时自动启动", action: #selector(toggleAutoStart(_:)), keyEquivalent: "")
+        let autoStart = NSMenuItem(title: text("trayAutoStart", fallback: "登录时自动启动"), action: #selector(toggleAutoStart(_:)), keyEquivalent: "")
         autoStart.target = self
         autoStart.state = bool("autoStart") ? .on : .off
         menu.addItem(autoStart)
 
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: "退出 Gecho", action: #selector(quit), keyEquivalent: "q")
+        let quit = NSMenuItem(title: text("trayQuit", fallback: "退出 Gecho"), action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
     }

@@ -251,3 +251,45 @@ test("macOS GechoTray automatically terminates when parent stdin pipe closes (P1
     if (!child.killed) child.kill();
   }
 });
+
+test("desktop platform supports internationalization (i18n) across tray and dashboard", () => {
+  const i18n = require("../desktop/i18n");
+  const fs = require("node:fs");
+  const path = require("node:path");
+
+  // Verify dictionaries
+  assert.ok(i18n.translations["zh-CN"], "zh-CN translations must exist");
+  assert.ok(i18n.translations["en-US"], "en-US translations must exist");
+  assert.equal(typeof i18n.translations["zh-CN"].appTitle, "string");
+  assert.equal(typeof i18n.translations["en-US"].appTitle, "string");
+
+  // Verify switching and translation interpolation
+  i18n.setLocale("zh-CN");
+  assert.equal(i18n.getLocale(), "zh-CN");
+  assert.equal(i18n.t("trayOpenDashboard"), "打开面板");
+  assert.equal(i18n.t("tasksCount", { total: 5, active: 2 }), "5 个任务已配置 (2 个运行中)");
+
+  i18n.setLocale("en-US");
+  assert.equal(i18n.getLocale(), "en-US");
+  assert.equal(i18n.t("trayOpenDashboard"), "Open Dashboard");
+  assert.equal(i18n.t("tasksCount", { total: 5, active: 2 }), "5 tasks configured (2 active)");
+
+  // Reset to zh-CN for safety
+  i18n.setLocale("zh-CN");
+
+  // Verify preload IPC exposure
+  const preloadSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "preload.js"), "utf8");
+  assert.ok(preloadSource.includes("getLocale"), "preload.js must expose getLocale");
+  assert.ok(preloadSource.includes("setLocale"), "preload.js must expose setLocale");
+  assert.ok(preloadSource.includes("getTranslations"), "preload.js must expose getTranslations");
+
+  // Verify renderer UI
+  const htmlSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "renderer", "index.html"), "utf8");
+  assert.ok(htmlSource.includes("lang-toggle-btn"), "index.html must have lang-toggle-btn");
+  assert.ok(htmlSource.includes("data-i18n"), "index.html must use data-i18n");
+
+  // Verify Swift tray supports dynamic localization keys
+  const swiftSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "macos-tray", "GechoTray.swift"), "utf8");
+  assert.ok(swiftSource.includes("trayOpenDashboard"), "GechoTray must read trayOpenDashboard dynamically");
+  assert.ok(swiftSource.includes("trayQuit"), "GechoTray must read trayQuit dynamically");
+});

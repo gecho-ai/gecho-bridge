@@ -1,6 +1,19 @@
 const $ = (id) => document.getElementById(id);
 
+let currentLocale = "zh-CN";
+let dict = {};
+let cachedStatus = null;
+let cachedTasks = [];
 let toastTimer = null;
+
+function t(key, vars = {}) {
+  let str = (dict && dict[key]) || key;
+  for (const [k, v] of Object.entries(vars)) {
+    str = str.replace(new RegExp(`\\{${k}\\}`, "g"), String(v));
+  }
+  return str;
+}
+
 function showToast(message) {
   const toast = $("toast");
   if (!toast) return;
@@ -12,21 +25,47 @@ function showToast(message) {
   }, 2400);
 }
 
+function applyI18n() {
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    const key = el.getAttribute("data-i18n");
+    if (key && dict[key]) {
+      el.textContent = dict[key];
+    }
+  });
+
+  const langBtn = $("lang-toggle-btn");
+  if (langBtn) {
+    langBtn.textContent = currentLocale === "zh-CN" ? "EN" : "中";
+    langBtn.title = currentLocale === "zh-CN" ? "Switch to English" : "切换为中文";
+  }
+
+  if (cachedStatus) renderStatus(cachedStatus);
+  if (cachedTasks && cachedTasks.length > 0) renderTasks(cachedTasks);
+}
+
 function renderStatus(status) {
+  cachedStatus = status;
   const running = status.service === "running";
   const connected = status.extensionConnected;
   const badge = $("service-badge");
   if (badge) {
-    badge.textContent = running ? (connected ? "浏览器已连接" : "等待浏览器插件") : "Bridge 未运行";
+    badge.textContent = running
+      ? (connected ? t("serviceBadgeReady") : t("serviceBadgePending"))
+      : t("serviceBadgeError");
     badge.className = `badge ${connected ? "ready" : running ? "pending" : "error"}`;
   }
-  if ($("service-status")) $("service-status").textContent = running ? "运行中" : "未运行";
-  if ($("extension-status")) $("extension-status").textContent = connected ? "已连接" : "未连接";
+  if ($("service-status")) {
+    $("service-status").textContent = running ? t("serviceRunning") : t("serviceStopped");
+  }
+  if ($("extension-status")) {
+    $("extension-status").textContent = connected ? t("extConnected") : t("extDisconnected");
+  }
   if ($("browser-status")) $("browser-status").textContent = status.browser || "—";
   if ($("profile-status")) $("profile-status").textContent = status.profile || "—";
 }
 
 function renderTasks(tasks) {
+  cachedTasks = tasks;
   const listContainer = $("tasks-list");
   if (!listContainer) return;
 
@@ -34,7 +73,7 @@ function renderTasks(tasks) {
   const activeCount = tasks.filter((t) => t.status === "active").length;
   const badge = $("task-stats-badge");
   if (badge) {
-    badge.textContent = `${totalCount} 个任务已配置 (${activeCount} 个运行中)`;
+    badge.textContent = t("tasksCount", { total: totalCount, active: activeCount });
   }
 
   listContainer.innerHTML = "";
@@ -45,8 +84,9 @@ function renderTasks(tasks) {
 
     const isRunning = task.status === "running";
     const isActive = task.status === "active";
-    const statusText = isRunning ? "执行中" : isActive ? "运行中" : "已暂停";
+    const statusText = isRunning ? t("statusRunning") : isActive ? t("statusActive") : t("statusPaused");
     const statusClass = isRunning ? "running" : isActive ? "active" : "paused";
+    const nextRunText = task.nextRun || "—";
 
     card.innerHTML = `
       <div class="task-card-top">
@@ -54,24 +94,24 @@ function renderTasks(tasks) {
           <span class="task-name">${task.name}</span>
           <span class="task-status-pill ${statusClass}" id="pill-${task.id}">${statusText}</span>
         </div>
-        <div class="task-timing">下次触发：${task.nextRun || "未设定"}</div>
+        <div class="task-timing">${t("nextRunLabel")} ${nextRunText}</div>
       </div>
 
       <div class="task-meta-grid">
         <div class="meta-item">
-          <span class="meta-label">调度周期:</span>
+          <span class="meta-label">${t("cronLabel")}</span>
           <span class="meta-value highlight">${task.cronDesc} <span style="opacity:0.6;font-size:11px;">(${task.cron})</span></span>
         </div>
         <div class="meta-item">
-          <span class="meta-label">抓取目标:</span>
-          <span class="meta-value">${task.target} · ${task.targetCount} 条</span>
+          <span class="meta-label">${t("targetLabel")}</span>
+          <span class="meta-value">${task.target} · ${task.targetCount}</span>
         </div>
         <div class="meta-item">
-          <span class="meta-label">上次执行:</span>
+          <span class="meta-label">${t("lastRunLabel")}</span>
           <span class="meta-value" id="lastrun-${task.id}">${task.lastRun || "—"}</span>
         </div>
         <div class="meta-item">
-          <span class="meta-label">上次结果:</span>
+          <span class="meta-label">${t("lastResultLabel")}</span>
           <span class="meta-value" id="lastres-${task.id}">${task.lastResult || "—"}</span>
         </div>
       </div>
@@ -79,8 +119,8 @@ function renderTasks(tasks) {
       <div class="task-card-bottom">
         <span style="font-size:11px;color:#9ca1b3;">ID: ${task.id}</span>
         <div class="task-actions">
-          <button class="btn-task primary-task" id="run-${task.id}">立即执行</button>
-          <button class="btn-task" id="toggle-${task.id}">${isActive ? "暂停任务" : "恢复任务"}</button>
+          <button class="btn-task primary-task" id="run-${task.id}">${t("btnRunNow")}</button>
+          <button class="btn-task" id="toggle-${task.id}">${isActive ? t("btnPause") : t("btnResume")}</button>
         </div>
       </div>
     `;
@@ -91,30 +131,30 @@ function renderTasks(tasks) {
     const runBtn = card.querySelector(`#run-${task.id}`);
     runBtn.addEventListener("click", async () => {
       runBtn.disabled = true;
-      runBtn.textContent = "执行中...";
+      runBtn.textContent = t("btnRunning");
       const pill = card.querySelector(`#pill-${task.id}`);
       if (pill) {
-        pill.textContent = "执行中";
+        pill.textContent = t("statusRunning");
         pill.className = "task-status-pill running";
       }
-      showToast(`已触发任务 [${task.name}]`);
+      showToast(t("toastRunTriggered", { name: task.name }));
 
       try {
         const res = await window.gechoDesktop.runScheduledTaskNow(task.id);
         if (res.success && res.task) {
           card.querySelector(`#lastrun-${task.id}`).textContent = res.task.lastRun;
           card.querySelector(`#lastres-${task.id}`).textContent = res.task.lastResult;
-          showToast(`任务 [${task.name}] 执行完成！`);
+          showToast(t("toastRunSuccess", { name: task.name }));
         } else {
-          showToast(`执行失败: ${res.error || "未知错误"}`);
+          showToast(res.error || "Error");
         }
       } catch (err) {
-        showToast(`执行出错: ${err.message}`);
+        showToast(err.message);
       } finally {
         runBtn.disabled = false;
-        runBtn.textContent = "立即执行";
+        runBtn.textContent = t("btnRunNow");
         if (pill) {
-          pill.textContent = task.status === "active" ? "运行中" : "已暂停";
+          pill.textContent = task.status === "active" ? t("statusActive") : t("statusPaused");
           pill.className = `task-status-pill ${task.status === "active" ? "active" : "paused"}`;
         }
       }
@@ -126,10 +166,11 @@ function renderTasks(tasks) {
       toggleBtn.disabled = true;
       try {
         const updatedTasks = await window.gechoDesktop.toggleScheduledTask(task.id);
+        const wasActive = task.status === "active";
         renderTasks(updatedTasks);
-        showToast(`已${task.status === "active" ? "暂停" : "启用"}任务 [${task.name}]`);
+        showToast(wasActive ? t("toastPaused", { name: task.name }) : t("toastResumed", { name: task.name }));
       } catch (err) {
-        showToast(`操作失败: ${err.message}`);
+        showToast(err.message);
       } finally {
         toggleBtn.disabled = false;
       }
@@ -156,10 +197,34 @@ async function refresh() {
   }
 }
 
+async function setLanguage(newLocale) {
+  currentLocale = newLocale;
+  if (window.gechoDesktop?.setLocale) {
+    await window.gechoDesktop.setLocale(newLocale);
+  }
+  if (window.gechoDesktop?.getTranslations) {
+    dict = await window.gechoDesktop.getTranslations(newLocale);
+  }
+  applyI18n();
+}
+
 async function init() {
+  if (window.gechoDesktop?.getLocale) {
+    currentLocale = await window.gechoDesktop.getLocale();
+  }
+  if (window.gechoDesktop?.getTranslations) {
+    dict = await window.gechoDesktop.getTranslations(currentLocale);
+  }
+  applyI18n();
+
   const info = await window.gechoDesktop.getAppInfo();
   if ($("version")) $("version").textContent = `Gecho Desktop ${info.version} · ${info.platform}`;
   if ($("auto-start")) $("auto-start").checked = info.autoStart;
+
+  $("lang-toggle-btn")?.addEventListener("click", async () => {
+    const next = currentLocale === "zh-CN" ? "en-US" : "zh-CN";
+    await setLanguage(next);
+  });
 
   $("onboarding-btn")?.addEventListener("click", () => window.gechoDesktop.openOnboarding());
   $("data-dir-btn")?.addEventListener("click", () => window.gechoDesktop.openDataDir());
@@ -169,7 +234,7 @@ async function init() {
   $("auto-start")?.addEventListener("change", (event) => window.gechoDesktop.setAutoStart(event.target.checked));
 
   $("create-task-btn")?.addEventListener("click", () => {
-    showToast("提示：可视化创建定时任务功能正在开发中");
+    showToast(t("toastCreatePending"));
   });
 
   function updateNetworkBanner() {
@@ -184,11 +249,11 @@ async function init() {
 
   window.addEventListener("online", () => {
     updateNetworkBanner();
-    showToast("网络连接已恢复");
+    showToast(t("networkRestored"));
   });
   window.addEventListener("offline", () => {
     updateNetworkBanner();
-    showToast("网络连接已断开");
+    showToast(t("networkDisconnected"));
   });
   updateNetworkBanner();
 

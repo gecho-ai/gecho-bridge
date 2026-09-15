@@ -12,6 +12,9 @@ contextBridge.exposeInMainWorld("gechoDesktop", {
   getScheduledTasks: () => ipcRenderer.invoke("get-scheduled-tasks"),
   toggleScheduledTask: (taskId) => ipcRenderer.invoke("toggle-scheduled-task", taskId),
   runScheduledTaskNow: (taskId) => ipcRenderer.invoke("run-scheduled-task-now", taskId),
+  getLocale: () => ipcRenderer.invoke("get-locale"),
+  setLocale: (locale) => ipcRenderer.invoke("set-locale", locale),
+  getTranslations: (locale) => ipcRenderer.invoke("get-translations", locale),
   onStatus: (callback) => {
     const listener = (_event, status) => callback(status);
     ipcRenderer.on("bridge-status", listener);

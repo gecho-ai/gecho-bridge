@@ -15,6 +15,7 @@ const path = require("node:path");
 
 const { getDefaultDataDir } = require(path.join(__dirname, "..", "data-dir.js"));
 const logger = require("./logger");
+const i18n = require("./i18n");
 
 process.on("uncaughtException", (error) => {
   logger.error("Uncaught exception:", error);
@@ -169,13 +170,25 @@ function getMacTrayPath() {
 }
 
 function macTrayStatusPayload() {
+  const t = (k, vars) => i18n.t(k, vars);
   return {
     type: "status",
     version: app.getVersion(),
-    serviceLabel: lastStatus.service === "running" ? "运行中" : lastStatus.service === "starting" ? "启动中" : "未运行",
+    locale: i18n.getLocale(),
+    serviceTitle: t("serviceLabel"),
+    serviceLabel: lastStatus.service === "running" ? t("serviceRunning") : lastStatus.service === "starting" ? t("serviceStarting") : t("serviceStopped"),
+    extensionTitle: t("extLabel"),
     extensionConnected: Boolean(lastStatus.extensionConnected),
+    extensionStatusLabel: lastStatus.extensionConnected ? t("extConnected") : t("extDisconnected"),
+    browserTitle: t("browserLabel"),
     browser: lastStatus.browser || "—",
     autoStart: getAutoStartEnabled(),
+    trayOpenDashboard: t("trayOpenDashboard"),
+    trayOpenOnboarding: t("trayOpenOnboarding"),
+    trayOpenData: t("trayOpenData"),
+    trayExportLogs: t("trayExportLogs"),
+    trayAutoStart: t("trayAutoStart"),
+    trayQuit: t("trayQuit"),
   };
 }
 
@@ -261,6 +274,15 @@ function registerIpc() {
   ipcMain.handle("open-onboarding", () => shell.openExternal(ONBOARDING_URL));
   ipcMain.handle("open-data-dir", () => shell.openPath(lastStatus.dataDir || getDefaultDataDir()));
   ipcMain.handle("export-diagnostics", () => handleExportDiagnostics());
+  ipcMain.handle("get-locale", () => i18n.getLocale());
+  ipcMain.handle("set-locale", (_event, locale) => {
+    const updated = i18n.setLocale(locale);
+    menuSignature = "";
+    macTrayStatusSignature = "";
+    updateMenu();
+    return updated;
+  });
+  ipcMain.handle("get-translations", (_event, locale) => i18n.getTranslations(locale));
   ipcMain.handle("set-auto-start", (_event, enabled) => {
     try {
       app.setLoginItemSettings({
@@ -395,22 +417,22 @@ function updateMenu() {
     sendMacTrayStatus();
     return;
   }
-  if (!tray) return;
+  const t = (k) => i18n.t(k);
   const autoStart = getAutoStartEnabled();
-  const signature = JSON.stringify([lastStatus, autoStart]);
+  const signature = JSON.stringify([lastStatus, autoStart, i18n.getLocale()]);
   if (signature === menuSignature) return;
   menuSignature = signature;
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: `Gecho ${app.getVersion()}`, enabled: false },
-    { label: `Bridge：${lastStatus.service === "running" ? "运行中" : lastStatus.service === "starting" ? "启动中" : "未运行"}`, enabled: false },
-    { label: `浏览器插件：${lastStatus.extensionConnected ? "已连接" : "未连接"}`, enabled: false },
-    { label: `浏览器：${lastStatus.browser || "—"}`, enabled: false },
+    { label: `${t("serviceLabel")}：${lastStatus.service === "running" ? t("serviceRunning") : lastStatus.service === "starting" ? t("serviceStarting") : t("serviceStopped")}`, enabled: false },
+    { label: `${t("extLabel")}：${lastStatus.extensionConnected ? t("extConnected") : t("extDisconnected")}`, enabled: false },
+    { label: `${t("browserLabel")}：${lastStatus.browser || "—"}`, enabled: false },
     { type: "separator" },
-    { label: "打开面板", click: () => openDashboardWindow() },
-    { label: "打开浏览器连接引导", click: () => shell.openExternal(ONBOARDING_URL) },
-    { label: "打开数据目录", click: () => shell.openPath(lastStatus.dataDir || getDefaultDataDir()) },
-    { label: "导出诊断日志", click: () => handleExportDiagnostics() },
-    { label: "登录时自动启动", type: "checkbox", checked: autoStart, click: (item) => {
+    { label: t("trayOpenDashboard"), click: () => openDashboardWindow() },
+    { label: t("trayOpenOnboarding"), click: () => shell.openExternal(ONBOARDING_URL) },
+    { label: t("trayOpenData"), click: () => shell.openPath(lastStatus.dataDir || getDefaultDataDir()) },
+    { label: t("trayExportLogs"), click: () => handleExportDiagnostics() },
+    { label: t("trayAutoStart"), type: "checkbox", checked: autoStart, click: (item) => {
       try {
         app.setLoginItemSettings({ ...loginItemOptions(process.platform, process.execPath), openAtLogin: item.checked });
       } catch (error) {
@@ -420,7 +442,7 @@ function updateMenu() {
       updateMenu();
     } },
     { type: "separator" },
-    { label: "退出 Gecho", click: () => app.quit() },
+    { label: t("trayQuit"), click: () => app.quit() },
   ]));
 }
 
@@ -449,6 +471,7 @@ if (!hasSingleInstance) {
   });
   app.whenReady().then(async () => {
     if (process.platform === "win32") app.setAppUserModelId("ai.gecho.desktop");
+    i18n.initLocale();
     registerIpc();
     try {
       createTray();
