@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld("gechoDesktop", {
   getAppInfo: () => ipcRenderer.invoke("app-info"),
   openOnboarding: () => ipcRenderer.invoke("open-onboarding"),
   openDataDir: () => ipcRenderer.invoke("open-data-dir"),
+  exportDiagnostics: () => ipcRenderer.invoke("export-diagnostics"),
   setAutoStart: (enabled) => ipcRenderer.invoke("set-auto-start", Boolean(enabled)),
   hideWindow: () => ipcRenderer.invoke("hide-window"),
   quit: () => ipcRenderer.invoke("quit-app"),

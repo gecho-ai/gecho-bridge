@@ -135,6 +135,10 @@ final class GechoTrayDelegate: NSObject, NSApplicationDelegate {
         dataDir.target = self
         menu.addItem(dataDir)
 
+        let exportLogs = NSMenuItem(title: "导出诊断日志", action: #selector(exportDiagnostics), keyEquivalent: "")
+        exportLogs.target = self
+        menu.addItem(exportLogs)
+
         let autoStart = NSMenuItem(title: "登录时自动启动", action: #selector(toggleAutoStart(_:)), keyEquivalent: "")
         autoStart.target = self
         autoStart.state = bool("autoStart") ? .on : .off
@@ -162,6 +166,10 @@ final class GechoTrayDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openDataDirectory() {
         send(["type": "command", "command": "open-data"])
+    }
+
+    @objc private func exportDiagnostics() {
+        send(["type": "command", "command": "export-diagnostics"])
     }
 
     @objc private func toggleAutoStart(_ item: NSMenuItem) {

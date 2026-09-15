@@ -55,6 +55,56 @@ test("desktop platform includes open dashboard menu and scheduled tasks panel", 
   assert.ok(htmlSource.includes("brand-logo"), "index.html must display brand logo");
 });
 
+test("desktop platform provides structured logger and export diagnostics capability", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const os = require("node:os");
+  const logger = require("../desktop/logger");
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "gecho-logger-test-"));
+  try {
+    logger.init(tmpDir);
+    logger.info("Test info message");
+    logger.warn("Test warn message");
+    logger.error("Test error message", new Error("Sample error"));
+
+    const logFile = logger.getLogFile();
+    assert.ok(fs.existsSync(logFile), "Log file must be created");
+    const content = fs.readFileSync(logFile, "utf8");
+    assert.ok(content.includes("[INFO] Test info message"), "Log file must include INFO log");
+    assert.ok(content.includes("[WARN] Test warn message"), "Log file must include WARN log");
+    assert.ok(content.includes("[ERROR] Test error message"), "Log file must include ERROR log");
+
+    const diag = logger.exportDiagnostics({
+      appVersion: "1.1.37-test",
+      platform: process.platform,
+      bridgeStatus: { service: "running" },
+      dataDir: tmpDir,
+    });
+    assert.equal(diag.success, true, "Diagnostics export must succeed");
+    assert.ok(fs.existsSync(diag.reportPath), "Diagnostics report file must exist");
+    const diagText = fs.readFileSync(diag.reportPath, "utf8");
+    assert.ok(diagText.includes("Gecho Desktop Diagnostics Report"), "Must have title header");
+    assert.ok(diagText.includes("1.1.37-test"), "Must include app version");
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+
+  const swiftSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "macos-tray", "GechoTray.swift"), "utf8");
+  assert.ok(swiftSource.includes("导出诊断日志"), "GechoTray must include '导出诊断日志'");
+  assert.ok(swiftSource.includes("export-diagnostics"), "GechoTray must send 'export-diagnostics' command");
+
+  const mainSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "main.js"), "utf8");
+  assert.ok(mainSource.includes("handleExportDiagnostics"), "main.js must define handleExportDiagnostics");
+  assert.ok(mainSource.includes("export-diagnostics"), "main.js must handle export-diagnostics IPC");
+
+  const preloadSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "preload.js"), "utf8");
+  assert.ok(preloadSource.includes("exportDiagnostics"), "preload.js must expose exportDiagnostics");
+
+  const htmlSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "renderer", "index.html"), "utf8");
+  assert.ok(htmlSource.includes("export-logs-btn"), "index.html must have export-logs-btn");
+});
+
 test("desktop application and tray icon assets exist and are valid", () => {
   const fs = require("node:fs");
   const path = require("node:path");

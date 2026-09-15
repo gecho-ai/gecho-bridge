@@ -163,6 +163,7 @@ async function init() {
 
   $("onboarding-btn")?.addEventListener("click", () => window.gechoDesktop.openOnboarding());
   $("data-dir-btn")?.addEventListener("click", () => window.gechoDesktop.openDataDir());
+  $("export-logs-btn")?.addEventListener("click", () => window.gechoDesktop.exportDiagnostics());
   $("hide")?.addEventListener("click", () => window.gechoDesktop.hideWindow());
   $("quit")?.addEventListener("click", () => window.gechoDesktop.quit());
   $("auto-start")?.addEventListener("change", (event) => window.gechoDesktop.setAutoStart(event.target.checked));

@@ -14,6 +14,18 @@ const http = require("node:http");
 const path = require("node:path");
 
 const { getDefaultDataDir } = require(path.join(__dirname, "..", "data-dir.js"));
+const logger = require("./logger");
+
+process.on("uncaughtException", (error) => {
+  logger.error("Uncaught exception:", error);
+  try {
+    dialog.showErrorBox("Gecho 异常提示", `主进程遇到未捕获异常：\n${error.message}\n日志文件：${logger.getLogFile()}`);
+  } catch (_e) {}
+});
+
+process.on("unhandledRejection", (reason) => {
+  logger.error("Unhandled promise rejection:", reason);
+});
 
 const SERVICE_URL = `http://127.0.0.1:${process.env.GECHO_HTTP_PORT || 18793}`;
 const SERVICE_PING_URL = `${SERVICE_URL}/ping`;
@@ -214,6 +226,30 @@ function openDashboardWindow() {
   });
 }
 
+function handleExportDiagnostics() {
+  logger.info("Exporting diagnostics report...");
+  const result = logger.exportDiagnostics({
+    appVersion: app.getVersion(),
+    platform: process.platform,
+    bridgeStatus: lastStatus,
+    dataDir: lastStatus.dataDir || getDefaultDataDir(),
+  });
+  if (result.success) {
+    logger.info("Diagnostics exported successfully to:", result.reportPath);
+    shell.showItemInFolder(result.reportPath);
+    dialog.showMessageBox({
+      type: "info",
+      title: "诊断日志已导出",
+      message: `诊断报告已成功生成并保存：\n${result.fileName}\n\n已自动打开所在目录。如遇问题可将该文件发送给技术支持人员。`,
+      buttons: ["好的"],
+    });
+  } else {
+    logger.error("Failed to export diagnostics:", result.error);
+    dialog.showErrorBox("导出失败", `生成诊断文件失败：${result.error}`);
+  }
+  return result;
+}
+
 function registerIpc() {
   ipcMain.handle("bridge-status", () => getBridgeStatus());
   ipcMain.handle("app-info", () => ({
@@ -224,6 +260,7 @@ function registerIpc() {
   }));
   ipcMain.handle("open-onboarding", () => shell.openExternal(ONBOARDING_URL));
   ipcMain.handle("open-data-dir", () => shell.openPath(lastStatus.dataDir || getDefaultDataDir()));
+  ipcMain.handle("export-diagnostics", () => handleExportDiagnostics());
   ipcMain.handle("set-auto-start", (_event, enabled) => {
     try {
       app.setLoginItemSettings({
@@ -273,6 +310,9 @@ function handleMacTrayCommand(message) {
       break;
     case "open-data":
       shell.openPath(lastStatus.dataDir || getDefaultDataDir());
+      break;
+    case "export-diagnostics":
+      handleExportDiagnostics();
       break;
     case "toggle-autostart":
       app.setLoginItemSettings({
@@ -369,6 +409,7 @@ function updateMenu() {
     { label: "打开面板", click: () => openDashboardWindow() },
     { label: "打开浏览器连接引导", click: () => shell.openExternal(ONBOARDING_URL) },
     { label: "打开数据目录", click: () => shell.openPath(lastStatus.dataDir || getDefaultDataDir()) },
+    { label: "导出诊断日志", click: () => handleExportDiagnostics() },
     { label: "登录时自动启动", type: "checkbox", checked: autoStart, click: (item) => {
       try {
         app.setLoginItemSettings({ ...loginItemOptions(process.platform, process.execPath), openAtLogin: item.checked });
