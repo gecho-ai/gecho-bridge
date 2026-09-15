@@ -4,45 +4,82 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';">
-  <title>Gecho</title>
+  <title>Gecho 控制面板</title>
+  <link rel="icon" type="image/png" href="../assets/icon.png">
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
+  <div id="toast" class="toast hidden"></div>
   <main class="page">
     <header class="header">
-      <div class="brand"><span class="mark">G</span><div><strong>Gecho</strong><small>桌面助手</small></div></div>
-      <span id="service-badge" class="badge pending">正在启动</span>
-    </header>
-
-    <section class="hero">
-      <div>
-        <p class="eyebrow">浏览器连接中心</p>
-        <h1>让 Gecho 在你的真实浏览器中工作</h1>
-        <p class="lead">桌面助手负责保持本地 Bridge 运行，并连接已登录的 Chrome 或 Edge。当前版本先用于快速验证桌面端能力。</p>
-        <div class="actions">
-          <button id="onboarding" class="primary">打开浏览器连接引导</button>
-          <button id="data-dir" class="secondary">打开数据目录</button>
+      <div class="brand">
+        <img class="brand-logo" src="../assets/icon.png" alt="Gecho">
+        <div>
+          <strong>Gecho</strong>
+          <small>控制面板 · 桌面助手</small>
         </div>
       </div>
-      <div class="status-card">
-        <div class="status-row"><span>本地 Bridge</span><strong id="service-status">检查中</strong></div>
-        <div class="status-row"><span>浏览器插件</span><strong id="extension-status">检查中</strong></div>
-        <div class="status-row"><span>浏览器</span><strong id="browser-status">—</strong></div>
-        <div class="status-row"><span>Profile</span><strong id="profile-status">—</strong></div>
+      <div class="header-right">
+        <span id="service-badge" class="badge pending">正在检查服务</span>
+        <button id="onboarding-btn" class="header-action-btn" title="打开连接引导">连接引导</button>
+        <button id="data-dir-btn" class="header-action-btn" title="打开本地数据目录">数据目录</button>
+      </div>
+    </header>
+
+    <!-- 定时任务管理核心区域 -->
+    <section class="tasks-section">
+      <div class="section-header">
+        <div>
+          <div class="section-title-wrap">
+            <h2 class="section-title">定时抓取任务</h2>
+            <span id="task-stats-badge" class="task-count-badge">3 个任务已配置</span>
+          </div>
+          <p class="section-subtitle">按预设时间周期在真实浏览器环境中自动执行 TikTok 数据采集与同步</p>
+        </div>
+        <button id="create-task-btn" class="primary btn-create">+ 新建任务</button>
+      </div>
+
+      <div id="tasks-list" class="tasks-list">
+        <!-- 任务卡片由 renderer.js 动态渲染 -->
+        <div class="loading-placeholder">正在加载定时任务配置...</div>
       </div>
     </section>
 
+    <!-- 系统连接状态摘要 -->
+    <section class="system-summary">
+      <div class="summary-item">
+        <span class="summary-label">本地 Bridge 引擎</span>
+        <strong id="service-status">检查中...</strong>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">浏览器插件通信</span>
+        <strong id="extension-status">检查中...</strong>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">当前挂载浏览器</span>
+        <strong id="browser-status">—</strong>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">浏览器 Profile</span>
+        <strong id="profile-status">—</strong>
+      </div>
+    </section>
+
+    <!-- 运行偏好设置 -->
     <section class="settings">
       <div>
-        <h2>运行设置</h2>
-        <p>开启后，登录电脑时自动启动 Gecho。关闭窗口只会隐藏到后台。</p>
+        <h3>开机自启动</h3>
+        <p>开机登录系统时静默拉起 Gecho 桌面端，常驻托盘守护采集任务。</p>
       </div>
       <label class="toggle"><input id="auto-start" type="checkbox"><span></span></label>
     </section>
 
     <footer>
       <span id="version">Gecho Desktop</span>
-      <div class="footer-actions"><button id="hide" class="text-button">隐藏窗口</button><button id="quit" class="text-button danger">退出助手</button></div>
+      <div class="footer-actions">
+        <button id="hide" class="text-button">隐藏到托盘</button>
+        <button id="quit" class="text-button danger">退出 Gecho</button>
+      </div>
     </footer>
   </main>
   <script src="./renderer.js"></script>

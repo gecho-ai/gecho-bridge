@@ -1,8 +1,10 @@
 const {
   app,
+  BrowserWindow,
   Menu,
   Tray,
   dialog,
+  ipcMain,
   nativeImage,
   shell,
 } = require("electron");
@@ -18,6 +20,7 @@ const SERVICE_PING_URL = `${SERVICE_URL}/ping`;
 const ONBOARDING_URL = `${SERVICE_URL}/onboarding`;
 const { loginItemOptions, createTrayPng } = require("./platform");
 
+let dashboardWindow = null;
 let tray = null;
 let macTray = null;
 let macTrayOutput = "";
@@ -27,6 +30,45 @@ let menuSignature = "";
 let bridgeMode = "starting";
 let statusTimer = null;
 let quitting = false;
+
+const mockScheduledTasks = [
+  {
+    id: "task-daily-trending",
+    name: "每日 TikTok 热门趋势抓取",
+    cron: "0 9 * * *",
+    cronDesc: "每天上午 09:00",
+    target: "TikTok Trending (#fyp, #viral, #trending)",
+    targetCount: 50,
+    status: "active",
+    lastRun: "今天 09:00:12",
+    lastResult: "成功 · 抓取 50 条视频",
+    nextRun: "明天 09:00:00",
+  },
+  {
+    id: "task-beauty-competitor",
+    name: "美妆个护类目爆款追踪",
+    cron: "0 */4 * * *",
+    cronDesc: "每 4 小时一次",
+    target: "关键词: skincare, makeup, beauty tips",
+    targetCount: 30,
+    status: "active",
+    lastRun: "今天 12:00:05",
+    lastResult: "成功 · 抓取 30 条视频",
+    nextRun: "今天 16:00:00",
+  },
+  {
+    id: "task-weekly-insights",
+    name: "竞品周度博主与评论互动监控",
+    cron: "0 10 * * 1",
+    cronDesc: "每周一 10:00",
+    target: "头部博主作品矩阵与粉丝互动分析",
+    targetCount: 100,
+    status: "paused",
+    lastRun: "上周一 10:00:22",
+    lastResult: "成功 · 生成分析报告",
+    nextRun: "下周一 10:00:00",
+  },
+];
 
 function requestJson(url, timeoutMs = 1500) {
   return new Promise((resolve) => {
@@ -88,6 +130,9 @@ async function startBridge() {
 
 function sendStatus(status) {
   lastStatus = status;
+  if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+    dashboardWindow.webContents.send("bridge-status", status);
+  }
   if (process.platform === "darwin") {
     updateMenu();
     return;
@@ -131,8 +176,98 @@ function sendMacTrayStatus() {
   macTray.stdin.write(`${JSON.stringify(payload)}\n`);
 }
 
+function openDashboardWindow() {
+  if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+    if (dashboardWindow.isMinimized()) dashboardWindow.restore();
+    dashboardWindow.show();
+    dashboardWindow.focus();
+    return;
+  }
+
+  dashboardWindow = new BrowserWindow({
+    width: 860,
+    height: 680,
+    minWidth: 720,
+    minHeight: 540,
+    show: false,
+    title: "Gecho 控制面板",
+    icon: path.join(__dirname, "assets", "icon.png"),
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: path.join(__dirname, "preload.js"),
+    },
+  });
+
+  dashboardWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
+
+  dashboardWindow.once("ready-to-show", () => {
+    dashboardWindow.show();
+    dashboardWindow.focus();
+  });
+
+  dashboardWindow.on("close", (event) => {
+    if (!quitting) {
+      event.preventDefault();
+      dashboardWindow.hide();
+    }
+  });
+}
+
+function registerIpc() {
+  ipcMain.handle("bridge-status", () => getBridgeStatus());
+  ipcMain.handle("app-info", () => ({
+    version: app.getVersion(),
+    platform: process.platform,
+    autoStart: getAutoStartEnabled(),
+    dataDir: lastStatus.dataDir || getDefaultDataDir(),
+  }));
+  ipcMain.handle("open-onboarding", () => shell.openExternal(ONBOARDING_URL));
+  ipcMain.handle("open-data-dir", () => shell.openPath(lastStatus.dataDir || getDefaultDataDir()));
+  ipcMain.handle("set-auto-start", (_event, enabled) => {
+    try {
+      app.setLoginItemSettings({
+        ...loginItemOptions(process.platform, process.execPath),
+        openAtLogin: Boolean(enabled),
+      });
+      macTrayStatusSignature = "";
+      sendMacTrayStatus();
+      menuSignature = "";
+      updateMenu();
+      return getAutoStartEnabled();
+    } catch (err) {
+      dialog.showErrorBox("自动启动设置失败", err.message);
+      return getAutoStartEnabled();
+    }
+  });
+  ipcMain.handle("hide-window", () => dashboardWindow?.hide());
+  ipcMain.handle("quit-app", () => {
+    quitting = true;
+    app.quit();
+  });
+  ipcMain.handle("get-scheduled-tasks", () => mockScheduledTasks);
+  ipcMain.handle("toggle-scheduled-task", (_event, taskId) => {
+    const task = mockScheduledTasks.find((t) => t.id === taskId);
+    if (task) {
+      task.status = task.status === "active" ? "paused" : "active";
+    }
+    return mockScheduledTasks;
+  });
+  ipcMain.handle("run-scheduled-task-now", async (_event, taskId) => {
+    const task = mockScheduledTasks.find((t) => t.id === taskId);
+    if (!task) return { success: false, error: "未找到指定任务" };
+    const nowStr = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+    task.lastRun = `刚刚 (${nowStr})`;
+    task.lastResult = `成功 · 抓取 ${task.targetCount} 条视频 (手动执行)`;
+    return { success: true, task };
+  });
+}
+
 function handleMacTrayCommand(message) {
   switch (message.command) {
+    case "open-dashboard":
+      openDashboardWindow();
+      break;
     case "open-onboarding":
       shell.openExternal(ONBOARDING_URL);
       break;
@@ -231,6 +366,7 @@ function updateMenu() {
     { label: `浏览器插件：${lastStatus.extensionConnected ? "已连接" : "未连接"}`, enabled: false },
     { label: `浏览器：${lastStatus.browser || "—"}`, enabled: false },
     { type: "separator" },
+    { label: "打开面板", click: () => openDashboardWindow() },
     { label: "打开浏览器连接引导", click: () => shell.openExternal(ONBOARDING_URL) },
     { label: "打开数据目录", click: () => shell.openPath(lastStatus.dataDir || getDefaultDataDir()) },
     { label: "登录时自动启动", type: "checkbox", checked: autoStart, click: (item) => {
@@ -266,6 +402,7 @@ if (!hasSingleInstance) {
   app.on("second-instance", () => tray?.popUpContextMenu());
   app.whenReady().then(async () => {
     if (process.platform === "win32") app.setAppUserModelId("ai.gecho.desktop");
+    registerIpc();
     try {
       createTray();
       if (process.platform === "darwin") app.dock.hide();

@@ -123,6 +123,10 @@ final class GechoTrayDelegate: NSObject, NSApplicationDelegate {
         addDisabled("浏览器：\(text("browser", fallback: "—"))")
         menu.addItem(.separator())
 
+        let openDashboard = NSMenuItem(title: "打开面板", action: #selector(openDashboardAction), keyEquivalent: "")
+        openDashboard.target = self
+        menu.addItem(openDashboard)
+
         let onboarding = NSMenuItem(title: "打开浏览器连接引导", action: #selector(openOnboarding), keyEquivalent: "")
         onboarding.target = self
         menu.addItem(onboarding)
@@ -146,6 +150,10 @@ final class GechoTrayDelegate: NSObject, NSApplicationDelegate {
         let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
         item.isEnabled = false
         menu.addItem(item)
+    }
+
+    @objc private func openDashboardAction() {
+        send(["type": "command", "command": "open-dashboard"])
     }
 
     @objc private func openOnboarding() {

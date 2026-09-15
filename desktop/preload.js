@@ -8,6 +8,9 @@ contextBridge.exposeInMainWorld("gechoDesktop", {
   setAutoStart: (enabled) => ipcRenderer.invoke("set-auto-start", Boolean(enabled)),
   hideWindow: () => ipcRenderer.invoke("hide-window"),
   quit: () => ipcRenderer.invoke("quit-app"),
+  getScheduledTasks: () => ipcRenderer.invoke("get-scheduled-tasks"),
+  toggleScheduledTask: (taskId) => ipcRenderer.invoke("toggle-scheduled-task", taskId),
+  runScheduledTaskNow: (taskId) => ipcRenderer.invoke("run-scheduled-task-now", taskId),
   onStatus: (callback) => {
     const listener = (_event, status) => callback(status);
     ipcRenderer.on("bridge-status", listener);
