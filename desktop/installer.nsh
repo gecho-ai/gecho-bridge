@@ -16,3 +16,14 @@
   nsExec::Exec 'taskkill /F /T /IM Gecho.exe'
   Sleep 1000
 !macroend
+
+!macro customUnInstallCheck
+  ; 如果旧版本卸载器返回非零退出码，记录日志并继续覆盖安装，避免中断阻塞
+  DetailPrint "Previous version uninstaller returned $R0, continuing with overwrite installation..."
+  ClearErrors
+!macroend
+
+!macro customUnInstallCheckCurrentUser
+  DetailPrint "Previous version uninstaller returned $R0, continuing with overwrite installation..."
+  ClearErrors
+!macroend
