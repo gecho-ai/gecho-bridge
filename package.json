@@ -134,7 +134,8 @@
       "shortcutName": "Gecho",
       "uninstallDisplayName": "Gecho",
       "deleteAppDataOnUninstall": false,
-      "runAfterFinish": true
+      "runAfterFinish": true,
+      "include": "desktop/installer.nsh"
     },
     "linux": {
       "target": [

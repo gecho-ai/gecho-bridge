@@ -24,6 +24,7 @@ test("desktop runtime files are included", () => {
     "desktop/renderer/index.html",
     "desktop/renderer/renderer.js",
     "desktop/renderer/style.css",
+    "desktop/installer.nsh",
   ]) {
     assert.equal(fs.existsSync(path.join(projectRoot, relativePath)), true, relativePath);
   }
@@ -37,4 +38,5 @@ test("desktop build configures NSIS clean uninstallation and user directory opti
   assert.equal(nsis.createStartMenuShortcut, true);
   assert.equal(nsis.deleteAppDataOnUninstall, false, "Must preserve user app data on uninstall");
   assert.equal(nsis.shortcutName, "Gecho");
+  assert.equal(nsis.include, "desktop/installer.nsh");
 });
