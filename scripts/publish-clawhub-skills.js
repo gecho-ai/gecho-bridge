@@ -298,9 +298,10 @@ function fingerprintSkill(directory) {
   return crypto.createHash("sha256").update(payload).digest("hex");
 }
 
-async function resolveRemote(registry, target, fingerprint) {
+async function resolveRemote(registry, target, fingerprint, owner) {
   const url = new URL("/api/v1/resolve", registry);
   url.searchParams.set("slug", target.publishedSlug);
+  if (owner) url.searchParams.set("ownerHandle", owner);
   url.searchParams.set("hash", fingerprint);
   const response = await fetch(url);
   if (response.status === 404) return { match: null, latestVersion: null };
@@ -327,7 +328,7 @@ async function prepareCandidates(staged, options) {
   for (const target of staged.targets) {
     const directory = path.join(projectRoot, target.stagePath);
     const fingerprint = fingerprintSkill(directory);
-    const remote = await resolveRemote(options.registry, target, fingerprint);
+    const remote = await resolveRemote(options.registry, target, fingerprint, options.owner);
     const status = remote.match ? "synced" : remote.latestVersion ? "update" : "new";
     if (status === "update" && compareVersions(target.version, remote.latestVersion) <= 0) {
       throw new Error(
