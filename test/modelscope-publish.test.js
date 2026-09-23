@@ -59,7 +59,7 @@ test("ModelScope staging injects version and excludes repository metadata", () =
 
     assert.equal(result.targets.length, 1);
     assert.equal(fs.existsSync(stagedSkillPath), true);
-    assert.match(fs.readFileSync(stagedSkillPath, "utf8"), /^version: "1\.1\.37"$/m);
+    assert.match(fs.readFileSync(stagedSkillPath, "utf8"), /^version: "1\.1\.38"$/m);
     assert.equal(
       fs.existsSync(path.join(stageDir, "zh-CN", target.skillName, "publish.json")),
       false
@@ -76,13 +76,13 @@ test("ModelScope staging injects version and excludes repository metadata", () =
 });
 
 test("ModelScope publication chooses create, update, or skip safely", () => {
-  assert.equal(decideAction("1.1.37", null), "create");
-  assert.equal(decideAction("1.1.37", { version: "1.1.36" }), "update");
-  assert.equal(decideAction("1.1.37", { version: "1.1.37" }), "skip");
-  assert.equal(decideAction("1.1.37", { version: "1.1.37" }, { force: true }), "update");
+  assert.equal(decideAction("1.1.38", null), "create");
+  assert.equal(decideAction("1.1.38", { version: "1.1.37" }), "update");
+  assert.equal(decideAction("1.1.38", { version: "1.1.38" }), "skip");
+  assert.equal(decideAction("1.1.38", { version: "1.1.38" }, { force: true }), "update");
   assert.throws(
-    () => decideAction("1.1.37", { version: "1.1.38" }),
-    /remote version 1\.1\.38 is newer than local version 1\.1\.37/
+    () => decideAction("1.1.38", { version: "1.1.39" }),
+    /remote version 1\.1\.39 is newer than local version 1\.1\.38/
   );
 });
 
@@ -108,7 +108,7 @@ test("ModelScope publish uploads once and updates an existing Skill", async () =
             id: `@${target.owner}/${target.skillName}`,
             skill_name: target.skillName,
             display_name: target.displayName,
-            version: detailReads === 1 ? "1.1.36" : "1.1.37"
+            version: detailReads === 1 ? "1.1.37" : "1.1.38"
           }
         });
       }
@@ -123,7 +123,7 @@ test("ModelScope publish uploads once and updates an existing Skill", async () =
       const payload = JSON.parse(init.body);
       assert.equal(payload.skill_file, "file-123");
       assert.equal(payload.display_name, target.displayName);
-      return jsonResponse({ data: { version: "1.1.37" } });
+      return jsonResponse({ data: { version: "1.1.38" } });
     };
 
     const result = await publishTarget(target, {
@@ -133,7 +133,7 @@ test("ModelScope publish uploads once and updates an existing Skill", async () =
     });
 
     assert.equal(result.action, "update");
-    assert.equal(result.verified.version, "1.1.37");
+    assert.equal(result.verified.version, "1.1.38");
     assert.equal(calls.filter((call) => call.url.endsWith("/files/upload")).length, 1);
     assert.equal(calls.filter((call) => call.init.method === "PATCH").length, 1);
   } finally {
@@ -205,7 +205,7 @@ test("ModelScope dry-run never uploads and blocks a newer remote version", async
   const calls = [];
   const fetchImpl = async (url, init = {}) => {
     calls.push({ url, init });
-    return jsonResponse({ data: { version: "1.1.38" } });
+    return jsonResponse({ data: { version: "1.1.39" } });
   };
 
   await assert.rejects(
@@ -215,7 +215,7 @@ test("ModelScope dry-run never uploads and blocks a newer remote version", async
       fetchImpl,
       dryRun: true
     }),
-    /remote version 1\.1\.38 is newer than local version 1\.1\.37/
+    /remote version 1\.1\.39 is newer than local version 1\.1\.38/
   );
   assert.equal(calls.length, 1);
   assert.equal(calls[0].init.method, "GET");

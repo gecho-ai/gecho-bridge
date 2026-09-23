@@ -19,8 +19,14 @@ test("YouTube Shorts and Facebook Reels are public Bridge tools", () => {
   for (const toolName of ["youtube_shorts_search", "facebook_reels_search"]) {
     const toolStart = mcpClientSource.indexOf(`name: "${toolName}"`);
     assert.notEqual(toolStart, -1, `${toolName} should have a ListTools entry`);
-    const toolText = mcpClientSource.slice(toolStart, toolStart + 900);
+    const nextToolStart = mcpClientSource.indexOf('\n        name: "', toolStart + 1);
+    const toolText = mcpClientSource.slice(
+      toolStart,
+      nextToolStart === -1 ? undefined : nextToolStart
+    );
     assert.match(toolText, /`?query`?/);
+    assert.match(toolText, /collectionMode/);
+    assert.match(toolText, /resultLimit/);
     assert.match(toolText, /targetCount/);
     assert.match(toolText, /default:\s*200/);
     assert.match(toolText, /maximum:\s*200/);
