@@ -104,6 +104,9 @@
       "desktop/**/*",
       "server.js",
       "data-dir.js",
+      "action-result.js",
+      "scheduled-task-store.js",
+      "scheduled-task-scheduler.js",
       "package.json"
     ],
     "extraMetadata": {

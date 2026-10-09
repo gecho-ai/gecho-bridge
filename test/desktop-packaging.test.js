@@ -25,9 +25,19 @@ test("desktop runtime files are included", () => {
     "desktop/renderer/renderer.js",
     "desktop/renderer/style.css",
     "desktop/installer.nsh",
+    "action-result.js",
+    "scheduled-task-store.js",
+    "scheduled-task-scheduler.js",
   ]) {
     assert.equal(fs.existsSync(path.join(projectRoot, relativePath)), true, relativePath);
   }
+
+  const buildFiles = packageJson.build.files;
+  assert.ok(buildFiles.includes("server.js"), "build.files must include server.js");
+  assert.ok(buildFiles.includes("data-dir.js"), "build.files must include data-dir.js");
+  assert.ok(buildFiles.includes("action-result.js"), "build.files must include action-result.js");
+  assert.ok(buildFiles.includes("scheduled-task-store.js"), "build.files must include scheduled-task-store.js");
+  assert.ok(buildFiles.includes("scheduled-task-scheduler.js"), "build.files must include scheduled-task-scheduler.js");
 });
 
 test("desktop build configures NSIS clean uninstallation and user directory options", () => {
