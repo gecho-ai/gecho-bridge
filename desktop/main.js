@@ -280,7 +280,15 @@ function registerIpc() {
   ipcMain.handle("open-onboarding", () => shell.openExternal(ONBOARDING_URL));
   ipcMain.handle("open-data-dir", () => shell.openPath(lastStatus.dataDir || getDefaultDataDir()));
   ipcMain.handle("export-diagnostics", () => handleExportDiagnostics());
-  ipcMain.handle("check-for-updates", () => updater.checkForUpdates(false));
+  ipcMain.handle("check-for-updates", (_event, options) => updater.checkForUpdates({ manual: true, ...options }));
+  ipcMain.handle("get-update-state", () => updater.getUpdateState());
+  ipcMain.handle("download-update", (_event, options) => updater.downloadUpdate(options));
+  ipcMain.handle("quit-and-install", () => updater.quitAndInstall({
+    cleanupCallback: () => {
+      quitting = true;
+      stopMacTray();
+    },
+  }));
   ipcMain.handle("get-local-token", () => process.env.GECHO_LOCAL_TOKEN || "");
   ipcMain.handle("get-locale", () => i18n.getLocale());
   ipcMain.handle("set-locale", (_event, locale) => {
@@ -345,7 +353,7 @@ function handleMacTrayCommand(message) {
       handleExportDiagnostics();
       break;
     case "check-for-updates":
-      updater.checkForUpdates(true);
+      updater.checkForUpdates({ manual: true });
       break;
     case "toggle-autostart":
       app.setLoginItemSettings({
@@ -443,7 +451,7 @@ function updateMenu() {
     { label: t("trayOpenOnboarding"), click: () => shell.openExternal(ONBOARDING_URL) },
     { label: t("trayOpenData"), click: () => shell.openPath(lastStatus.dataDir || getDefaultDataDir()) },
     { label: t("trayExportLogs"), click: () => handleExportDiagnostics() },
-    { label: t("trayCheckUpdate"), click: () => updater.checkForUpdates(true) },
+    { label: t("trayCheckUpdate"), click: () => updater.checkForUpdates({ manual: true }) },
     { label: t("trayAutoStart"), type: "checkbox", checked: autoStart, click: (item) => {
       try {
         app.setLoginItemSettings({ ...loginItemOptions(process.platform, process.execPath), openAtLogin: item.checked });
@@ -488,9 +496,20 @@ if (!hasSingleInstance) {
     try {
       createTray();
       if (process.platform === "darwin") app.dock.hide();
+      updater.onStateChange((state) => {
+        if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+          dashboardWindow.webContents.send("update-status", state);
+        }
+      });
       await startBridge();
       await refreshStatus();
       statusTimer = setInterval(refreshStatus, 2000);
+      // 启动 8 秒后进行一次静默后台版本检查，不打扰用户
+      setTimeout(() => {
+        if (!quitting) {
+          updater.checkForUpdates({ manual: false }).catch(() => {});
+        }
+      }, 8000).unref?.();
     } catch (error) {
       dialog.showErrorBox("Gecho 启动失败", error.message);
       app.quit();

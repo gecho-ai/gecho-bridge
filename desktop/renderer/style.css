@@ -226,6 +226,46 @@ body { margin: 0; min-width: 680px; }
 /* Footer */
 footer { margin-top: 22px; color: #9a9dac; font-size: 11px; }
 .version-wrap { display: flex; align-items: center; gap: 8px; }
+.update-action-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #f4f5fa;
+  padding: 6px 12px;
+  border-radius: 8px;
+  margin: 6px 0;
+  font-size: 11px;
+}
+.update-msg {
+  color: #555869;
+  font-weight: 500;
+}
+.update-progress-bar {
+  flex: 1;
+  max-width: 140px;
+  height: 6px;
+  background: #e2e4ee;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.update-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: #7158e8;
+  transition: width .2s ease;
+}
+.update-action-btn {
+  background: #7158e8;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: .15s;
+}
+.update-action-btn:hover { background: #583cd6; }
 .text-link-button {
   background: none;
   border: none;

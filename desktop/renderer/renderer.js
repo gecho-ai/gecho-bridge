@@ -4,7 +4,9 @@ let currentLocale = "zh-CN";
 let dict = {};
 let cachedStatus = null;
 let cachedTasks = [];
+let cachedUpdateState = null;
 let toastTimer = null;
+let updateFadeTimer = null;
 
 function t(key, vars = {}) {
   let str = (dict && dict[key]) || key;
@@ -41,6 +43,7 @@ function applyI18n() {
 
   if (cachedStatus) renderStatus(cachedStatus);
   if (cachedTasks && cachedTasks.length > 0) renderTasks(cachedTasks);
+  if (cachedUpdateState) renderUpdateState(cachedUpdateState);
 }
 
 function renderStatus(status) {
@@ -237,12 +240,18 @@ async function init() {
     btn.textContent = t("checkingUpdate");
     try {
       const res = await window.gechoDesktop.checkForUpdates();
-      if (res && res.updateAvailable) {
-        showToast(t("updateAvailableTitle") + `: v${res.latestVersion}`);
-      } else if (res && res.success) {
+      if (!res?.success) {
+        if (res?.errorCode === "NO_RELEASES") {
+          showToast(t("updateNoRelease"));
+        } else if (res?.errorCode === "RATE_LIMIT") {
+          showToast(t("updateRateLimit"));
+        } else if (res?.errorCode === "OFFLINE") {
+          showToast(t("updateOffline"));
+        } else {
+          showToast(res?.error || t("updateErrorTitle"));
+        }
+      } else if (!res.updateAvailable) {
         showToast(t("updateLatestMsg", { version: res.currentVersion }));
-      } else {
-        showToast(res?.error || t("updateErrorMsg"));
       }
     } catch (err) {
       showToast(err.message);
@@ -279,9 +288,151 @@ async function init() {
   });
   updateNetworkBanner();
 
+  if (window.gechoDesktop.onUpdateStatus) {
+    window.gechoDesktop.onUpdateStatus((state) => {
+      renderUpdateState(state);
+    });
+  }
+  if (window.gechoDesktop.getUpdateState) {
+    try {
+      const initialState = await window.gechoDesktop.getUpdateState();
+      renderUpdateState(initialState);
+    } catch (_e) {
+      // ignore
+    }
+  }
+
   window.gechoDesktop.onStatus(renderStatus);
   await refresh();
   await loadScheduledTasks();
+}
+
+function renderUpdateState(state) {
+  if (!state) return;
+  cachedUpdateState = state;
+
+  const wrap = $("update-action-wrap");
+  const msg = $("update-msg");
+  const progressBar = $("update-progress-bar");
+  const progressFill = $("update-progress-fill");
+  const actionBtn = $("update-action-btn");
+
+  if (!wrap || !msg || !progressBar || !progressFill || !actionBtn) return;
+  clearTimeout(updateFadeTimer);
+
+  switch (state.status) {
+    case "checking":
+      wrap.classList.remove("hidden");
+      msg.textContent = t("updateChecking");
+      progressBar.classList.add("hidden");
+      actionBtn.classList.add("hidden");
+      break;
+
+    case "available":
+      wrap.classList.remove("hidden");
+      msg.textContent = t("updateAvailableMsg", { version: state.latestVersion });
+      progressBar.classList.add("hidden");
+      actionBtn.classList.remove("hidden");
+      actionBtn.disabled = false;
+      actionBtn.textContent = t("btnGoDownload");
+      actionBtn.onclick = async () => {
+        actionBtn.disabled = true;
+        try {
+          await window.gechoDesktop.downloadUpdate();
+        } catch (err) {
+          showToast(err.message);
+        }
+      };
+      break;
+
+    case "downloading": {
+      wrap.classList.remove("hidden");
+      const pct = Math.round(state.progress?.percent || 0);
+      msg.textContent = t("updateDownloading", { percent: pct });
+      progressBar.classList.remove("hidden");
+      progressFill.style.width = `${pct}%`;
+      actionBtn.classList.add("hidden");
+      break;
+    }
+
+    case "downloaded":
+      wrap.classList.remove("hidden");
+      msg.textContent = `${t("updateDownloaded")} · ${t("updateDataPreservedNotice")}`;
+      progressBar.classList.add("hidden");
+      actionBtn.classList.remove("hidden");
+      actionBtn.disabled = false;
+      actionBtn.textContent = t("btnInstallNow");
+      actionBtn.onclick = async () => {
+        actionBtn.disabled = true;
+        try {
+          await window.gechoDesktop.quitAndInstall();
+        } catch (err) {
+          showToast(err.message);
+        }
+      };
+      break;
+
+    case "installing":
+      wrap.classList.remove("hidden");
+      msg.textContent = t("updateInstalling");
+      progressBar.classList.add("hidden");
+      actionBtn.classList.remove("hidden");
+      actionBtn.disabled = true;
+      actionBtn.textContent = t("btnInstallNow");
+      break;
+
+    case "not-available":
+      wrap.classList.remove("hidden");
+      msg.textContent = t("updateLatestMsg", { version: state.currentVersion });
+      progressBar.classList.add("hidden");
+      actionBtn.classList.add("hidden");
+      updateFadeTimer = setTimeout(() => {
+        wrap.classList.add("hidden");
+      }, 5000);
+      break;
+
+    case "no-matching-asset":
+      wrap.classList.remove("hidden");
+      msg.textContent = t("updateNoMatchingAsset", {
+        version: state.latestVersion,
+        platform: state.platform,
+        arch: state.arch,
+      });
+      progressBar.classList.add("hidden");
+      actionBtn.classList.add("hidden");
+      break;
+
+    case "error": {
+      wrap.classList.remove("hidden");
+      progressBar.classList.add("hidden");
+      let errMsg = state.error || t("updateErrorTitle");
+      if (state.errorCode === "OFFLINE") errMsg = t("updateOffline");
+      else if (state.errorCode === "TIMEOUT") errMsg = t("updateTimeout");
+      else if (state.errorCode === "RATE_LIMIT") errMsg = t("updateRateLimit");
+      else if (state.errorCode === "NO_RELEASES") errMsg = t("updateNoRelease");
+      else if (state.errorCode === "DOWNLOAD_FAILED") errMsg = t("updateDownloadFailed", { error: state.error || "" });
+      else if (state.errorCode === "VERIFICATION_FAILED") errMsg = t("updateVerifyFailed");
+
+      msg.textContent = errMsg;
+      actionBtn.classList.remove("hidden");
+      actionBtn.disabled = false;
+      actionBtn.textContent = t("btnRetryUpdate");
+      actionBtn.onclick = async () => {
+        actionBtn.disabled = true;
+        try {
+          await window.gechoDesktop.checkForUpdates();
+        } catch (err) {
+          showToast(err.message);
+        }
+      };
+      break;
+    }
+
+    case "idle":
+    default:
+      wrap.classList.add("hidden");
+      break;
+  }
 }
 
 init();
