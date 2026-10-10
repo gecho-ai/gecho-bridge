@@ -22,6 +22,10 @@ const i18n = require("./i18n");
 const updater = require("./updater");
 const security = require("./security");
 const { runHealthChecks } = require("./health-check");
+const browserManager = require("./browser-manager");
+const { getServiceBaseUrl, isBridgeInfo } = require("../service-discovery");
+const preferences = require("./preferences").createPreferences(process.env.GECHO_DATA_DIR || getDefaultDataDir());
+const recovery = browserManager.createRecoveryGuard({ launch: () => browserManager.launchBrowser(preferences.get(), ONBOARDING_URL) });
 const powerGuard = require("./power-guard").createPowerGuard(powerSaveBlocker);
 
 process.on("uncaughtException", (error) => {
@@ -165,7 +169,7 @@ function requestJson(url, timeoutMs = 1500) {
 
 async function getBridgeStatus() {
   const response = await requestJson(SERVICE_PING_URL);
-  if (!response.ok || !require("../service-discovery").isBridgeInfo(response.data)) {
+  if (!response.ok || !isBridgeInfo(response.data)) {
     return { service: "stopped", bridgeMode, extensionConnected: false };
   }
 
@@ -183,6 +187,7 @@ async function getBridgeStatus() {
 }
 
 async function startBridge() {
+  applyPort(Number(new URL(getServiceBaseUrl()).port));
   const existing = await getBridgeStatus();
   if (existing.service === "running") {
     bridgeMode = "existing";
@@ -204,6 +209,8 @@ async function startBridge() {
 
   // 桌面助手直接承载 Bridge，不依赖 MCP/Agent，也不自动弹出 onboarding 页面。
   process.env.GECHO_AUTO_OPEN_ONBOARDING_ON_FIRST_START = "0";
+  // Desktop browsers remain user-owned, including windows opened for recovery.
+  process.env.GECHO_AUTO_CLOSE_LAUNCHED_BROWSER = "0";
   const dataDir = lastStatus.dataDir || getDefaultDataDir();
   const token = security.getOrCreateLocalToken(dataDir);
   process.env.GECHO_LOCAL_TOKEN = token;
@@ -238,6 +245,8 @@ async function refreshStatus() {
   const status = await getBridgeStatus();
   sendStatus(status);
   syncPowerSaveBlocker(status.service === "running" && status.hasActiveWork);
+  await recovery.tick({ connected: status.extensionConnected, enabled: status.service === "running" && preferences.get().autoRecover, selected: !!preferences.get().browser })
+    .catch((error) => logger.warn("Browser recovery failed:", error.message));
 }
 
 function getAutoStartEnabled() {
@@ -314,8 +323,7 @@ function openDashboardWindow() {
 
   dashboardWindow.on("close", (event) => {
     if (quitting) return; // 真正退出时直接销毁
-    // 关闭控制面板时 destroy 渲染进程，释放 Chromium 内存（~60-120MB）
-    // 下次从托盘打开时重新创建，成本极低（< 200ms）
+    // Release the renderer; reopening creates a fresh control panel.
     event.preventDefault();
     dashboardWindow.destroy();
     dashboardWindow = null;
@@ -347,6 +355,16 @@ function handleExportDiagnostics() {
 }
 
 function registerIpc() {
+  ipcMain.handle("browser-environment", () => ({ browsers: browserManager.discoverBrowsers(), preferences: preferences.get() }));
+  ipcMain.handle("set-desktop-preferences", (_event, patch) => {
+    if (!patch || typeof patch !== "object") throw new Error("Invalid preferences");
+    if (patch.browser) {
+      const browser = browserManager.discoverBrowsers().find((entry) => entry.id === patch.browser);
+      browserManager.browserLaunchSpec(browser, patch.profile || preferences.get().profile, ONBOARDING_URL);
+    }
+    return preferences.set(patch);
+  });
+  ipcMain.handle("launch-selected-browser", () => browserManager.launchBrowser(preferences.get(), ONBOARDING_URL));
   let healthCheckPromise = null;
   ipcMain.handle("run-health-check", (_event, options) => {
     if (!healthCheckPromise) {
@@ -403,7 +421,7 @@ function registerIpc() {
       return getAutoStartEnabled();
     }
   });
-  ipcMain.handle("hide-window", () => dashboardWindow?.hide());
+  ipcMain.handle("hide-window", () => dashboardWindow?.close());
   ipcMain.handle("quit-app", () => {
     quitting = true;
     app.quit();

@@ -70,6 +70,19 @@
     </section>
 
     <!-- 运行偏好设置 -->
+    <section class="settings browser-settings">
+      <div>
+        <h3>浏览器环境 / Browser environment</h3>
+        <p>选择已安装扩展的 Profile；不会读取 Cookie 或关闭浏览器。</p>
+        <label for="browser-select">浏览器 / Browser</label>
+        <select id="browser-select"></select>
+        <label for="profile-select">Profile</label>
+        <select id="profile-select"></select>
+        <label><input id="auto-recover" type="checkbox">失联 30 秒后尝试恢复，最多 3 次 / Recover disconnected browser</label>
+        <p id="browser-feedback" role="status"></p>
+      </div>
+      <button id="launch-browser-btn" class="header-action-btn">打开连接引导 / Connect</button>
+    </section>
     <section class="settings">
       <div>
         <h3 data-i18n="healthTitle">环境自检</h3>
@@ -105,6 +118,7 @@
       </div>
     </footer>
   </main>
+  <script src="./environment.js"></script>
   <script src="./renderer.js"></script>
 </body>
 </html>

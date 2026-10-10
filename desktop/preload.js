@@ -2,6 +2,9 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("gechoDesktop", {
   getStatus: () => ipcRenderer.invoke("bridge-status"),
+  getBrowserEnvironment: () => ipcRenderer.invoke("browser-environment"),
+  setPreferences: (patch) => ipcRenderer.invoke("set-desktop-preferences", patch),
+  launchBrowser: () => ipcRenderer.invoke("launch-selected-browser"),
   getAppInfo: () => ipcRenderer.invoke("app-info"),
   openOnboarding: () => ipcRenderer.invoke("open-onboarding"),
   openDataDir: () => ipcRenderer.invoke("open-data-dir"),
