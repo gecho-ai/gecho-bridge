@@ -39,6 +39,7 @@ test("updater: compareVersions and compareSemver handle version ranges correctly
   assert.equal(compareSemver("1.1.38-beta", "1.1.38"), -1, "预发布版应低于同版本的正式版");
   assert.equal(compareSemver("1.1.38-alpha", "1.1.38-beta"), -1, "alpha 应低于 beta");
   assert.equal(compareSemver("1.1.39-alpha", "1.1.38"), 1, "更高主/次版本的预发布版应高于低版本的正式版");
+  assert.equal(compareSemver("1.1.38-beta.10", "1.1.38-beta.2"), 1);
 });
 
 test("updater: findMatchingAsset matches assets based on platform and arch", () => {
@@ -81,6 +82,18 @@ test("updater: findMatchingAsset matches assets based on platform and arch", () 
     { name: "Gecho-Setup-1.1.39.exe", browser_download_url: "https://mock.download/win.exe", size: 80000000 },
   ];
   assert.equal(findMatchingAsset(winOnlyAssets, "darwin", "arm64"), null);
+  assert.equal(findMatchingAsset([{ name: "Gecho-mac-x64.dmg" }], "darwin", "arm64"), null);
+  assert.equal(findMatchingAsset([{ name: "Gecho-win-arm64.exe" }], "win32", "x64"), null);
+});
+
+test("updater ignores drafts and prereleases in a stable release feed", async (t) => {
+  const server = http.createServer((_req, res) => res.end(JSON.stringify([
+    { tag_name: "v99.0.0-beta", prerelease: true }, { tag_name: "v2.0.0" }, { tag_name: "v3.0.0" }
+  ])));
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+  const release = await fetchReleaseFeed(`http://127.0.0.1:${server.address().port}`);
+  assert.equal(release.tag_name, "v3.0.0");
 });
 
 test("updater: handles empty releases and rate limit errors gracefully", async () => {

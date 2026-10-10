@@ -84,7 +84,7 @@ function compareVersions(v1, v2, options = {}) {
   const strict = Boolean(options && options.strict);
 
   const parse = (v) => {
-    const raw = String(v).trim().replace(/^v/, "");
+    const raw = String(v).trim().replace(/^v/, "").split("+")[0];
     const [main, ...preParts] = raw.split("-");
     const pre = preParts.join("-");
     const nums = main.split(".").map((n) => Number.parseInt(n, 10) || 0);
@@ -105,8 +105,16 @@ function compareVersions(v1, v2, options = {}) {
     if (!p1.pre && p2.pre) return 1;
     if (p1.pre && !p2.pre) return -1;
     if (p1.pre && p2.pre) {
-      if (p1.pre > p2.pre) return 1;
-      if (p1.pre < p2.pre) return -1;
+      const a = p1.pre.split("."), b = p2.pre.split(".");
+      for (let i = 0; i < Math.max(a.length, b.length); i++) {
+        if (a[i] === b[i]) continue;
+        if (a[i] === undefined) return -1;
+        if (b[i] === undefined) return 1;
+        const numericA = /^\d+$/.test(a[i]), numericB = /^\d+$/.test(b[i]);
+        if (numericA && numericB) return Number(a[i]) > Number(b[i]) ? 1 : -1;
+        if (numericA !== numericB) return numericA ? -1 : 1;
+        return a[i] > b[i] ? 1 : -1;
+      }
     }
   }
 
@@ -128,6 +136,8 @@ function findMatchingAsset(assets, platform = process.platform, arch = process.a
     // 过滤掉 blockmap 和非安装包文件
     if (name.endsWith(".blockmap") || name.endsWith(".yml") || name.endsWith(".yaml")) return false;
     if (name.includes("__uninstaller") || name.includes(".uninstaller.")) return false;
+    if (arch === "arm64" && /x64|x86_64|intel|win64/.test(name) && !name.includes("universal")) return false;
+    if (arch === "x64" && /arm64|aarch64/.test(name) && !name.includes("universal")) return false;
     return true;
   });
 
@@ -287,7 +297,8 @@ async function fetchReleaseFeed(customFeedUrl) {
       throw err;
     }
     // 过滤掉草稿 (draft)
-    const published = data.filter((r) => !r.draft);
+    const published = data.filter((r) => !r.draft && !r.prerelease && !String(r.tag_name || r.version || "").includes("-"))
+      .sort((a, b) => compareSemver(b.tag_name || b.version, a.tag_name || a.version));
     if (published.length === 0) {
       const err = new Error("No published releases found");
       err.errorType = "NO_RELEASES";
@@ -298,6 +309,9 @@ async function fetchReleaseFeed(customFeedUrl) {
   }
 
   if (data && typeof data === "object") {
+    if (data.draft || data.prerelease || String(data.tag_name || data.version || "").includes("-")) {
+      const error = new Error("No stable published release"); error.errorType = "NO_RELEASES"; throw error;
+    }
     return data;
   }
 
@@ -349,7 +363,7 @@ async function checkForUpdates({ manual = false, feedUrl, currentVersion: versio
       throw err;
     }
 
-    const hasNewerVersion = compareVersions(latestVersion, currentVersion) > 0;
+    const hasNewerVersion = compareSemver(latestVersion, currentVersion) > 0;
     const releaseNotes = release.body || release.releaseNotes || "";
     const assets = release.assets || [];
     const matchingAsset = findMatchingAsset(assets, platform, arch);
