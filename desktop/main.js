@@ -165,7 +165,7 @@ function requestJson(url, timeoutMs = 1500) {
 
 async function getBridgeStatus() {
   const response = await requestJson(SERVICE_PING_URL);
-  if (!response.ok || !response.data) {
+  if (!response.ok || !require("../service-discovery").isBridgeInfo(response.data)) {
     return { service: "stopped", bridgeMode, extensionConnected: false };
   }
 

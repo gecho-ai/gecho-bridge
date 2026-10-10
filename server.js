@@ -15,6 +15,7 @@ const path = require("path");
 const { spawn, spawnSync } = require("child_process");
 const packageJson = require("./package.json");
 const { getDefaultDataDir } = require("./data-dir");
+const { publishServiceEndpoint, removeServiceEndpoint } = require("./service-discovery");
 const {
   createActionResultEnvelope,
   getActionResultMetadata,
@@ -1639,6 +1640,7 @@ function initializeScheduledTaskRuntime() {
 function gracefulShutdown(reason) {
   if (shuttingDown) return;
   shuttingDown = true;
+  removeServiceEndpoint({ dataDir: JOBS_DIR });
   console.log(`🛑 Service shutting down: ${reason}`);
 
   for (const [_requestId, pending] of pendingRequests) {
@@ -2470,6 +2472,11 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(HTTP_PORT, "127.0.0.1", () => {
+  try {
+    publishServiceEndpoint({ dataDir: JOBS_DIR, port: HTTP_PORT });
+  } catch (error) {
+    console.error("Could not publish Bridge endpoint:", error.message);
+  }
   console.log(`🚀 TikTok Bridge Service Layer is running:`);
   console.log(`   - WebSocket (Extension): ws://127.0.0.1:${WS_PORT}`);
   console.log(`   - HTTP API (Client): http://127.0.0.1:${HTTP_PORT}`);

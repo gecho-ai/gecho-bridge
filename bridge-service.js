@@ -13,8 +13,7 @@ const {
   uninstallStartup
 } = require("./bridge-startup");
 
-const HTTP_PORT = Number(process.env.GECHO_HTTP_PORT || 18793);
-const SERVICE_BASE_URL = `http://127.0.0.1:${HTTP_PORT}`;
+const { getServiceBaseUrl, isBridgeInfo } = require("./service-discovery");
 const SERVICE_PATH = path.join(__dirname, "server.js");
 const SERVICE_PROTOCOL_VERSION = 2;
 const START_TIMEOUT_MS = Math.max(1000, Number(process.env.GECHO_SERVICE_START_TIMEOUT_MS || 10000));
@@ -22,7 +21,7 @@ const POLL_INTERVAL_MS = 200;
 
 function requestJson(requestPath, method = "GET") {
   return new Promise((resolve) => {
-    const request = http.request(`${SERVICE_BASE_URL}${requestPath}`, { method }, (response) => {
+    const request = http.request(`${getServiceBaseUrl()}${requestPath}`, { method }, (response) => {
       let body = "";
       response.setEncoding("utf8");
       response.on("data", (chunk) => { body += chunk; });
@@ -58,7 +57,7 @@ function isCompatibleService(info) {
 
 async function getServiceInfo() {
   const response = await requestJson("/ping");
-  return response.ok ? response.body : null;
+  return response.ok && isBridgeInfo(response.body) ? response.body : null;
 }
 
 async function waitForService({ running = true, timeoutMs = START_TIMEOUT_MS } = {}) {
@@ -114,7 +113,7 @@ async function printStatus() {
     process.stdout.write(`${JSON.stringify(info)}\n`);
     return true;
   }
-  process.stdout.write(`${JSON.stringify({ status: "not running", url: SERVICE_BASE_URL })}\n`);
+  process.stdout.write(`${JSON.stringify({ status: "not running", url: getServiceBaseUrl() })}\n`);
   return false;
 }
 

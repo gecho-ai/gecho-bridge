@@ -104,6 +104,7 @@
       "desktop/**/*",
       "server.js",
       "data-dir.js",
+      "service-discovery.js",
       "action-result.js",
       "scheduled-task-store.js",
       "scheduled-task-scheduler.js",

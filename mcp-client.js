@@ -24,10 +24,7 @@ const packageJson = require("./package.json");
 const { getDefaultDataDir } = require("./data-dir");
 const { isHardActionResultFailure, normalizeActionResult } = require("./action-result");
 
-const SERVICE_BASE_URL = "http://127.0.0.1:18793";
-const HTTP_SERVICE_URL = `${SERVICE_BASE_URL}/search`;
-const PING_URL = `${SERVICE_BASE_URL}/ping`;
-const SHUTDOWN_URL = `${SERVICE_BASE_URL}/shutdown`;
+const { getServiceBaseUrl } = require("./service-discovery");
 const DIST_SERVICE_PATH = path.join(__dirname, "server.cjs");
 const SOURCE_SERVICE_PATH = path.join(__dirname, "server.js");
 const SERVICE_PATH = fs.existsSync(DIST_SERVICE_PATH) ? DIST_SERVICE_PATH : SOURCE_SERVICE_PATH;
@@ -86,7 +83,7 @@ function requestJson(url, options = {}) {
  * 检查服务是否在线
  */
 async function getServiceInfo() {
-  const response = await requestJson(PING_URL, { method: "GET" });
+  const response = await requestJson(`${getServiceBaseUrl()}/ping`, { method: "GET" });
   if (!response.ok) return null;
   return response.body || null;
 }
@@ -131,7 +128,7 @@ function isCurrentServiceCompatible(info) {
  */
 function requestShutdown() {
   return new Promise((resolve) => {
-    const req = http.request(SHUTDOWN_URL, { method: "POST" }, (res) => {
+    const req = http.request(`${getServiceBaseUrl()}/shutdown`, { method: "POST" }, (res) => {
       resolve(res.statusCode >= 200 && res.statusCode < 300);
     });
     req.on("error", () => resolve(false));
@@ -455,7 +452,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     try {
       const jobId = args.jobId;
       const requestStatus = () => new Promise((resolve, reject) => {
-        const req = http.get(`${SERVICE_BASE_URL}/async-status?jobId=${encodeURIComponent(jobId)}`, (res) => {
+        const req = http.get(`${getServiceBaseUrl()}/async-status?jobId=${encodeURIComponent(jobId)}`, (res) => {
           let body = "";
           res.on("data", (chunk) => body += chunk);
           res.on("end", () => {
@@ -622,7 +619,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     try {
       const isAsyncTool = toolName === "tiktok_insight";
-      const targetUrl = isAsyncTool ? `${SERVICE_BASE_URL}/async-action` : HTTP_SERVICE_URL;
+      const targetUrl = `${getServiceBaseUrl()}/${isAsyncTool ? "async-action" : "search"}`;
 
       const requestService = () => new Promise((resolve, reject) => {
         const req = http.request(targetUrl, {
