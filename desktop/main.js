@@ -408,9 +408,9 @@ function registerIpc() {
   ipcMain.handle("open-onboarding", () => shell.openExternal(ONBOARDING_URL));
   ipcMain.handle("open-data-dir", () => shell.openPath(lastStatus.dataDir || getDefaultDataDir()));
   ipcMain.handle("export-diagnostics", () => handleExportDiagnostics());
-  ipcMain.handle("check-for-updates", (_event, options) => updater.checkForUpdates({ manual: true, ...options }));
+  ipcMain.handle("check-for-updates", () => updater.checkForUpdates({ manual: true }));
   ipcMain.handle("get-update-state", () => updater.getUpdateState());
-  ipcMain.handle("download-update", (_event, options) => updater.downloadUpdate(options));
+  ipcMain.handle("download-update", () => updater.downloadUpdate());
   ipcMain.handle("quit-and-install", () => updater.quitAndInstall({
     cleanupCallback: () => {
       quitting = true;

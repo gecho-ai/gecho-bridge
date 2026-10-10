@@ -1,15 +1,13 @@
 "use strict";
 
-const https = require("node:https");
-const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
 const crypto = require("node:crypto");
-const { spawn } = require("node:child_process");
 const { app, dialog, shell } = require("electron");
 const logger = require("./logger");
 const i18n = require("./i18n");
+const transport = require("./update-transport");
 
 const GITHUB_REPO = "gecho-ai/gecho-bridge";
 const DEFAULT_RELEASES_API = `https://api.github.com/repos/${GITHUB_REPO}/releases`;
@@ -204,80 +202,8 @@ function findMatchingAsset(assets, platform = process.platform, arch = process.a
 /**
  * 统一 HTTP/HTTPS 异步请求封装
  */
-function fetchJson(urlStr, options = {}, timeoutMs = 10000) {
-  return new Promise((resolve, reject) => {
-    let url;
-    try {
-      url = new URL(urlStr);
-    } catch (err) {
-      return reject(new Error(`Invalid URL: ${urlStr}`));
-    }
-
-    const client = url.protocol === "http:" ? http : https;
-    const reqHeaders = {
-      "User-Agent": `Gecho-Desktop/${app?.getVersion?.() || "1.1.38"}`,
-      Accept: "application/vnd.github.v3+json, application/json",
-      ...options.headers,
-    };
-
-    const req = client.get(url, { headers: reqHeaders }, (res) => {
-      // 处理 301 / 302 / 307 / 308 重定向
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        return resolve(fetchJson(res.headers.location, options, timeoutMs));
-      }
-
-      if (res.statusCode === 404) {
-        const err = new Error("No release found (HTTP 404)");
-        err.errorType = "NO_RELEASES";
-        err.statusCode = 404;
-        return reject(err);
-      }
-
-      if (res.statusCode === 403) {
-        const err = new Error("API rate limit exceeded or access forbidden");
-        err.errorType = "RATE_LIMIT";
-        err.statusCode = 403;
-        return reject(err);
-      }
-
-      if (res.statusCode >= 500) {
-        const err = new Error(`Server returned HTTP ${res.statusCode}`);
-        err.errorType = "SERVER_ERROR";
-        err.statusCode = res.statusCode;
-        return reject(err);
-      }
-
-      if (res.statusCode < 200 || res.statusCode >= 300) {
-        const err = new Error(`Unexpected HTTP status ${res.statusCode}`);
-        err.statusCode = res.statusCode;
-        return reject(err);
-      }
-
-      let data = "";
-      res.on("data", (chunk) => (data += chunk));
-      res.on("end", () => {
-        try {
-          resolve(JSON.parse(data));
-        } catch (e) {
-          reject(new Error(`Failed to parse JSON response: ${e.message}`));
-        }
-      });
-    });
-
-    req.on("error", (err) => {
-      if (err.code === "ENOTFOUND" || err.code === "ECONNREFUSED") {
-        err.errorType = "OFFLINE";
-      }
-      reject(err);
-    });
-
-    req.setTimeout(timeoutMs, () => {
-      req.destroy();
-      const err = new Error("Update check timed out");
-      err.errorType = "TIMEOUT";
-      reject(err);
-    });
-  });
+function fetchJson(url, options = {}, timeoutMs = 10000) {
+  return transport.fetchUpdateJson(url, { headers: { "User-Agent": "Gecho-Desktop", ...options.headers } }, timeoutMs);
 }
 
 /**
@@ -339,6 +265,7 @@ async function checkForUpdates({ manual = false, feedUrl, currentVersion: versio
     logger.info("Update check already in progress, skipping duplicate request.");
     return { ...currentState, alreadyChecking: true };
   }
+  if (activeDownloadPromise || currentState.status === UPDATE_STATUS.INSTALLING) return { ...currentState, success: false, error: "Update operation is busy" };
 
   isChecking = true;
   setState({
@@ -346,6 +273,7 @@ async function checkForUpdates({ manual = false, feedUrl, currentVersion: versio
     currentVersion,
     error: null,
     errorType: null,
+    downloadedFilePath: null,
   });
 
   logger.info(`Checking for updates (current: v${currentVersion}, manual: ${manual})...`);
@@ -571,204 +499,64 @@ function verifyDownloadedFile(filePath, options = {}) {
 /**
  * 执行安装包文件下载并校验
  */
-function downloadUpdate({ asset, onProgress } = {}) {
+function downloadUpdate({ asset, onProgress, expectedSha256 } = {}) {
+  if (activeDownloadPromise) return activeDownloadPromise;
   const targetAsset = asset || currentState.asset;
-  if (!targetAsset) {
-    return Promise.reject(new Error("No target asset specified for download"));
-  }
-
-  const downloadUrl = targetAsset.browser_download_url || targetAsset.url;
-  if (!downloadUrl) {
-    return Promise.reject(new Error("Asset has no download URL"));
-  }
-
-  if (activeDownloadPromise) {
-    logger.info("Download already in progress, returning active promise.");
-    return activeDownloadPromise;
-  }
-
-  setState({
-    status: UPDATE_STATUS.DOWNLOADING,
-    progress: { percent: 0, transferredBytes: 0, totalBytes: targetAsset.size || 0 },
-    error: null,
-    errorType: null,
-  });
-
-  const tempBaseDir = path.join(app?.getPath?.("temp") || os.tmpdir(), "gecho-updates");
-  if (!fs.existsSync(tempBaseDir)) {
-    fs.mkdirSync(tempBaseDir, { recursive: true });
-  }
-
-  const targetFileName = targetAsset.name || path.basename(new URL(downloadUrl).pathname);
-  const targetFilePath = path.join(tempBaseDir, targetFileName);
-
-  activeDownloadPromise = new Promise((resolve, reject) => {
-    logger.info(`Starting download: ${downloadUrl} -> ${targetFilePath}`);
-
-    const fileStream = fs.createWriteStream(targetFilePath);
-
-    const handleDownload = (currentUrl, redirectCount = 0) => {
-      if (redirectCount > 5) {
-        fileStream.close();
-        fs.unlink(targetFilePath, () => {});
-        return reject(new Error("Too many redirects during download"));
-      }
-
-      let parsed;
-      try {
-        parsed = new URL(currentUrl);
-      } catch (err) {
-        fileStream.close();
-        fs.unlink(targetFilePath, () => {});
-        return reject(new Error(`Invalid download URL: ${currentUrl}`));
-      }
-
-      const client = parsed.protocol === "http:" ? http : https;
-      const req = client.get(parsed, {
-        headers: { "User-Agent": `Gecho-Desktop/${app?.getVersion?.() || "1.1.38"}` },
-      }, (res) => {
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          return handleDownload(res.headers.location, redirectCount + 1);
-        }
-
-        if (res.statusCode !== 200) {
-          fileStream.close();
-          fs.unlink(targetFilePath, () => {});
-          const err = new Error(`Download server returned HTTP ${res.statusCode}`);
-          err.statusCode = res.statusCode;
-          return reject(err);
-        }
-
-        const totalBytes = Number.parseInt(res.headers["content-length"], 10) || targetAsset.size || 0;
-        let transferredBytes = 0;
-
-        res.on("data", (chunk) => {
-          transferredBytes += chunk.length;
-          const percent = totalBytes > 0 ? Math.min(100, Math.round((transferredBytes / totalBytes) * 100)) : 0;
-          const progressPayload = { percent, transferredBytes, totalBytes };
-          currentState.progress = progressPayload;
-          if (typeof onProgress === "function") {
-            try { onProgress(progressPayload); } catch (_) {}
-          }
-          notifyStateChange();
-        });
-
-        res.pipe(fileStream);
-
-        fileStream.on("finish", () => {
-          fileStream.close(() => {
-            const verifyResult = verifyDownloadedFile(targetFilePath, {
-              size: targetAsset.size,
-              sha256: targetAsset.sha256,
-            });
-            if (!verifyResult.valid) {
-              logger.error("Verification failed for downloaded file:", verifyResult.error);
-              fs.unlink(targetFilePath, () => {});
-              const err = new Error(`Verification failed: ${verifyResult.error}`);
-              err.errorType = "VERIFICATION_FAILED";
-              setState({
-                status: UPDATE_STATUS.ERROR,
-                error: err.message,
-                errorType: "VERIFICATION_FAILED",
-              });
-              reject(err);
-            } else {
-              logger.info("Download and verification succeeded:", targetFilePath);
-              setState({
-                status: UPDATE_STATUS.DOWNLOADED,
-                downloadedFilePath: targetFilePath,
-                progress: { percent: 100, transferredBytes, totalBytes },
-              });
-              resolve({ success: true, filePath: targetFilePath, asset: targetAsset });
-            }
-          });
-        });
+  if (!targetAsset) return Promise.reject(new Error("No update asset available"));
+  activeDownloadPromise = (async () => {
+    let targetFilePath;
+    try {
+      const url = targetAsset.browser_download_url || targetAsset.url;
+      transport.safeUpdateUrl(url);
+      const name = transport.safeAssetName(targetAsset.name || path.basename(new URL(url).pathname));
+      const hash = expectedSha256 || targetAsset.sha256 || targetAsset.digest?.replace(/^sha256:/, "");
+      if (hash && !/^[a-f0-9]{64}$/i.test(hash)) throw new Error("Invalid SHA256 digest");
+      const dir = fs.mkdtempSync(path.join(app?.getPath?.("temp") || os.tmpdir(), "gecho-update-"));
+      targetFilePath = path.join(dir, name);
+      setState({ status: UPDATE_STATUS.DOWNLOADING, downloadedFilePath: null, error: null, errorType: null });
+      const progress = await transport.downloadFile(url, targetFilePath, {
+        size: targetAsset.size,
+        headers: { "User-Agent": "Gecho-Desktop" },
+        onProgress(value) {
+          setState({ progress: value });
+          try { onProgress?.(value); } catch (_) {}
+        },
       });
-
-      req.on("error", (reqErr) => {
-        fileStream.close();
-        fs.unlink(targetFilePath, () => {});
-        reject(reqErr);
-      });
-
-      req.setTimeout(60000, () => {
-        req.destroy();
-        fileStream.close();
-        fs.unlink(targetFilePath, () => {});
-        const err = new Error("Download request timed out");
-        err.errorType = "TIMEOUT";
-        reject(err);
-      });
-    };
-
-    handleDownload(downloadUrl);
-  }).finally(() => {
-    activeDownloadPromise = null;
-  });
-
+      const verified = verifyDownloadedFile(targetFilePath, { size: targetAsset.size, sha256: hash });
+      if (!verified.valid) throw Object.assign(new Error(verified.error), { errorType: "VERIFICATION_FAILED" });
+      setState({ status: UPDATE_STATUS.DOWNLOADED, asset: targetAsset, downloadedFilePath: targetFilePath, verifiedSha256: hash || null, progress: { ...progress, percent: 100 } });
+      return { success: true, filePath: targetFilePath, asset: targetAsset };
+    } catch (error) {
+      if (targetFilePath) { try { fs.unlinkSync(targetFilePath); } catch (_) {} }
+      setState({ status: UPDATE_STATUS.ERROR, downloadedFilePath: null, error: error.message, errorType: error.errorType || "DOWNLOAD_FAILED" });
+      throw error;
+    }
+  })().finally(() => { activeDownloadPromise = null; });
   return activeDownloadPromise;
 }
 
 /**
  * 退出当前应用并启动安装程序完成升级
  */
-function quitAndInstall({ installerPath, cleanupCallback } = {}) {
-  const filePath = installerPath || currentState.downloadedFilePath;
-
-  if (!filePath || !fs.existsSync(filePath)) {
-    throw new Error("No installer package available to execute");
-  }
-
+async function quitAndInstall({ cleanupCallback } = {}) {
+  const filePath = currentState.downloadedFilePath;
+  if (currentState.status !== UPDATE_STATUS.DOWNLOADED || !filePath) throw new Error("No verified installer available");
+  const verified = verifyDownloadedFile(filePath, { size: currentState.asset?.size, sha256: currentState.verifiedSha256 });
+  if (!verified.valid) throw new Error(verified.error);
   setState({ status: UPDATE_STATUS.INSTALLING });
-  logger.info("Launching installer for upgrade:", filePath);
-
-  if (typeof cleanupCallback === "function") {
-    try { cleanupCallback(); } catch (_) {}
-  }
-
-  if (process.platform === "win32") {
-    // Windows: 运行 NSIS 安装器
-    // 传 --updated 参数启动安装向导
-    const child = spawn(filePath, ["--updated"], {
-      detached: true,
-      stdio: "ignore",
-    });
-    child.unref();
-
-    if (app && typeof app.quit === "function") {
-      setTimeout(() => {
-        app.quit();
-      }, 500).unref?.();
-    }
-    return { success: true, platform: "win32", launched: true };
-  }
-
-  if (process.platform === "darwin") {
-    // macOS: 针对 DMG 挂载并打开，或执行安装脚本
-    if (filePath.endsWith(".dmg")) {
-      const child = spawn("hdiutil", ["attach", filePath], {
-        detached: true,
-        stdio: "ignore",
-      });
-      child.unref();
-
-      // 打开安装卷
-      setTimeout(() => {
-        spawn("open", [filePath], { detached: true, stdio: "ignore" }).unref();
-        if (app && typeof app.quit === "function") {
-          app.quit();
-        }
-      }, 800).unref?.();
+  try {
+    const result = await transport.launchInstaller(filePath, { openPath: (file) => shell.openPath(file) });
+    if (result.shouldQuit) {
+      cleanupCallback?.();
+      app.quit();
     } else {
-      spawn("open", [filePath], { detached: true, stdio: "ignore" }).unref();
-      if (app && typeof app.quit === "function") {
-        app.quit();
-      }
+      setState({ status: UPDATE_STATUS.DOWNLOADED });
     }
-    return { success: true, platform: "darwin", launched: true };
+    return { success: true, platform: process.platform, ...result };
+  } catch (error) {
+    setState({ status: UPDATE_STATUS.DOWNLOADED, error: error.message, errorType: "INSTALL_FAILED" });
+    throw error;
   }
-
-  return { success: false, error: `Unsupported platform: ${process.platform}` };
 }
 
 module.exports = {
