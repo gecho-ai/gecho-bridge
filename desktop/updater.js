@@ -467,8 +467,18 @@ function verifyDownloadedFile(filePath, options = {}) {
 
   // 2. 如果提供了 SHA256，进行哈希比对
   if (expectedSha256 && typeof expectedSha256 === "string") {
-    const fileBuffer = fs.readFileSync(filePath);
-    const actualHash = crypto.createHash("sha256").update(fileBuffer).digest("hex").toLowerCase();
+    const hash = crypto.createHash("sha256");
+    const buffer = Buffer.alloc(64 * 1024);
+    const descriptor = fs.openSync(filePath, "r");
+    try {
+      let bytes;
+      while ((bytes = fs.readSync(descriptor, buffer, 0, buffer.length, null)) > 0) {
+        hash.update(buffer.subarray(0, bytes));
+      }
+    } finally {
+      fs.closeSync(descriptor);
+    }
+    const actualHash = hash.digest("hex").toLowerCase();
     if (actualHash !== expectedSha256.toLowerCase()) {
       return {
         valid: false,
