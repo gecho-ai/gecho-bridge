@@ -4,13 +4,68 @@ const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
 
-const MAX_LOG_SIZE = 5 * 1024 * 1024; // 5MB
-const MAX_BACKUP_FILES = 3;
+const DEFAULT_MAX_LOG_SIZE = 5 * 1024 * 1024; // 5MB
+const DEFAULT_MAX_BACKUP_FILES = 3;
+const DEFAULT_MAX_RETENTION_DAYS = 7;
+
+let maxLogSize = DEFAULT_MAX_LOG_SIZE;
+let maxBackupFiles = DEFAULT_MAX_BACKUP_FILES;
 
 let logDirectory = null;
 let currentLogFile = null;
 
-function initLogger(customDir) {
+/**
+ * 敏感数据脱敏过滤器，避免将用户凭证、Token、Cookie、密码等明文写入日志或导出报告
+ */
+function redactSensitiveData(text) {
+  if (typeof text !== "string") return text;
+  return text
+    // 匹配 Bearer token: Authorization: Bearer xxx
+    .replace(/(Bearer\s+)[a-zA-Z0-9_\-\.]{8,}/gi, "$1***REDACTED_TOKEN***")
+    // 匹配键值对 token / api_key / secret / password
+    .replace(/(["']?(?:token|apiKey|api_key|secret|password|passwd|auth_token|authToken|access_token|refreshToken)["']?\s*[:=]\s*["']?)([^"' \r\n,;&]{4,})(["']?)/gi, (match, prefix, val, suffix) => {
+      return `${prefix}***REDACTED***${suffix}`;
+    })
+    // 匹配 Cookie / Cookies: cookie: session=xxx; token=yyy
+    .replace(/(["']?cookie[s]?["']?\s*[:=]\s*["']?)([^"'\r\n]+)(["']?)/gi, (match, prefix, val, suffix) => {
+      return `${prefix}***REDACTED_COOKIE***${suffix}`;
+    })
+    // 匹配 URL 查询参数中的敏感信息: ?token=xxx 或 &key=xxx
+    .replace(/([?&](?:token|key|api_key|auth|signature|secret)=)([^&\s"']+)/gi, "$1***REDACTED***");
+}
+
+/**
+ * 清理指定天数之前的旧日志与诊断包
+ */
+function cleanOldLogs(maxAgeDays = DEFAULT_MAX_RETENTION_DAYS) {
+  if (!logDirectory || !fs.existsSync(logDirectory)) return;
+  const now = Date.now();
+  const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
+
+  try {
+    const files = fs.readdirSync(logDirectory);
+    for (const file of files) {
+      if (file.startsWith("gecho-desktop.log.") || file.startsWith("gecho-diagnostics-")) {
+        const fullPath = path.join(logDirectory, file);
+        try {
+          const stats = fs.statSync(fullPath);
+          if (now - stats.mtimeMs > maxAgeMs) {
+            fs.unlinkSync(fullPath);
+          }
+        } catch (_err) {
+          // ignore individual file deletion error
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Failed to clean old logs:", err);
+  }
+}
+
+function initLogger(customDir, options = {}) {
+  if (options.maxLogSize) maxLogSize = options.maxLogSize;
+  if (options.maxBackupFiles) maxBackupFiles = options.maxBackupFiles;
+
   if (customDir) {
     logDirectory = path.join(customDir, "logs");
   } else {
@@ -25,6 +80,7 @@ function initLogger(customDir) {
   try {
     fs.mkdirSync(logDirectory, { recursive: true });
     currentLogFile = path.join(logDirectory, "gecho-desktop.log");
+    cleanOldLogs(options.retentionDays || DEFAULT_MAX_RETENTION_DAYS);
   } catch (err) {
     console.error("Failed to create log directory:", err);
   }
@@ -34,13 +90,13 @@ function rotateLogsIfNeeded() {
   if (!currentLogFile || !fs.existsSync(currentLogFile)) return;
   try {
     const stats = fs.statSync(currentLogFile);
-    if (stats.size < MAX_LOG_SIZE) return;
+    if (stats.size < maxLogSize) return;
 
-    for (let i = MAX_BACKUP_FILES - 1; i >= 1; i -= 1) {
+    for (let i = maxBackupFiles - 1; i >= 1; i -= 1) {
       const oldFile = `${currentLogFile}.${i}`;
       const nextFile = `${currentLogFile}.${i + 1}`;
       if (fs.existsSync(oldFile)) {
-        if (i + 1 > MAX_BACKUP_FILES) {
+        if (i + 1 > maxBackupFiles) {
           fs.unlinkSync(oldFile);
         } else {
           fs.renameSync(oldFile, nextFile);
@@ -69,7 +125,7 @@ function formatMessage(level, args) {
     return String(arg);
   }).join(" ");
 
-  return `[${timestamp}] [${level}] ${text}\n`;
+  return `[${timestamp}] [${level}] ${redactSensitiveData(text)}\n`;
 }
 
 function writeLog(level, ...args) {
@@ -106,13 +162,15 @@ const logger = {
   debug: (...args) => writeLog("DEBUG", ...args),
   getLogFile: () => currentLogFile,
   getLogDir: () => logDirectory,
+  redact: redactSensitiveData,
+  cleanOldLogs,
 
   getRecentLogs: (lineCount = 100) => {
     if (!currentLogFile || !fs.existsSync(currentLogFile)) return "No log records found.";
     try {
       const content = fs.readFileSync(currentLogFile, "utf8");
       const lines = content.trim().split("\n");
-      return lines.slice(-lineCount).join("\n");
+      return redactSensitiveData(lines.slice(-lineCount).join("\n"));
     } catch (err) {
       return `Failed to read log file: ${err.message}`;
     }
@@ -123,6 +181,9 @@ const logger = {
     const timestampStr = new Date().toISOString().replace(/[:.]/g, "-");
     const reportFileName = `gecho-diagnostics-${timestampStr}.txt`;
     const reportPath = path.join(logDirectory, reportFileName);
+
+    const safeBridgeStatus = redactSensitiveData(JSON.stringify(bridgeStatus || {}, null, 2));
+    const safeExtraInfo = extraInfo ? redactSensitiveData(JSON.stringify(extraInfo, null, 2)) : "";
 
     const reportContent = [
       "=================================================================",
@@ -141,9 +202,9 @@ const logger = {
       `CPU Cores        : ${os.cpus().length}`,
       "",
       "--- Bridge Status ---",
-      JSON.stringify(bridgeStatus || {}, null, 2),
+      safeBridgeStatus,
       "",
-      ...(extraInfo ? ["--- Additional Information ---", JSON.stringify(extraInfo, null, 2), ""] : []),
+      ...(safeExtraInfo ? ["--- Additional Information ---", safeExtraInfo, ""] : []),
       "--- Recent Application Logs (Latest 100 lines) ---",
       logger.getRecentLogs(100),
       "",
