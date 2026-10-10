@@ -2115,6 +2115,7 @@ const server = http.createServer(async (req, res) => {
       sourceMtimeMs: getServiceSourceMtimeMs(),
       dataDir: JOBS_DIR,
       extensionConnected: isExtensionConnected(),
+      hasActiveWork: pendingRequests.size > 0 || [...asyncJobs.values()].some((job) => job.status === "running"),
       lastConnectedBrowser: lastBrowserConnection?.browser || null,
       lastConnectedProfile: lastBrowserConnection?.profileId || null,
       extensionOnboarding: loadOnboardingState(),

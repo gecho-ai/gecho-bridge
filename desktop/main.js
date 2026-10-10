@@ -7,6 +7,7 @@ const {
   ipcMain,
   nativeImage,
   powerSaveBlocker,
+  powerMonitor,
   shell,
 } = require("electron");
 const fs = require("node:fs");
@@ -21,6 +22,7 @@ const i18n = require("./i18n");
 const updater = require("./updater");
 const security = require("./security");
 const { runHealthChecks } = require("./health-check");
+const powerGuard = require("./power-guard").createPowerGuard(powerSaveBlocker);
 
 process.on("uncaughtException", (error) => {
   logger.error("Uncaught exception:", error);
@@ -44,7 +46,6 @@ let SERVICE_PING_URL = `${SERVICE_URL}/ping`;
 let ONBOARDING_URL = `${SERVICE_URL}/onboarding`;
 
 // powerSaveBlocker ID：有任务运行时阻止系统休眠，无活跃任务时释放
-let powerSaveBlockerId = null;
 
 let dashboardWindow = null;
 let tray = null;
@@ -101,18 +102,7 @@ function applyPort(port) {
  * - 无活跃任务：释放 blocker 让系统正常休眠
  */
 function syncPowerSaveBlocker(hasActiveTasks) {
-  if (hasActiveTasks) {
-    if (powerSaveBlockerId === null || !powerSaveBlocker.isStarted(powerSaveBlockerId)) {
-      powerSaveBlockerId = powerSaveBlocker.start("prevent-app-suspension");
-      logger.info(`Power save blocker started (id=${powerSaveBlockerId}) - active tasks detected`);
-    }
-  } else {
-    if (powerSaveBlockerId !== null && powerSaveBlocker.isStarted(powerSaveBlockerId)) {
-      powerSaveBlocker.stop(powerSaveBlockerId);
-      logger.info(`Power save blocker stopped (id=${powerSaveBlockerId}) - no active tasks`);
-      powerSaveBlockerId = null;
-    }
-  }
+  powerGuard.sync(hasActiveTasks);
 }
 
 const mockScheduledTasks = [
@@ -188,6 +178,7 @@ async function getBridgeStatus() {
     profile: response.data.lastConnectedProfile || null,
     dataDir: response.data.dataDir || getDefaultDataDir(),
     startedAt: response.data.startedAt || null,
+    hasActiveWork: response.data.hasActiveWork === true,
   };
 }
 
@@ -246,14 +237,7 @@ function sendStatus(status) {
 async function refreshStatus() {
   const status = await getBridgeStatus();
   sendStatus(status);
-  // 检查是否有活跃定时任务，同步防休眠状态
-  try {
-    const { getActiveTasks } = require("../scheduled-task-store");
-    const active = Array.isArray(getActiveTasks()) ? getActiveTasks() : [];
-    syncPowerSaveBlocker(active.length > 0);
-  } catch (_e) {
-    // scheduled-task-store 未载入时忽略（Bridge 未启动等情况）
-  }
+  syncPowerSaveBlocker(status.service === "running" && status.hasActiveWork);
 }
 
 function getAutoStartEnabled() {
@@ -608,6 +592,14 @@ if (!hasSingleInstance) {
       await startBridge();
       await refreshStatus();
       statusTimer = setInterval(refreshStatus, 2000);
+      powerMonitor.on("suspend", () => {
+        logger.info("System suspending; releasing power guard");
+        powerGuard.dispose();
+      });
+      powerMonitor.on("resume", () => {
+        logger.info("System resumed; refreshing Bridge and extension status");
+        if (!quitting) refreshStatus().catch((error) => logger.warn("Resume check failed:", error.message));
+      });
       // 启动 8 秒后进行一次静默后台版本检查，不打扰用户
       setTimeout(() => {
         if (!quitting) {
@@ -626,9 +618,6 @@ if (!hasSingleInstance) {
     stopMacTray();
     if (statusTimer) clearInterval(statusTimer);
     // 退出前释放防休眠锁
-    if (powerSaveBlockerId !== null && powerSaveBlocker.isStarted(powerSaveBlockerId)) {
-      powerSaveBlocker.stop(powerSaveBlockerId);
-      powerSaveBlockerId = null;
-    }
+    powerGuard.dispose();
   });
 }
