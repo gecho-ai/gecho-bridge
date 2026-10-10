@@ -34,6 +34,20 @@ test("logger: redactSensitiveData masks tokens, cookies, passwords and auth para
   assert.ok(!redactedUrl.includes("sec_token_9999"), "URL token parameter must be masked");
   assert.ok(redactedUrl.includes("token=***REDACTED***"));
   assert.ok(redactedUrl.includes("limit=10"), "Non-sensitive params must be preserved");
+  assert.equal(redact('password="abc"').includes("abc"), false);
+  assert.equal(redact('refresh_token="xyz"').includes("xyz"), false);
+  assert.equal(redact('Authorization: Bearer abc').includes("abc"), false);
+});
+
+test("logger bounds individual entries and starts fresh size settings for each initialization", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gecho-log-bound-"));
+  t.after(() => { logger.init(); fs.rmSync(dir, { recursive: true, force: true }); });
+  logger.init(dir, { maxLogSize: 1024, maxBackupFiles: 2 });
+  logger.info("x".repeat(10000));
+  assert.ok(fs.statSync(logger.getLogFile()).size <= 1024);
+  logger.init(dir);
+  logger.info("normal entry");
+  assert.equal(fs.existsSync(`${logger.getLogFile()}.1`), false);
 });
 
 test("logger: writes sanitized logs and handles log rotation", () => {

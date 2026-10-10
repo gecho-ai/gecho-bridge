@@ -21,9 +21,9 @@ function redactSensitiveData(text) {
   if (typeof text !== "string") return text;
   return text
     // 匹配 Bearer token: Authorization: Bearer xxx
-    .replace(/(Bearer\s+)[a-zA-Z0-9_\-\.]{8,}/gi, "$1***REDACTED_TOKEN***")
+    .replace(/(Bearer\s+)[a-zA-Z0-9_\-\.]+/gi, "$1***REDACTED_TOKEN***")
     // 匹配键值对 token / api_key / secret / password
-    .replace(/(["']?(?:token|apiKey|api_key|secret|password|passwd|auth_token|authToken|access_token|refreshToken)["']?\s*[:=]\s*["']?)([^"' \r\n,;&]{4,})(["']?)/gi, (match, prefix, val, suffix) => {
+    .replace(/(["']?(?:token|apiKey|api_key|secret|password|passwd|auth_token|authToken|access_token|refresh_token|refreshToken)["']?\s*[:=]\s*["']?)([^"' \r\n,;&]+)(["']?)/gi, (match, prefix, val, suffix) => {
       return `${prefix}***REDACTED***${suffix}`;
     })
     // 匹配 Cookie / Cookies: cookie: session=xxx; token=yyy
@@ -63,8 +63,8 @@ function cleanOldLogs(maxAgeDays = DEFAULT_MAX_RETENTION_DAYS) {
 }
 
 function initLogger(customDir, options = {}) {
-  if (options.maxLogSize) maxLogSize = options.maxLogSize;
-  if (options.maxBackupFiles) maxBackupFiles = options.maxBackupFiles;
+  maxLogSize = Number.isInteger(options.maxLogSize) && options.maxLogSize >= 256 ? Math.min(options.maxLogSize, DEFAULT_MAX_LOG_SIZE) : DEFAULT_MAX_LOG_SIZE;
+  maxBackupFiles = Number.isInteger(options.maxBackupFiles) && options.maxBackupFiles > 0 ? Math.min(options.maxBackupFiles, 8) : DEFAULT_MAX_BACKUP_FILES;
 
   if (customDir) {
     logDirectory = path.join(customDir, "logs");
@@ -86,11 +86,13 @@ function initLogger(customDir, options = {}) {
   }
 }
 
-function rotateLogsIfNeeded() {
+function rotateLogsIfNeeded(incomingBytes = 0) {
   if (!currentLogFile || !fs.existsSync(currentLogFile)) return;
   try {
     const stats = fs.statSync(currentLogFile);
-    if (stats.size < maxLogSize) return;
+    const newDay = stats.mtime.toISOString().slice(0, 10) !== new Date().toISOString().slice(0, 10);
+    if (!newDay && stats.size + incomingBytes <= maxLogSize) return;
+    if (fs.existsSync(`${currentLogFile}.${maxBackupFiles}`)) fs.unlinkSync(`${currentLogFile}.${maxBackupFiles}`);
 
     for (let i = maxBackupFiles - 1; i >= 1; i -= 1) {
       const oldFile = `${currentLogFile}.${i}`;
@@ -129,7 +131,8 @@ function formatMessage(level, args) {
 }
 
 function writeLog(level, ...args) {
-  const formatted = formatMessage(level, args);
+  const raw = formatMessage(level, args);
+  const formatted = Buffer.byteLength(raw) <= maxLogSize ? raw : Buffer.from(raw).subarray(0, maxLogSize - 40).toString("utf8") + "\n[Log entry truncated]\n";
   if (level === "ERROR") {
     process.stderr.write(formatted);
   } else {
@@ -146,7 +149,7 @@ function writeLog(level, ...args) {
       if (!fs.existsSync(logDir)) {
         fs.mkdirSync(logDir, { recursive: true });
       }
-      rotateLogsIfNeeded();
+      rotateLogsIfNeeded(Buffer.byteLength(formatted));
       fs.appendFileSync(currentLogFile, formatted, "utf8");
     }
   } catch (err) {
