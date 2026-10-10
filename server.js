@@ -16,7 +16,8 @@ const { spawn, spawnSync } = require("child_process");
 const packageJson = require("./package.json");
 const { getDefaultDataDir } = require("./data-dir");
 const { publishServiceEndpoint, removeServiceEndpoint } = require("./service-discovery");
-const desktopEvents = require("./desktop-events").createDesktopEvents();
+const { createDesktopEvents, resultEventType } = require("./desktop-events");
+const desktopEvents = createDesktopEvents();
 const {
   createActionResultEnvelope,
   getActionResultMetadata,
@@ -1416,7 +1417,7 @@ function resolveActionResultByRequestId(requestId, result, sourceLabel) {
   const pending = pendingRequests.get(requestId);
   if (pending) {
     clearTimeout(pending.timeoutId);
-    if (!pending.jobId) desktopEvents.add(isHardActionResultFailure(normalizeActionResult(result)) ? "task-failed" : "task-completed", requestId);
+    if (!pending.jobId) desktopEvents.add(resultEventType(result), requestId);
     pending.resolve(result);
     pendingRequests.delete(requestId);
     return true;
@@ -2123,7 +2124,7 @@ const server = http.createServer(async (req, res) => {
       sourceMtimeMs: getServiceSourceMtimeMs(),
       dataDir: JOBS_DIR,
       extensionConnected: isExtensionConnected(),
-      hasActiveWork: pendingRequests.size > 0 || [...asyncJobs.values()].some((job) => job.status === "running"),
+      hasActiveWork: pendingRequests.size > 0 || [...asyncJobs.values()].some((job) => job.status === "running" && Number(job.createdAt || job.startTime) >= SERVICE_STARTED_AT),
       desktopEvents: desktopEvents.list(),
       lastConnectedBrowser: lastBrowserConnection?.browser || null,
       lastConnectedProfile: lastBrowserConnection?.profileId || null,

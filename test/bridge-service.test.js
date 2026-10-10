@@ -49,6 +49,7 @@ test("standalone Bridge service CLI can start, report status, restart and stop t
     GECHO_AUTO_OPEN_ONBOARDING_ON_FIRST_START: "0",
     GECHO_SCHEDULED_ALLOWED_ORIGINS: "https://gecho.ai"
   };
+  fs.writeFileSync(path.join(dataDir, ".async_jobs.json"), JSON.stringify({ jobs: { stale: { status: "running", createdAt: 1 } } }));
 
   try {
     const started = await runCli("start", env);
@@ -59,6 +60,7 @@ test("standalone Bridge service CLI can start, report status, restart and stop t
     assert.equal(status.code, 0, status.stderr);
     const statusBody = JSON.parse(status.stdout);
     assert.equal(statusBody.status, "ok");
+    assert.equal(statusBody.hasActiveWork, false, "restored orphan jobs must not block sleep");
     assert.equal(statusBody.scheduler.triggerAction, "start_flywheel_task");
 
     const restarted = await runCli("restart", env);
