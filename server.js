@@ -16,6 +16,7 @@ const { spawn, spawnSync } = require("child_process");
 const packageJson = require("./package.json");
 const { getDefaultDataDir } = require("./data-dir");
 const { publishServiceEndpoint, removeServiceEndpoint } = require("./service-discovery");
+const desktopEvents = require("./desktop-events").createDesktopEvents();
 const {
   createActionResultEnvelope,
   getActionResultMetadata,
@@ -1143,6 +1144,9 @@ function toSafeFileName(name) {
 function updateJob(jobId, patch) {
   const prev = asyncJobs.get(jobId) || {};
   const next = { ...prev, ...patch, lastUpdateAt: Date.now() };
+  if (next.status !== prev.status && ["completed", "error"].includes(next.status)) {
+    desktopEvents.add(next.status === "completed" ? "task-completed" : "task-failed", jobId);
+  }
   asyncJobs.set(jobId, next);
   saveJobDetailToDisk(jobId, next);
   schedulePersistAsyncJobs();
@@ -1412,6 +1416,7 @@ function resolveActionResultByRequestId(requestId, result, sourceLabel) {
   const pending = pendingRequests.get(requestId);
   if (pending) {
     clearTimeout(pending.timeoutId);
+    if (!pending.jobId) desktopEvents.add(isHardActionResultFailure(normalizeActionResult(result)) ? "task-failed" : "task-completed", requestId);
     pending.resolve(result);
     pendingRequests.delete(requestId);
     return true;
@@ -1730,6 +1735,7 @@ wss.on("connection", (ws, request) => {
         return;
       }
       if (parsed.method === "action_progress" && parsed.requestId) {
+        if (["captcha_required", "verification_required"].includes(parsed.progress?.stage)) desktopEvents.add("verification-required", parsed.requestId);
         traceBridgeEvent("extension_progress", { requestId: parsed.requestId });
         const pending = pendingRequests.get(parsed.requestId);
         if (!pending) {
@@ -2118,6 +2124,7 @@ const server = http.createServer(async (req, res) => {
       dataDir: JOBS_DIR,
       extensionConnected: isExtensionConnected(),
       hasActiveWork: pendingRequests.size > 0 || [...asyncJobs.values()].some((job) => job.status === "running"),
+      desktopEvents: desktopEvents.list(),
       lastConnectedBrowser: lastBrowserConnection?.browser || null,
       lastConnectedProfile: lastBrowserConnection?.profileId || null,
       extensionOnboarding: loadOnboardingState(),

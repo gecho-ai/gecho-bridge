@@ -8,6 +8,16 @@ async function initEnvironment() {
   const launch = document.getElementById("launch-browser-btn");
   try {
     const { browsers, preferences } = await api.getBrowserEnvironment();
+    for (const [id, key] of [["desktop-notifications", "notifications"], ["desktop-shortcut", "shortcut"]]) {
+      const input = document.getElementById(id);
+      input.checked = preferences[key];
+      input.addEventListener("change", async () => {
+        input.disabled = true;
+        try { await api.setPreferences({ [key]: input.checked }); document.getElementById("system-feedback").textContent = "已保存 / Saved"; }
+        catch (error) { input.checked = !input.checked; document.getElementById("system-feedback").textContent = error.message; }
+        finally { input.disabled = false; }
+      });
+    }
     browserSelect.replaceChildren(new Option("选择浏览器 / Select browser", ""));
     for (const browser of browsers) browserSelect.add(new Option(browser.name, browser.id));
     browserSelect.value = preferences.browser;

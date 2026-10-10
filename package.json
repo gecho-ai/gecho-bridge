@@ -105,6 +105,7 @@
       "server.js",
       "data-dir.js",
       "service-discovery.js",
+      "desktop-events.js",
       "action-result.js",
       "scheduled-task-store.js",
       "scheduled-task-scheduler.js",

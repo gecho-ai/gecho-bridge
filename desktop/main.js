@@ -8,6 +8,8 @@ const {
   nativeImage,
   powerSaveBlocker,
   powerMonitor,
+  globalShortcut,
+  Notification,
   shell,
 } = require("electron");
 const fs = require("node:fs");
@@ -26,6 +28,23 @@ const browserManager = require("./browser-manager");
 const { getServiceBaseUrl, isBridgeInfo } = require("../service-discovery");
 const preferences = require("./preferences").createPreferences(process.env.GECHO_DATA_DIR || getDefaultDataDir());
 const recovery = browserManager.createRecoveryGuard({ launch: () => browserManager.launchBrowser(preferences.get(), ONBOARDING_URL) });
+const notificationCursor = require("./notifications").createNotificationCursor();
+const SHORTCUT = "CommandOrControl+Shift+G";
+function syncShortcut(enabled) {
+  globalShortcut.unregister(SHORTCUT);
+  if (enabled && !globalShortcut.register(SHORTCUT, openDashboardWindow)) throw new Error("快捷键已被占用 / Shortcut is unavailable");
+}
+function notifyStatus(status) {
+  const events = notificationCursor.consume(status.startedAt, status.desktopEvents);
+  if (!preferences.get().notifications || !Notification.isSupported()) return;
+  for (const event of events.slice(-3)) {
+    const labels = { "task-completed": "采集任务已完成 / Collection completed", "task-failed": "采集任务失败，请查看任务结果 / Collection failed", "verification-required": "请在浏览器中完成人工验证 / Browser verification required" };
+    const notification = new Notification({ title: "Gecho", body: labels[event.type], silent: event.type === "task-completed" });
+    notification.on("click", openDashboardWindow);
+    notification.on("failed", (_event, error) => logger.warn("Notification failed:", error));
+    notification.show();
+  }
+}
 const powerGuard = require("./power-guard").createPowerGuard(powerSaveBlocker);
 
 process.on("uncaughtException", (error) => {
@@ -183,6 +202,7 @@ async function getBridgeStatus() {
     dataDir: response.data.dataDir || getDefaultDataDir(),
     startedAt: response.data.startedAt || null,
     hasActiveWork: response.data.hasActiveWork === true,
+    desktopEvents: Array.isArray(response.data.desktopEvents) ? response.data.desktopEvents : [],
   };
 }
 
@@ -245,6 +265,7 @@ async function refreshStatus() {
   const status = await getBridgeStatus();
   sendStatus(status);
   syncPowerSaveBlocker(status.service === "running" && status.hasActiveWork);
+  if (status.service === "running") notifyStatus(status);
   await recovery.tick({ connected: status.extensionConnected, enabled: status.service === "running" && preferences.get().autoRecover, selected: !!preferences.get().browser })
     .catch((error) => logger.warn("Browser recovery failed:", error.message));
 }
@@ -362,6 +383,7 @@ function registerIpc() {
       const browser = browserManager.discoverBrowsers().find((entry) => entry.id === patch.browser);
       browserManager.browserLaunchSpec(browser, patch.profile || preferences.get().profile, ONBOARDING_URL);
     }
+    if (typeof patch.shortcut === "boolean") syncShortcut(patch.shortcut);
     return preferences.set(patch);
   });
   ipcMain.handle("launch-selected-browser", () => browserManager.launchBrowser(preferences.get(), ONBOARDING_URL));
@@ -598,6 +620,7 @@ if (!hasSingleInstance) {
   app.whenReady().then(async () => {
     if (process.platform === "win32") app.setAppUserModelId("ai.gecho.desktop");
     i18n.initLocale();
+    try { syncShortcut(preferences.get().shortcut); } catch (error) { logger.warn(error.message); preferences.set({ shortcut: false }); }
     registerIpc();
     try {
       createTray();
@@ -637,5 +660,6 @@ if (!hasSingleInstance) {
     if (statusTimer) clearInterval(statusTimer);
     // 退出前释放防休眠锁
     powerGuard.dispose();
+    globalShortcut.unregisterAll();
   });
 }
