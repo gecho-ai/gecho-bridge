@@ -6,9 +6,11 @@ const {
   dialog,
   ipcMain,
   nativeImage,
+  powerSaveBlocker,
   shell,
 } = require("electron");
 const fs = require("node:fs");
+const net = require("node:net");
 const { spawn } = require("node:child_process");
 const http = require("node:http");
 const path = require("node:path");
@@ -30,10 +32,18 @@ process.on("unhandledRejection", (reason) => {
   logger.error("Unhandled promise rejection:", reason);
 });
 
-const SERVICE_URL = `http://127.0.0.1:${process.env.GECHO_HTTP_PORT || 18793}`;
-const SERVICE_PING_URL = `${SERVICE_URL}/ping`;
-const ONBOARDING_URL = `${SERVICE_URL}/onboarding`;
+const DEFAULT_SERVICE_PORT = Number(process.env.GECHO_HTTP_PORT) || 18793;
+const PORT_SEARCH_RANGE = 10; // 若默认端口被占，依次尝试 18793~18802
 const { loginItemOptions, createTrayPng } = require("./platform");
+
+// 运行时动态确定的 Bridge 端口（端口冲突时自动挑选）
+let activeServicePort = DEFAULT_SERVICE_PORT;
+let SERVICE_URL = `http://127.0.0.1:${activeServicePort}`;
+let SERVICE_PING_URL = `${SERVICE_URL}/ping`;
+let ONBOARDING_URL = `${SERVICE_URL}/onboarding`;
+
+// powerSaveBlocker ID：有任务运行时阻止系统休眠，无活跃任务时释放
+let powerSaveBlockerId = null;
 
 let dashboardWindow = null;
 let tray = null;
@@ -45,6 +55,64 @@ let menuSignature = "";
 let bridgeMode = "starting";
 let statusTimer = null;
 let quitting = false;
+
+/**
+ * 探测端口是否被占用（promise-based）
+ */
+function isPortAvailable(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once("error", () => resolve(false));
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port, "127.0.0.1");
+  });
+}
+
+/**
+ * 找到从 startPort 开始第一个可用端口，搜索 range 个
+ */
+async function findAvailablePort(startPort, range = PORT_SEARCH_RANGE) {
+  for (let offset = 0; offset < range; offset++) {
+    const port = startPort + offset;
+    if (await isPortAvailable(port)) {
+      return port;
+    }
+  }
+  throw new Error(`No available port found in range ${startPort}–${startPort + range - 1}`);
+}
+
+/**
+ * 更新所有依赖 activeServicePort 的 URL 变量
+ */
+function applyPort(port) {
+  activeServicePort = port;
+  SERVICE_URL = `http://127.0.0.1:${port}`;
+  SERVICE_PING_URL = `${SERVICE_URL}/ping`;
+  ONBOARDING_URL = `${SERVICE_URL}/onboarding`;
+  process.env.GECHO_HTTP_PORT = String(port);
+}
+
+/**
+ * 根据当前是否有活跃定时任务，管理 powerSaveBlocker：
+ * - 有活跃任务：启用"prevent-app-suspension"阻止睡眠
+ * - 无活跃任务：释放 blocker 让系统正常休眠
+ */
+function syncPowerSaveBlocker(hasActiveTasks) {
+  if (hasActiveTasks) {
+    if (powerSaveBlockerId === null || !powerSaveBlocker.isStarted(powerSaveBlockerId)) {
+      powerSaveBlockerId = powerSaveBlocker.start("prevent-app-suspension");
+      logger.info(`Power save blocker started (id=${powerSaveBlockerId}) - active tasks detected`);
+    }
+  } else {
+    if (powerSaveBlockerId !== null && powerSaveBlocker.isStarted(powerSaveBlockerId)) {
+      powerSaveBlocker.stop(powerSaveBlockerId);
+      logger.info(`Power save blocker stopped (id=${powerSaveBlockerId}) - no active tasks`);
+      powerSaveBlockerId = null;
+    }
+  }
+}
 
 const mockScheduledTasks = [
   {
@@ -129,6 +197,19 @@ async function startBridge() {
     return existing;
   }
 
+  // 端口冲突自愈：探测可用端口再启动内嵌 Bridge
+  let chosenPort;
+  try {
+    chosenPort = await findAvailablePort(DEFAULT_SERVICE_PORT);
+  } catch (err) {
+    throw new Error(`端口资源不足，无法启动 Bridge：${err.message}`);
+  }
+
+  if (chosenPort !== DEFAULT_SERVICE_PORT) {
+    logger.warn(`Default port ${DEFAULT_SERVICE_PORT} is busy, using port ${chosenPort} instead`);
+  }
+  applyPort(chosenPort);
+
   // 桌面助手直接承载 Bridge，不依赖 MCP/Agent，也不自动弹出 onboarding 页面。
   process.env.GECHO_AUTO_OPEN_ONBOARDING_ON_FIRST_START = "0";
   const dataDir = lastStatus.dataDir || getDefaultDataDir();
@@ -162,7 +243,16 @@ function sendStatus(status) {
 }
 
 async function refreshStatus() {
-  sendStatus(await getBridgeStatus());
+  const status = await getBridgeStatus();
+  sendStatus(status);
+  // 检查是否有活跃定时任务，同步防休眠状态
+  try {
+    const { getActiveTasks } = require("../scheduled-task-store");
+    const active = Array.isArray(getActiveTasks()) ? getActiveTasks() : [];
+    syncPowerSaveBlocker(active.length > 0);
+  } catch (_e) {
+    // scheduled-task-store 未载入时忽略（Bridge 未启动等情况）
+  }
 }
 
 function getAutoStartEnabled() {
@@ -238,10 +328,12 @@ function openDashboardWindow() {
   });
 
   dashboardWindow.on("close", (event) => {
-    if (!quitting) {
-      event.preventDefault();
-      dashboardWindow.hide();
-    }
+    if (quitting) return; // 真正退出时直接销毁
+    // 关闭控制面板时 destroy 渲染进程，释放 Chromium 内存（~60-120MB）
+    // 下次从托盘打开时重新创建，成本极低（< 200ms）
+    event.preventDefault();
+    dashboardWindow.destroy();
+    dashboardWindow = null;
   });
 }
 
@@ -521,5 +613,10 @@ if (!hasSingleInstance) {
     quitting = true;
     stopMacTray();
     if (statusTimer) clearInterval(statusTimer);
+    // 退出前释放防休眠锁
+    if (powerSaveBlockerId !== null && powerSaveBlocker.isStarted(powerSaveBlockerId)) {
+      powerSaveBlocker.stop(powerSaveBlockerId);
+      powerSaveBlockerId = null;
+    }
   });
 }
