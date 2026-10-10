@@ -20,6 +20,7 @@ const logger = require("./logger");
 const i18n = require("./i18n");
 const updater = require("./updater");
 const security = require("./security");
+const { runHealthChecks } = require("./health-check");
 
 process.on("uncaughtException", (error) => {
   logger.error("Uncaught exception:", error);
@@ -362,6 +363,17 @@ function handleExportDiagnostics() {
 }
 
 function registerIpc() {
+  let healthCheckPromise = null;
+  ipcMain.handle("run-health-check", (_event, options) => {
+    if (!healthCheckPromise) {
+      healthCheckPromise = runHealthChecks({
+        servicePort: activeServicePort,
+        dataDir: lastStatus.dataDir || getDefaultDataDir(),
+        checkNetwork: options?.checkNetwork === true,
+      }).finally(() => { healthCheckPromise = null; });
+    }
+    return healthCheckPromise;
+  });
   ipcMain.handle("bridge-status", () => getBridgeStatus());
   ipcMain.handle("app-info", () => ({
     version: app.getVersion(),

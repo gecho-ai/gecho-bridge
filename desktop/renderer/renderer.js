@@ -260,6 +260,24 @@ async function init() {
       btn.textContent = oldText;
     }
   });
+  $("health-check-btn")?.addEventListener("click", async () => {
+    const button = $("health-check-btn");
+    button.disabled = true;
+    const list = $("health-results");
+    list.replaceChildren();
+    try {
+      const results = await window.gechoDesktop.runHealthCheck($("health-network").checked);
+      for (const result of results) {
+        const item = document.createElement("li");
+        item.textContent = `${result.status.toUpperCase()} · ${result.label}：${result.detail}${result.suggestion ? ` — ${result.suggestion}` : ""}`;
+        list.appendChild(item);
+      }
+    } catch (error) {
+      showToast(error.message);
+    } finally {
+      button.disabled = false;
+    }
+  });
   $("hide")?.addEventListener("click", () => window.gechoDesktop.hideWindow());
   $("quit")?.addEventListener("click", () => window.gechoDesktop.quit());
   $("auto-start")?.addEventListener("change", (event) => window.gechoDesktop.setAutoStart(event.target.checked));

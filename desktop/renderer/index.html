@@ -72,6 +72,15 @@
     <!-- 运行偏好设置 -->
     <section class="settings">
       <div>
+        <h3 data-i18n="healthTitle">环境自检</h3>
+        <p data-i18n="healthDescription">检查服务、插件、浏览器及磁盘；不会修改系统设置。</p>
+        <label><input id="health-network" type="checkbox"><span data-i18n="healthNetwork">同时访问官网及 TikTok 检查网络</span></label>
+        <ul id="health-results" aria-live="polite"></ul>
+      </div>
+      <button id="health-check-btn" class="header-action-btn" data-i18n="healthRun">开始自检</button>
+    </section>
+    <section class="settings">
+      <div>
         <h3 data-i18n="settingsAutoStart">开机自启动</h3>
         <p data-i18n="settingsAutoStartDesc">开机登录系统时静默拉起 Gecho 桌面端，常驻托盘守护采集任务。</p>
       </div>
