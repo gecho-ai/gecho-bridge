@@ -24,7 +24,7 @@ const packageJson = require("./package.json");
 const { getDefaultDataDir } = require("./data-dir");
 const { isHardActionResultFailure, normalizeActionResult } = require("./action-result");
 
-const { getServiceBaseUrl } = require("./service-discovery");
+const { getServiceBaseUrl, getServiceEnvironment, isBridgeInfo } = require("./service-discovery");
 const DIST_SERVICE_PATH = path.join(__dirname, "server.cjs");
 const SOURCE_SERVICE_PATH = path.join(__dirname, "server.js");
 const SERVICE_PATH = fs.existsSync(DIST_SERVICE_PATH) ? DIST_SERVICE_PATH : SOURCE_SERVICE_PATH;
@@ -82,9 +82,9 @@ function requestJson(url, options = {}) {
 /**
  * 检查服务是否在线
  */
-async function getServiceInfo() {
-  const response = await requestJson(`${getServiceBaseUrl()}/ping`, { method: "GET" });
-  if (!response.ok) return null;
+async function getServiceInfo(baseUrl = getServiceBaseUrl()) {
+  const response = await requestJson(`${baseUrl}/ping`, { method: "GET" });
+  if (!response.ok || !isBridgeInfo(response.body)) return null;
   return response.body || null;
 }
 
@@ -126,7 +126,10 @@ function isCurrentServiceCompatible(info) {
 /**
  * 请求旧服务优雅退出
  */
-function requestShutdown() {
+async function requestShutdown() {
+  const info = await getServiceInfo();
+  if (!info) return false;
+  if (info.runtime === "desktop") throw new Error("Bridge is managed by Gecho Desktop; restart or update it through the desktop app");
   return new Promise((resolve) => {
     const req = http.request(`${getServiceBaseUrl()}/shutdown`, { method: "POST" }, (res) => {
       resolve(res.statusCode >= 200 && res.statusCode < 300);
@@ -140,11 +143,12 @@ function requestShutdown() {
   });
 }
 
-function startServiceDetached() {
+function startServiceDetached(env = getServiceEnvironment()) {
   // Desktop MCP hosts often provide a reduced PATH. Using the current Node
   // executable keeps the client and service on the same runtime.
   const isWindows = process.platform === "win32";
   const child = spawn(process.execPath, [SERVICE_PATH], {
+    env,
     // On Windows, detached creates a separate process group. It is unnecessary
     // after unref() and has proved unreliable for the browser launched by this
     // service when the parent is a desktop MCP host. Keep the Unix behaviour.
@@ -158,11 +162,11 @@ function startServiceDetached() {
   return child;
 }
 
-async function waitForServiceDown() {
+async function waitForServiceDown(baseUrl) {
   let retries = 10;
   while (retries > 0) {
     await new Promise((r) => setTimeout(r, 300));
-    if (!(await checkServiceAlive())) {
+    if (!(await getServiceInfo(baseUrl))) {
       return true;
     }
     retries--;
@@ -183,15 +187,17 @@ async function waitForServiceUp() {
 }
 
 async function ensureServiceRunning() {
+  const serviceEnv = getServiceEnvironment();
+  const baseUrl = getServiceBaseUrl();
   const info = await getServiceInfo();
   if (isCurrentServiceCompatible(info)) {
     return;
   }
   if (info) {
     await requestShutdown();
-    await waitForServiceDown();
+    await waitForServiceDown(baseUrl);
   }
-  startServiceDetached();
+  startServiceDetached(serviceEnv);
   const ready = await waitForServiceUp();
   if (!ready) {
     throw new Error("Failed to start Service Layer.");
@@ -199,9 +205,11 @@ async function ensureServiceRunning() {
 }
 
 async function restartServiceRunning() {
+  const serviceEnv = getServiceEnvironment();
+  const baseUrl = getServiceBaseUrl();
   await requestShutdown();
-  await waitForServiceDown();
-  startServiceDetached();
+  await waitForServiceDown(baseUrl);
+  startServiceDetached(serviceEnv);
   const ready = await waitForServiceUp();
   if (!ready) {
     throw new Error("Failed to restart Service Layer.");
@@ -822,6 +830,7 @@ async function main() {
     const transport = new StdioServerTransport();
     await server.connect(transport);
   } catch (e) {
+    console.error(e.message);
     process.exit(1);
   }
 }

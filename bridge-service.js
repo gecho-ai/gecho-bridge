@@ -13,15 +13,15 @@ const {
   uninstallStartup
 } = require("./bridge-startup");
 
-const { getServiceBaseUrl, isBridgeInfo } = require("./service-discovery");
+const { getServiceBaseUrl, getServiceEnvironment, isBridgeInfo } = require("./service-discovery");
 const SERVICE_PATH = path.join(__dirname, "server.js");
 const SERVICE_PROTOCOL_VERSION = 2;
 const START_TIMEOUT_MS = Math.max(1000, Number(process.env.GECHO_SERVICE_START_TIMEOUT_MS || 10000));
 const POLL_INTERVAL_MS = 200;
 
-function requestJson(requestPath, method = "GET") {
+function requestJson(requestPath, method = "GET", baseUrl = getServiceBaseUrl()) {
   return new Promise((resolve) => {
-    const request = http.request(`${getServiceBaseUrl()}${requestPath}`, { method }, (response) => {
+    const request = http.request(`${baseUrl}${requestPath}`, { method }, (response) => {
       let body = "";
       response.setEncoding("utf8");
       response.on("data", (chunk) => { body += chunk; });
@@ -55,15 +55,15 @@ function isCompatibleService(info) {
   return !info.dataDir || path.resolve(String(info.dataDir)) === expectedDataDir();
 }
 
-async function getServiceInfo() {
-  const response = await requestJson("/ping");
+async function getServiceInfo(baseUrl) {
+  const response = await requestJson("/ping", "GET", baseUrl);
   return response.ok && isBridgeInfo(response.body) ? response.body : null;
 }
 
-async function waitForService({ running = true, timeoutMs = START_TIMEOUT_MS } = {}) {
+async function waitForService({ running = true, timeoutMs = START_TIMEOUT_MS, baseUrl } = {}) {
   const startedAt = Date.now();
   while (Date.now() - startedAt <= timeoutMs) {
-    const info = await getServiceInfo();
+    const info = await getServiceInfo(baseUrl);
     if (running ? isCompatibleService(info) : !info) return info;
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
   }
@@ -71,34 +71,36 @@ async function waitForService({ running = true, timeoutMs = START_TIMEOUT_MS } =
 }
 
 async function stopService() {
-  const info = await getServiceInfo();
+  const baseUrl = getServiceBaseUrl();
+  const info = await getServiceInfo(baseUrl);
   if (!info) return { status: "not running" };
 
-  await requestJson("/shutdown", "POST");
-  const stopped = await waitForService({ running: false });
+  await requestJson("/shutdown", "POST", baseUrl);
+  const stopped = await waitForService({ running: false, baseUrl });
   if (stopped === null && Number.isInteger(Number(info.pid)) && Number(info.pid) > 0) {
     try { process.kill(Number(info.pid), "SIGTERM"); } catch (_error) {}
-    await waitForService({ running: false, timeoutMs: 3000 });
+    await waitForService({ running: false, timeoutMs: 3000, baseUrl });
   }
   return { status: "stopped", pid: info.pid || null };
 }
 
-async function startService() {
+async function startService(serviceEnv = getServiceEnvironment()) {
   const current = await getServiceInfo();
   if (isCompatibleService(current)) {
     return { status: "already running", pid: current.pid || null };
   }
+  if (current?.runtime === "desktop") throw new Error("Bridge is managed by Gecho Desktop; update or restart it through the desktop app");
   if (current) await stopService();
 
   const child = spawn(process.execPath, [SERVICE_PATH], {
     cwd: __dirname,
-    env: process.env,
+    env: serviceEnv,
     detached: true,
     stdio: "ignore",
     windowsHide: true
   });
   child.unref();
-  const started = await waitForService();
+  const started = await waitForService({ baseUrl: `http://127.0.0.1:${serviceEnv.GECHO_HTTP_PORT}` });
   if (!started) {
     const error = new Error("Bridge service did not become ready");
     error.code = "BRIDGE_SERVICE_START_FAILED";
@@ -148,8 +150,11 @@ async function main(argv = process.argv.slice(2)) {
     return;
   }
   if (command === "restart") {
+    const serviceEnv = getServiceEnvironment();
+    const current = await getServiceInfo();
+    if (current?.runtime === "desktop") throw new Error("Bridge is managed by Gecho Desktop; restart it through the desktop app");
     await stopService();
-    process.stdout.write(`${JSON.stringify(await startService())}\n`);
+    process.stdout.write(`${JSON.stringify(await startService(serviceEnv))}\n`);
     return;
   }
   if (command === "install") {

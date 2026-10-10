@@ -2117,6 +2117,7 @@ const server = http.createServer(async (req, res) => {
       status: "ok",
       serviceProtocolVersion: SERVICE_PROTOCOL_VERSION,
       packageVersion: packageJson.version,
+      runtime: process.env.GECHO_DESKTOP_RUNTIME === "1" ? "desktop" : "standalone",
       pid: process.pid,
       cwd: process.cwd(),
       servicePath: __filename,

@@ -24,6 +24,10 @@ function getServiceBaseUrl({ dataDir, port = process.env.GECHO_HTTP_PORT } = {})
   return "http://127.0.0.1:18793";
 }
 
+function getServiceEnvironment({ dataDir, env = process.env } = {}) {
+  return { ...env, GECHO_HTTP_PORT: new URL(getServiceBaseUrl({ dataDir, port: env.GECHO_HTTP_PORT })).port };
+}
+
 function publishServiceEndpoint({ dataDir, port, pid = process.pid }) {
   if (!validPort(port)) throw new Error("Invalid Bridge HTTP port");
   const target = endpointPath(dataDir);
@@ -46,4 +50,4 @@ function isBridgeInfo(info) {
     typeof info.packageVersion === "string" && info.packageVersion.length > 0;
 }
 
-module.exports = { getServiceBaseUrl, publishServiceEndpoint, removeServiceEndpoint, isBridgeInfo };
+module.exports = { getServiceBaseUrl, getServiceEnvironment, publishServiceEndpoint, removeServiceEndpoint, isBridgeInfo };

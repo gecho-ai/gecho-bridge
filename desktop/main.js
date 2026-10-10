@@ -231,6 +231,7 @@ async function startBridge() {
   process.env.GECHO_AUTO_OPEN_ONBOARDING_ON_FIRST_START = "0";
   // Desktop browsers remain user-owned, including windows opened for recovery.
   process.env.GECHO_AUTO_CLOSE_LAUNCHED_BROWSER = "0";
+  process.env.GECHO_DESKTOP_RUNTIME = "1";
   const dataDir = lastStatus.dataDir || getDefaultDataDir();
   const token = security.getOrCreateLocalToken(dataDir);
   process.env.GECHO_LOCAL_TOKEN = token;
