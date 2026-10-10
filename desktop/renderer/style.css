@@ -5,6 +5,7 @@
   background: #f6f7fb;
 }
 * { box-sizing: border-box; }
+.hidden { display: none !important; }
 body { margin: 0; min-width: 680px; }
 .page { max-width: 820px; margin: 0 auto; padding: 28px 36px 22px; }
 
@@ -314,6 +315,10 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 @media (prefers-color-scheme: dark) {
   :root { color: #e6e7ed; background: #161820; }
   .task-card, .loading-placeholder, .settings, .system-summary { background: #22252f; border-color: #424654; }
+  .task-card.paused { background: #22252f; opacity: 1; }
+  .task-meta-grid { background: #1c1f28; border-color: #424654; }
+  .meta-value.highlight { color: #c5b7ff; }
+  .task-status-pill.paused { background: #343848; color: #c4c9d6; }
   .header-action-btn, .btn-task, select { background: #2c303d; color: #e6e7ed; border-color: #555a6c; }
   .header-action-btn:hover, .btn-task:hover { background: #383e4c; color: white; }
   .settings h3, .summary-item strong, .meta-value, .task-name, .section-title { color: #e6e7ed; }
