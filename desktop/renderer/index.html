@@ -31,6 +31,15 @@
     <div id="network-banner" class="network-banner hidden" data-i18n="networkOffline">⚠️ 网络连接已断开，数据采集与服务通信可能会受到影响</div>
 
     <!-- 定时任务管理核心区域 -->
+    <section class="settings" aria-label="Gecho 账号">
+      <div>
+        <h3>Gecho 账号 / Account</h3>
+        <p id="account-status" role="status">正在检查登录状态 / Checking account</p>
+        <button id="account-login" class="primary">登录 Gecho / Sign in</button>
+        <button id="account-cancel" class="text-button hidden">取消授权 / Cancel</button>
+        <button id="account-logout" class="text-button hidden">退出账号 / Sign out</button>
+      </div>
+    </section>
     <section class="tasks-section">
       <div class="section-header">
         <div>
@@ -127,6 +136,7 @@
     </footer>
   </main>
   <script src="./environment.js"></script>
+  <script src="./account.js"></script>
   <script src="./renderer.js"></script>
 </body>
 </html>

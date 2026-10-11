@@ -1,6 +1,15 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("gechoDesktop", {
+  getAccountStatus: () => ipcRenderer.invoke('account-status'),
+  loginAccount: () => ipcRenderer.invoke('account-login'),
+  cancelAccountLogin: () => ipcRenderer.invoke('account-cancel'),
+  logoutAccount: () => ipcRenderer.invoke('account-logout'),
+  onAccountStatus: callback => {
+    const listener = (_event, state) => callback(state);
+    ipcRenderer.on('account-status', listener);
+    return () => ipcRenderer.removeListener('account-status', listener);
+  },
   getStatus: () => ipcRenderer.invoke("bridge-status"),
   getBrowserEnvironment: () => ipcRenderer.invoke("browser-environment"),
   setPreferences: (patch) => ipcRenderer.invoke("set-desktop-preferences", patch),

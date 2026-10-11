@@ -11,6 +11,7 @@ const {
   globalShortcut,
   Notification,
   shell,
+  safeStorage,
 } = require("electron");
 const fs = require("node:fs");
 const net = require("node:net");
@@ -30,6 +31,19 @@ const preferences = require("./preferences").createPreferences(process.env.GECHO
 const recovery = browserManager.createRecoveryGuard({ launch: () => browserManager.launchBrowser(preferences.get(), ONBOARDING_URL) });
 const notificationCursor = require("./notifications").createNotificationCursor();
 const SHORTCUT = "CommandOrControl+Shift+G";
+let accountClient = null;
+function initializeAccount() {
+  const baseUrl = process.env.GECHO_ACCOUNT_AUTH_URL;
+  if (!baseUrl) return;
+  try {
+    const store = require('./account-store').createAccountStore(getDefaultDataDir(), safeStorage);
+    accountClient = require('./account-login').createAccountClient({ baseUrl, store,
+      openExternal: url => shell.openExternal(url), onChange: state => {
+        if (dashboardWindow && !dashboardWindow.isDestroyed()) dashboardWindow.webContents.send('account-status', state);
+      } });
+    accountClient.restore().catch(() => {});
+  } catch { logger.warn('Desktop account configuration is invalid'); }
+}
 function syncShortcut(enabled) {
   globalShortcut.unregister(SHORTCUT);
   if (enabled && !globalShortcut.register(SHORTCUT, openDashboardWindow)) throw new Error("快捷键已被占用 / Shortcut is unavailable");
@@ -378,6 +392,10 @@ function handleExportDiagnostics() {
 
 function registerIpc() {
   ipcMain.handle("browser-environment", () => ({ browsers: browserManager.discoverBrowsers(), preferences: preferences.get() }));
+  ipcMain.handle('account-status', () => accountClient?.status() || { status: 'unavailable', user: null });
+  ipcMain.handle('account-login', () => accountClient?.login() || { status: 'unavailable', user: null });
+  ipcMain.handle('account-cancel', () => accountClient?.cancel() || { status: 'unavailable', user: null });
+  ipcMain.handle('account-logout', () => accountClient?.logout() || { status: 'unavailable', user: null });
   ipcMain.handle("set-desktop-preferences", (_event, patch) => {
     if (!patch || typeof patch !== "object") throw new Error("Invalid preferences");
     if (patch.browser) {
@@ -621,6 +639,7 @@ if (!hasSingleInstance) {
   app.whenReady().then(async () => {
     if (process.platform === "win32") app.setAppUserModelId("ai.gecho.desktop");
     i18n.initLocale();
+    initializeAccount();
     try { syncShortcut(preferences.get().shortcut); } catch (error) { logger.warn(error.message); preferences.set({ shortcut: false }); }
     registerIpc();
     try {
@@ -657,6 +676,7 @@ if (!hasSingleInstance) {
   app.on("window-all-closed", () => {});
   app.on("before-quit", () => {
     quitting = true;
+    accountClient?.cancel();
     stopMacTray();
     if (statusTimer) clearInterval(statusTimer);
     // 退出前释放防休眠锁
