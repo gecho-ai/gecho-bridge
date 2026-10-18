@@ -112,7 +112,8 @@
       "package.json"
     ],
     "extraMetadata": {
-      "main": "desktop/main.js"
+      "main": "desktop/main.js",
+      "desktopAccountAuthUrl": "https://www.gecho.ai/service_layer/desktop-auth"
     },
     "asarUnpack": [
       "desktop/macos-tray/**"

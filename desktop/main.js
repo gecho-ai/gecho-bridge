@@ -33,10 +33,10 @@ const notificationCursor = require("./notifications").createNotificationCursor()
 const SHORTCUT = "CommandOrControl+Shift+G";
 let accountClient = null;
 function initializeAccount() {
-  const baseUrl = process.env.GECHO_ACCOUNT_AUTH_URL;
+  const baseUrl = require('./account-config').resolveAccountAuthUrl(process.env, require('../package.json'));
   if (!baseUrl) return;
   try {
-    const store = require('./account-store').createAccountStore(getDefaultDataDir(), safeStorage);
+    const store = require('./account-store').createAccountStore(process.env.GECHO_DATA_DIR || getDefaultDataDir(), safeStorage);
     accountClient = require('./account-login').createAccountClient({ baseUrl, store,
       openExternal: url => shell.openExternal(url), onChange: state => {
         if (dashboardWindow && !dashboardWindow.isDestroyed()) dashboardWindow.webContents.send('account-status', state);
