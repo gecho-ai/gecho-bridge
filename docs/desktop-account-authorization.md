@@ -1,6 +1,6 @@
 # 桌面账号授权：实现与启用
 
-更新：2026-10-11；Bridge 1.1.38，feature/phase3-scheduled-desktop。
+更新：2026-10-18；Bridge 1.1.38，feature/phase3-scheduled-desktop。部署进展以 docs/desktop-authorization-deployment-status.md 为准；下文测试记录为 10 月 11 日的历史验证。
 
 ## 用户流程
 
@@ -20,9 +20,9 @@
 
 1. 服务层应用 db/desktop_auth.sql，并按服务层 docs/desktop-authorization.md 配置开关、共享数据库、官网同域地址和可信客户端IP来源。
 2. 授权路由必须部署到官网 Cookie 所在域名下，透传 HTML、302、Cookie 和 Origin。API域名与官网页面域名不同的情况下，需要同域网关转发；不能跨域读取 Cookie。
-3. 桌面启动环境配置 GECHO_ACCOUNT_AUTH_URL=https://官网实际域名/service_layer/desktop-auth。未配置时按钮禁用；没有内置假接口。开发可使用已确认的同域地址启动 npm run desktop:dev。
+3. 源码开发可配置 GECHO_ACCOUNT_AUTH_URL=https://官网实际域名/service_layer/desktop-auth。安装包通过 build.extraMetadata 提供默认正式地址，环境变量优先；二者都没有时按钮禁用。配置了地址不等于线上授权服务已启用。账号存储遵循 GECHO_DATA_DIR，未指定时使用默认数据目录。
 
-默认未启用，不修改官网 gecho-web 前端，不执行生产SQL、不部署、不推送、不发布、不改版本。原有未跟踪 desktop-account-login-spec.md 为早期设计稿，本次实现状态以本文为准，不覆盖原文件。
+实现阶段未修改官网 gecho-web 前端。随后已建表并成功发布服务层代码，但授权配置和同域入口尚未收尾；真实账号授权未验收。desktop-account-login-spec.md 保留为历史设计稿，不作为当前状态。提交/推送代码与开启线上授权是两件不同的事。
 
 ## 验证
 
